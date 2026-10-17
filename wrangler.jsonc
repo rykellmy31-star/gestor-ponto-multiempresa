@@ -1,7 +1,7 @@
 
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "folhadeponto-paguepouco",
+  "name": "cr-jornada",
   "main": "server/index.ts",
   "compatibility_date": "2026-10-15",
   "compatibility_flags": ["nodejs_compat"],
@@ -14,14 +14,14 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "pontopaguepouco",
-      "database_id": "ef8d42a5-b0b1-416d-abd0-e7947cef5cbc",
+      "database_name": "cr-jornada-db",
+      "database_id": "SUBSTITUIR_PELO_ID_DO_NOVO_BANCO",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
-    "ENVIRONMENT": "production",
-    "APP_ORIGIN": "https://folhadeponto-paguepouco.netssh3-0.workers.dev",
+    "ENVIRONMENT": "development",
+    "APP_ORIGIN": "https://cr-jornada.netssh3-0.workers.dev",
     "SESSION_HOURS": "8"
   },
   "rules": [
