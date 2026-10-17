@@ -1,7 +1,7 @@
 
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { App, Env } from './types';
+import type { App } from './types';
 import { ApiError } from './core/errors';
 import { auth, getPrincipal, originGuard } from './core/security';
 
@@ -15,6 +15,15 @@ import {
   employeeMoodRoutes,
   adminMoodRoutes
 } from './routes/mood';
+
+// CR JORNADA - Superadministrador
+import {
+  platformAuthRoutes
+} from './routes/platform-auth';
+
+import {
+  platformSetupRoutes
+} from './routes/platform-setup';
 
 const app = new Hono<App>();
 
@@ -56,6 +65,7 @@ app.use('*', async (c, next) => {
     c.res.headers.get('Content-Type')?.includes('text/html') ||
     c.req.path.startsWith('/admin') ||
     c.req.path.startsWith('/app') ||
+    c.req.path.startsWith('/superadmin') ||
     c.req.path.includes('senha') ||
     c.req.path === '/setup'
   ) {
@@ -124,8 +134,14 @@ app.get('/api/health', async c => {
   });
 });
 
-// Autenticacao
+// Autenticacao original
 app.route('/api', authRoutes);
+
+// CR JORNADA - Autenticacao do Superadmin
+app.route('/api/platform/auth', platformAuthRoutes);
+
+// CR JORNADA - Configuracao inicial do Superadmin
+app.route('/api/platform', platformSetupRoutes);
 
 // Rotas dos funcionarios
 app.route('/api/employee', employeeRoutes);
@@ -192,6 +208,11 @@ app.get('*', async c => {
     }
   }
 
+  // O painel Superadmin tera sua propria
+  // verificacao de sessao antes da publicacao.
+  // Nao habilitar paginas administrativas
+  // sem a protecao correspondente.
+
   return c.env.ASSETS.fetch(c.req.raw);
 });
 
@@ -210,7 +231,7 @@ app.onError((error, c) => {
     );
   }
 
-  const text = String(error.message);
+  const message = String(error.message);
 
   const conflicts: [string, string, string][] = [
     [
@@ -261,7 +282,7 @@ app.onError((error, c) => {
   ];
 
   const conflict = conflicts.find(
-    ([needle]) => text.includes(needle)
+    ([needle]) => message.includes(needle)
   );
 
   if (conflict) {
@@ -277,7 +298,7 @@ app.onError((error, c) => {
     );
   }
 
-  if (text.includes('FOREIGN KEY constraint')) {
+  if (message.includes('FOREIGN KEY constraint')) {
     return c.json(
       {
         error: {
@@ -293,7 +314,7 @@ app.onError((error, c) => {
     JSON.stringify({
       requestId: c.get('requestId'),
       error: error.name,
-      message: text.slice(0, 400)
+      message: message.slice(0, 400)
     })
   );
 
