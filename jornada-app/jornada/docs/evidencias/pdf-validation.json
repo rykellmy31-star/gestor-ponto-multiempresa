@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-15T14:16:55.120403+00:00",
+  "month": "2026-09",
+  "tool": "PyMuPDF",
+  "results": [
+    {
+      "file": "test-results/folha-teste.pdf",
+      "status": "PASS",
+      "pages": 3,
+      "a4_landscape": true,
+      "all_month_dates": true,
+      "no_text_outside_page": true,
+      "signatures_and_totals": true,
+      "long_note_complete": false
+    },
+    {
+      "file": "test-results/pdf-observacoes-longas.pdf",
+      "status": "PASS",
+      "pages": 3,
+      "a4_landscape": true,
+      "all_month_dates": true,
+      "no_text_outside_page": true,
+      "signatures_and_totals": true,
+      "long_note_complete": true
+    },
+    {
+      "file": "test-results/browser/download-folha.pdf",
+      "status": "PASS",
+      "pages": 3,
+      "a4_landscape": true,
+      "all_month_dates": true,
+      "no_text_outside_page": true,
+      "signatures_and_totals": true,
+      "long_note_complete": false
+    },
+    {
+      "file": "test-results/browser/impressao-a4.pdf",
+      "status": "PASS",
+      "pages": 3,
+      "a4_landscape": true,
+      "all_month_dates": true,
+      "no_text_outside_page": true,
+      "signatures_and_totals": true,
+      "long_note_complete": false
+    }
+  ]
+}

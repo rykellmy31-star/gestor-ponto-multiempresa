@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-15T14:20:31.958291+00:00",
+  "status": "PASS",
+  "source_only_copy": true,
+  "npm_ci": "PASS",
+  "fresh_secrets_generated_without_echo": true,
+  "migrations_local_and_test": "PASS",
+  "unit_tests": 33,
+  "typecheck_and_build_and_worker_dry_run": "PASS",
+  "empty_database_counts": {
+    ".data": {
+      "users": 0,
+      "employees": 0,
+      "punches": 0
+    },
+    ".test-data": {
+      "users": 0,
+      "employees": 0,
+      "punches": 0
+    }
+  },
+  "remote_actions": false
+}

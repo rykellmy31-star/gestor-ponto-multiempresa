@@ -1,0 +1,4 @@
+
+> jornada-ponto@1.0.0 typecheck:tests
+> tsc --noEmit -p tsconfig.tests.json
+

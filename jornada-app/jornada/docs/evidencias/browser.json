@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-15T14:14:10.326Z",
+  "browser": "Chromium",
+  "results": [
+    {
+      "test": "Login desktop responsivo, mostrar/ocultar senha e acesso administrativo direto bloqueado",
+      "status": "PASS",
+      "ms": 1210
+    },
+    {
+      "test": "Dashboard usa dados reais e todas as páginas administrativas carregam sem exceções",
+      "status": "PASS",
+      "ms": 2796
+    },
+    {
+      "test": "Botão de nova jornada cria uma configuração persistente no D1",
+      "status": "PASS",
+      "ms": 1096
+    },
+    {
+      "test": "Formulário de funcionário cria e edita registro real; XSS permanece texto",
+      "status": "PASS",
+      "ms": 3098
+    },
+    {
+      "test": "Funcionário deve trocar senha inicial pelo formulário e entrar novamente",
+      "status": "PASS",
+      "ms": 3375
+    },
+    {
+      "test": "Quatro botões chegam ao servidor; falha após salvar é repetida sem duplicar",
+      "status": "PASS",
+      "ms": 1614
+    },
+    {
+      "test": "Solicitação do funcionário funciona e aparece persistida na tabela",
+      "status": "PASS",
+      "ms": 1908
+    },
+    {
+      "test": "Folha mensal no navegador, download PDF real e impressão A4 sem corte horizontal",
+      "status": "PASS",
+      "ms": 1616
+    },
+    {
+      "test": "Celular: login, navegação, ponto persistido e CSV sem overflow na página",
+      "status": "PASS",
+      "ms": 2644
+    },
+    {
+      "test": "Administrador no celular pode abrir menu, filtrar e usar formulários",
+      "status": "PASS",
+      "ms": 2739
+    },
+    {
+      "test": "Recuperação assistida completa funciona também pela interface",
+      "status": "PASS",
+      "ms": 15997
+    },
+    {
+      "test": "Tela principal entregue limpa e nenhum erro JavaScript não tratado",
+      "status": "PASS",
+      "ms": 3353
+    }
+  ],
+  "uncaught_errors": []
+}

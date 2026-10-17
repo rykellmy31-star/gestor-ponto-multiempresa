@@ -1,0 +1,7 @@
+# Nunca use estes textos como valores. Gere valores aleatórios, independentes.
+AUTH_PEPPER="GERAR_64_CARACTERES_HEXADECIMAIS"
+DATA_KEY="GERAR_64_CARACTERES_HEXADECIMAIS"
+BOOTSTRAP_TOKEN="GERAR_64_CARACTERES_HEXADECIMAIS_E_REMOVER_APOS_SETUP"
+# Recuperação automática por e-mail é opcional:
+# MAIL_API_KEY="CHAVE_DO_PROVEDOR_RESEND"
+# MAIL_FROM="RH <rh@seu-dominio.com.br>"

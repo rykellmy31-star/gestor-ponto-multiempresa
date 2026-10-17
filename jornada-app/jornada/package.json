@@ -1,0 +1,62 @@
+{
+  "name": "jornada-ponto",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "npm run build:web && wrangler dev --ip 0.0.0.0 --port 8787 --persist-to .data --var ENVIRONMENT:development --var APP_ORIGIN:http://localhost:8787",
+    "dev:web": "vite --host 0.0.0.0",
+    "build:web": "vite build",
+    "build": "npm run typecheck && npm run build:web && wrangler deploy --dry-run --outdir .worker-bundle",
+    "typecheck": "tsc --noEmit",
+    "db:local": "wrangler d1 migrations apply DB --local --persist-to .data",
+    "db:remote": "wrangler d1 migrations apply DB --remote",
+    "secrets:local": "node scripts/local-secrets.mjs",
+    "setup:token": "node scripts/show-local-token.mjs",
+    "deploy": "npm run typecheck && npm run build:web && node scripts/preflight.mjs && wrangler deploy",
+    "test": "vitest run",
+    "test:integration": "tsx tests/integration.ts",
+    "test:browser": "tsx tests/browser.ts",
+    "test:prepare": "node scripts/test-env.mjs && wrangler d1 migrations apply DB --local --persist-to .test-data --config wrangler.test.jsonc",
+    "test:serve": "wrangler dev --ip 0.0.0.0 --port 8788 --persist-to .test-data --config wrangler.test.jsonc",
+    "admin:recover": "node scripts/recover-admin.mjs",
+    "backup": "node scripts/backup.mjs",
+    "test:edge": "tsx tests/edge-cases.ts",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json",
+    "test:restart": "tsx tests/restart.ts",
+    "backup:decrypt": "node scripts/decrypt-backup.mjs",
+    "deploy:check": "node scripts/preflight.mjs",
+    "dev:bundle": "wrangler dev .worker-bundle/index.js --no-bundle --ip 0.0.0.0 --port 8787 --persist-to .data --var ENVIRONMENT:development --var APP_ORIGIN:http://localhost:8787",
+    "test:serve:bundle": "wrangler dev .worker-bundle/index.js --no-bundle --ip 0.0.0.0 --port 8788 --persist-to .test-data --config wrangler.test.jsonc"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "hono": "^4.13.13",
+    "lucide-react": "^0.468.0",
+    "luxon": "^3.7.2",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.9.5",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261015.1",
+    "@types/luxon": "^3.7.1",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "node": "^22.21.0",
+    "playwright": "^1.56.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.151.0"
+  }
+}

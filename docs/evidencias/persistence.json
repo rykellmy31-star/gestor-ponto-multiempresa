@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-15T14:17:44.435Z",
+  "status": "PASS",
+  "target": "D1 LOCAL após parada e novo processo workerd, sem apagar dados",
+  "before": {
+    "employees": 5,
+    "punches": 9,
+    "work_days": 6,
+    "adjustments": 6,
+    "closure_snapshots": 3,
+    "audit_log": 351
+  },
+  "after": {
+    "employees": 5,
+    "punches": 9,
+    "work_days": 6,
+    "adjustments": 6,
+    "closure_snapshots": 3,
+    "audit_log": 351
+  },
+  "raw_punches_visible_through_api": 4,
+  "closed_snapshot_preserved": true,
+  "main_installation_clean": true,
+  "remote_redeploy_tested": false
+}

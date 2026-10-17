@@ -1,0 +1,150 @@
+Node v22.23.3 · npm 10.8.2
+
+added 162 packages in 8s
+
+> jornada-ponto@1.0.0 secrets:local
+> node scripts/local-secrets.mjs
+
+Segredos locais independentes gerados em .dev.vars (não versionar). Use npm run setup:token somente em terminal privado.
+
+> jornada-ponto@1.0.0 db:local
+> wrangler d1 migrations apply DB --local --persist-to .data
+
+
+ ⛅️ wrangler 4.151.0
+────────────────────
+Resource location: local 
+
+Use --remote if you want to access the remote instance.
+
+Migrations to be applied:
+┌────────────────────────┐
+│ name                   │
+├────────────────────────┤
+│ 0001_initial.sql       │
+├────────────────────────┤
+│ 0002_auth_versions.sql │
+└────────────────────────┘
+? About to apply 2 migration(s)
+Your database may not be available to serve requests during the migration, continue?
+🤖 Using fallback value in non-interactive context: yes
+🌀 Executing on local database DB (REPLACE_WITH_D1_DATABASE_ID) from .data/v3/d1:
+🌀 To execute on your remote database, add a --remote flag to your wrangler command.
+🚣 96 commands executed successfully.
+┌────────────────────────┬────────┐
+│ name                   │ status │
+├────────────────────────┼────────┤
+│ 0001_initial.sql       │ ✅     │
+├────────────────────────┼────────┤
+│ 0002_auth_versions.sql │ 🕒️    │
+└────────────────────────┴────────┘
+🌀 Executing on local database DB (REPLACE_WITH_D1_DATABASE_ID) from .data/v3/d1:
+🌀 To execute on your remote database, add a --remote flag to your wrangler command.
+🚣 4 commands executed successfully.
+┌────────────────────────┬────────┐
+│ name                   │ status │
+├────────────────────────┼────────┤
+│ 0001_initial.sql       │ ✅     │
+├────────────────────────┼────────┤
+│ 0002_auth_versions.sql │ ✅     │
+└────────────────────────┴────────┘
+
+> jornada-ponto@1.0.0 test:prepare
+> node scripts/test-env.mjs && wrangler d1 migrations apply DB --local --persist-to .test-data --config wrangler.test.jsonc
+
+Banco de testes isolado preparado. Credenciais aleatórias não serão impressas nem incluídas na entrega.
+
+ ⛅️ wrangler 4.151.0
+────────────────────
+Resource location: local 
+
+Use --remote if you want to access the remote instance.
+
+Migrations to be applied:
+┌────────────────────────┐
+│ name                   │
+├────────────────────────┤
+│ 0001_initial.sql       │
+├────────────────────────┤
+│ 0002_auth_versions.sql │
+└────────────────────────┘
+? About to apply 2 migration(s)
+Your database may not be available to serve requests during the migration, continue?
+🤖 Using fallback value in non-interactive context: yes
+🌀 Executing on local database DB (local-jornada-tests-only) from .test-data/v3/d1:
+🌀 To execute on your remote database, add a --remote flag to your wrangler command.
+🚣 96 commands executed successfully.
+┌────────────────────────┬────────┐
+│ name                   │ status │
+├────────────────────────┼────────┤
+│ 0001_initial.sql       │ ✅     │
+├────────────────────────┼────────┤
+│ 0002_auth_versions.sql │ 🕒️    │
+└────────────────────────┴────────┘
+🌀 Executing on local database DB (local-jornada-tests-only) from .test-data/v3/d1:
+🌀 To execute on your remote database, add a --remote flag to your wrangler command.
+🚣 4 commands executed successfully.
+┌────────────────────────┬────────┐
+│ name                   │ status │
+├────────────────────────┼────────┤
+│ 0001_initial.sql       │ ✅     │
+├────────────────────────┼────────┤
+│ 0002_auth_versions.sql │ ✅     │
+└────────────────────────┴────────┘
+
+> jornada-ponto@1.0.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /home/user/jornada-clean-check
+
+ ✓ tests/calculations.test.ts (33 tests) 1362ms
+   ✓ Criptografia real > scrypt tem salt aleatório, aceita senha válida e rejeita inválida  1310ms
+
+ Test Files  1 passed (1)
+      Tests  33 passed (33)
+   Start at  14:20:16
+   Duration  1.83s (transform 119ms, setup 0ms, collect 244ms, tests 1.36s, environment 0ms, prepare 73ms)
+
+
+> jornada-ponto@1.0.0 build
+> npm run typecheck && npm run build:web && wrangler deploy --dry-run --outdir .worker-bundle
+
+
+> jornada-ponto@1.0.0 typecheck
+> tsc --noEmit
+
+
+> jornada-ponto@1.0.0 build:web
+> vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 1600 modules transformed.
+rendering chunks...
+computing gzip size...
+../public/index.html                                              0.51 kB │ gzip:   0.34 kB
+../public/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2     10.25 kB
+../public/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2      11.23 kB
+../public/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2       18.75 kB
+../public/assets/inter-greek-wght-normal-CkhJZR-_.woff2          19.00 kB
+../public/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2   25.96 kB
+../public/assets/inter-latin-wght-normal-Dx4kXJAl.woff2          48.26 kB
+../public/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2      85.07 kB
+../public/assets/index-DvFTarNW.css                              67.10 kB │ gzip:  14.94 kB
+../public/assets/index-DbJSzF46.js                              391.22 kB │ gzip: 117.64 kB
+✓ built in 3.41s
+
+ ⛅️ wrangler 4.151.0
+────────────────────
+✨ Read 11 files from the assets directory /home/user/jornada-clean-check/public
+Total Upload: 3937.37 KiB / gzip: 1124.95 KiB
+Your Worker has access to the following bindings:
+Binding                                                        Resource                  
+env.DB (jornada-db)                                            D1 Database               
+env.ASSETS                                                     Assets                    
+env.ENVIRONMENT ("production")                                 Environment Variable      
+env.APP_ORIGIN ("https://configure-o-dominio.invalid")         Environment Variable      
+env.SESSION_HOURS ("8")                                        Environment Variable      
+
+--dry-run: exiting now.

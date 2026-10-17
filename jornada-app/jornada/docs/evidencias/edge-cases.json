@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-15T14:14:23.177Z",
+  "results": [
+    {
+      "test": "HTML recebe CSP e no-store, além das APIs protegidas",
+      "status": "PASS",
+      "ms": 12
+    },
+    {
+      "test": "Identificadores não colidem entre matrícula, usuário e e-mail",
+      "status": "PASS",
+      "ms": 617
+    },
+    {
+      "test": "Primeira entrada concorrente cria um único dia e uma única marcação",
+      "status": "PASS",
+      "ms": 1523
+    },
+    {
+      "test": "Ajustes não aceitam futuro, ordem inválida ou campos inexistentes",
+      "status": "PASS",
+      "ms": 35
+    },
+    {
+      "test": "Dia tratado bloqueia marcação comum, preservando o ponto original",
+      "status": "PASS",
+      "ms": 122
+    },
+    {
+      "test": "Vigências futuras não reescrevem jornadas ou regras anteriores",
+      "status": "PASS",
+      "ms": 83
+    },
+    {
+      "test": "Fechamentos concorrentes geram apenas uma versão válida",
+      "status": "PASS",
+      "ms": 73
+    },
+    {
+      "test": "Relatórios e PDF suportam justificativas longas sem perder o fim do texto",
+      "status": "PASS",
+      "ms": 718
+    },
+    {
+      "test": "CSV neutraliza células que poderiam ser interpretadas como fórmula",
+      "status": "PASS",
+      "ms": 51
+    },
+    {
+      "test": "Versão de autenticação bloqueia sessão antiga que surgiu após revogação",
+      "status": "PASS",
+      "ms": 419
+    },
+    {
+      "test": "Recuperação operacional por CLI emite token somente para administrador existente",
+      "status": "PASS",
+      "ms": 3624
+    },
+    {
+      "test": "Paginação de auditoria não perde eventos com o mesmo milissegundo",
+      "status": "PASS",
+      "ms": 64
+    },
+    {
+      "test": "Revogar todas as sessões também avança a versão de autenticação",
+      "status": "PASS",
+      "ms": 578
+    },
+    {
+      "test": "Backup cifrado real e restauração de SQL em banco separado preservam dados e triggers",
+      "status": "PASS",
+      "ms": 2824
+    }
+  ]
+}

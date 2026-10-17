@@ -1,0 +1,3 @@
+Publicação bloqueada:
+ • Configure APP_ORIGIN com a origem HTTPS real, sem caminho ou barra final.
+ • Substitua o database_id pelo identificador REAL retornado por wrangler d1 create.

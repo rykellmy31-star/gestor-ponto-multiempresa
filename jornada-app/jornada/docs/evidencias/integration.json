@@ -1,0 +1,163 @@
+{
+  "runtime": "Cloudflare Workers local / workerd + D1 SQLite",
+  "date": "2026-10-15T14:13:26.885Z",
+  "passed": 31,
+  "failed": 0,
+  "results": [
+    {
+      "test": "Runtime Workers, D1 e instalação limpa",
+      "status": "PASS",
+      "ms": 92
+    },
+    {
+      "test": "APIs e página administrativa recusam acesso não autenticado",
+      "status": "PASS",
+      "ms": 24
+    },
+    {
+      "test": "Setup exige código e cria primeiro administrador sem senha padrão",
+      "status": "PASS",
+      "ms": 312
+    },
+    {
+      "test": "Login administrativo válido e inválido, cookie HttpOnly e sessão",
+      "status": "PASS",
+      "ms": 797
+    },
+    {
+      "test": "Proteção de origem e CSRF nas operações administrativas",
+      "status": "PASS",
+      "ms": 24
+    },
+    {
+      "test": "Cadastro de jornada persistente e validação de sequência contratual",
+      "status": "PASS",
+      "ms": 38
+    },
+    {
+      "test": "Cadastro real de funcionários, CPF validado e transações sem duplicidade",
+      "status": "PASS",
+      "ms": 752
+    },
+    {
+      "test": "Senhas com salt, CPF cifrado e nenhuma credencial em texto puro no D1",
+      "status": "PASS",
+      "ms": 116
+    },
+    {
+      "test": "Edição de cadastro, texto potencialmente XSS tratado como dado e sem SQL injection",
+      "status": "PASS",
+      "ms": 264
+    },
+    {
+      "test": "Login de funcionário inválido/válido e troca obrigatória de senha inicial",
+      "status": "PASS",
+      "ms": 1220
+    },
+    {
+      "test": "Separação de perfis e bloqueio de IDOR/elevação de privilégio",
+      "status": "PASS",
+      "ms": 287
+    },
+    {
+      "test": "Quatro marcações reais, hora do servidor e sequência estrita",
+      "status": "PASS",
+      "ms": 225
+    },
+    {
+      "test": "Persistência após novas requisições e consulta independente ao D1",
+      "status": "PASS",
+      "ms": 96
+    },
+    {
+      "test": "Triggers impedem alteração e exclusão das marcações originais",
+      "status": "PASS",
+      "ms": 136
+    },
+    {
+      "test": "Ajuste auditado calcula jornada, intervalo e extra ainda não aprovada",
+      "status": "PASS",
+      "ms": 53
+    },
+    {
+      "test": "Aprovação específica de horas positivas compõe o saldo",
+      "status": "PASS",
+      "ms": 43
+    },
+    {
+      "test": "Faltas, registros incompletos e fechamento bloqueado por pendências",
+      "status": "PASS",
+      "ms": 86
+    },
+    {
+      "test": "Solicitação de justificativa, revisão, abono e folga autorizada",
+      "status": "PASS",
+      "ms": 87
+    },
+    {
+      "test": "Feriado configurado e apuração semanal/mensal com dados reais",
+      "status": "PASS",
+      "ms": 59
+    },
+    {
+      "test": "Turno que cruza a meia-noite e o mês permanece no mês de início",
+      "status": "PASS",
+      "ms": 354
+    },
+    {
+      "test": "PDF A4 válido, CSV individual e relatório geral exportados pelo servidor",
+      "status": "PASS",
+      "ms": 551
+    },
+    {
+      "test": "Fechamento congela relatório, bloqueia tratamentos e reabertura é auditada",
+      "status": "PASS",
+      "ms": 251
+    },
+    {
+      "test": "Folha fechada preserva nome da empresa após configuração alterada",
+      "status": "PASS",
+      "ms": 25
+    },
+    {
+      "test": "Recuperação registra pedido, emite token único, expira e revoga sessões",
+      "status": "PASS",
+      "ms": 1665
+    },
+    {
+      "test": "Bloqueio de funcionário revoga acesso e reativação exige administrador",
+      "status": "PASS",
+      "ms": 525
+    },
+    {
+      "test": "Expiração absoluta e por inatividade são validadas no servidor",
+      "status": "PASS",
+      "ms": 374
+    },
+    {
+      "test": "Operações críticas exigem reautenticação recente",
+      "status": "PASS",
+      "ms": 586
+    },
+    {
+      "test": "Proteção contra tentativas repetidas de login",
+      "status": "PASS",
+      "ms": 2552
+    },
+    {
+      "test": "Gerenciamento de administradores autorizado e proteção contra autobloqueio",
+      "status": "PASS",
+      "ms": 305
+    },
+    {
+      "test": "Auditoria é persistente, não contém senhas/tokens e não pode ser alterada",
+      "status": "PASS",
+      "ms": 48
+    },
+    {
+      "test": "Logout encerra sessão imediatamente",
+      "status": "PASS",
+      "ms": 294
+    }
+  ]
+}
