@@ -1,0 +1,44 @@
+
+name: Importar sistema original
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  importar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar repositório CR JORNADA
+        uses: actions/checkout@v4
+
+      - name: Baixar código da Farmácia Pague Pouco
+        run: |
+          git clone --depth 1 --branch main \
+            https://github.com/rykellmy31-star/folhadeponto_paguepouco.git \
+            /tmp/sistema-original
+
+      - name: Copiar arquivos do sistema
+        run: |
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.dev.vars' \
+            --exclude='.env' \
+            --exclude='*.sqlite' \
+            --exclude='*.sqlite3' \
+            --exclude='*.db' \
+            /tmp/sistema-original/ ./
+
+      - name: Salvar arquivos no novo repositório
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if ! git diff --cached --quiet; then
+            git commit -m "Importar base original do sistema de ponto"
+            git push
+          fi
