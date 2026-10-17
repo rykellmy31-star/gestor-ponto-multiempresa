@@ -4,7 +4,9 @@
   "name": "cr-jornada",
   "main": "server/index.ts",
   "compatibility_date": "2026-10-15",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -15,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "cr-jornada-db",
-      "database_id": "SUBSTITUIR_PELO_ID_DO_NOVO_BANCO",
+      "database_id": "39045448-774c-4687-8bb9-26c7c3b2f963",
       "migrations_dir": "migrations"
     }
   ],
@@ -27,7 +29,9 @@
   "rules": [
     {
       "type": "Data",
-      "globs": ["**/*.ttf"],
+      "globs": [
+        "**/*.ttf"
+      ],
       "fallthrough": true
     }
   ],
