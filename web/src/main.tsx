@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {BrowserRouter, Routes, Route, Navigate, Link} from 'react-router-dom';
@@ -12,6 +13,7 @@ import {AdminDashboard, EmployeesPage} from './admin-team';
 import {RecordsPage, AdminReportsPage, AdminOccurrencesPage} from './admin-records';
 import {SchedulesPage, SettingsPage, AdminUsersPage, AuditPage} from './admin-settings';
 import {AdminMoodPage} from './admin-mood';
+import {PlatformPage} from './platform-pages';
 
 class ErrorBoundary extends React.Component<
   {children: React.ReactNode},
@@ -35,6 +37,7 @@ class ErrorBoundary extends React.Component<
         </div>
       );
     }
+
     return this.props.children;
   }
 }
@@ -62,6 +65,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/setup" element={<SetupPage/>}/>
           <Route path="/recuperar-senha" element={<ForgotPage/>}/>
           <Route path="/redefinir-senha" element={<ResetPage/>}/>
+
+          <Route path="/superadmin" element={<PlatformPage/>}/>
 
           <Route path="/app" element={<ProtectedLayout realm="employee"/>}>
             <Route index element={<ClockPage/>}/>
