@@ -1,18 +1,25 @@
 
 import { Hono } from 'hono';
-import type { App } from '../types';
-import {
-  getCookie,
-  setCookie,
-  deleteCookie
-} from 'hono/cookie';
+import { z } from 'zod';
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+
+import type { App, Ctx } from '../types';
+import { body } from '../core/validation';
+import { ensure } from '../core/errors';
 
 import {
+  hashPassword,
+  keyedHash,
   randomToken,
-  sha256,
   safeEqual,
+  sha256,
   verifyPassword
 } from '../core/crypto';
+
+import {
+  ipHash,
+  limit
+} from '../core/security';
 
 export const platformAuthRoutes = new Hono<App>();
 
@@ -31,57 +38,65 @@ type PlatformSession = {
   login: string;
   email: string | null;
   display_name: string;
-  active: number;
   csrf_token: string;
   expires_at: number;
   last_seen_at: number;
 };
 
-function cookieName(
-  environment: string
-): string {
-  return environment === 'production'
+function platformCookieName(c: Ctx) {
+  return c.env.ENVIRONMENT === 'production'
     ? '__Host-cr_jornada_platform'
     : 'cr_jornada_platform_dev';
 }
 
-function cookieOptions(
-  environment: string
-) {
+function platformCookieOptions(c: Ctx) {
   return {
     httpOnly: true,
-    secure: environment === 'production',
+    secure:
+      c.env.ENVIRONMENT === 'production' ||
+      new URL(c.req.url).protocol === 'https:',
     sameSite: 'Strict' as const,
     path: '/'
   };
 }
 
-function failure(
-  c: any,
-  status: 400 | 401 | 403 | 429,
-  message: string
+async function recordPlatformAudit(
+  c: Ctx,
+  action: string,
+  actorId: string | null,
+  entityType: string,
+  entityId: string | null,
+  details: Record<string, unknown> = {}
 ) {
-  return c.json(
-    {
-      success: false,
-      error: message
-    },
-    status
-  );
+  await c.get('db')
+    .prepare(`
+      INSERT INTO platform_audit_log (
+        id,
+        actor_id,
+        action,
+        entity_type,
+        entity_id,
+        details_json,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      crypto.randomUUID(),
+      actorId,
+      action,
+      entityType,
+      entityId,
+      JSON.stringify(details),
+      Date.now()
+    )
+    .run();
 }
 
-async function getSession(
-  c: any
-): Promise<PlatformSession | null> {
-  const token = getCookie(
-    c,
-    cookieName(c.env.ENVIRONMENT)
-  );
+async function getPlatformSession(c: Ctx) {
+  const token = getCookie(c, platformCookieName(c));
 
-  if (
-    !token ||
-    !/^[a-f0-9]{64}$/.test(token)
-  ) {
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) {
     return null;
   }
 
@@ -95,7 +110,6 @@ async function getSession(
         a.login,
         a.email,
         a.display_name,
-        a.active,
         s.csrf_token,
         s.expires_at,
         s.last_seen_at
@@ -111,301 +125,253 @@ async function getSession(
     .bind(
       tokenHash,
       now,
-      now - 30 * 60 * 1000
+      now - 30 * 60000
     )
     .first<PlatformSession>();
 
-  return session ?? null;
+  if (!session) {
+    return null;
+  }
+
+  return {
+    ...session,
+    tokenHash
+  };
 }
 
-/*
- * LOGIN DO SUPERADMIN
- */
-platformAuthRoutes.post(
-  '/login',
-  async c => {
-    let input: unknown;
+// LOGIN DO SUPERADMIN
 
-    try {
-      input = await c.req.json();
-    } catch {
-      return failure(
-        c,
-        400,
-        'JSON inválido.'
-      );
-    }
+platformAuthRoutes.post('/login', async c => {
+  const input = await body(
+    c,
+    z.object({
+      login: z.string().trim().min(1).max(200),
+      password: z.string().min(1).max(128)
+    }).strict()
+  );
 
-    if (
-      !input ||
-      typeof input !== 'object' ||
-      Array.isArray(input)
-    ) {
-      return failure(
-        c,
-        400,
-        'Dados inválidos.'
-      );
-    }
+  const identifier = input.login.toLowerCase();
 
-    const data = input as Record<
-      string,
-      unknown
-    >;
+  await limit(
+    c,
+    `platform-login-ip:${ipHash(c)}`,
+    30,
+    15 * 60000
+  );
 
-    if (
-      typeof data.login !== 'string' ||
-      typeof data.password !== 'string' ||
-      data.login.trim().length < 1 ||
-      data.login.length > 200 ||
-      data.password.length < 1 ||
-      data.password.length > 128
-    ) {
-      return failure(
-        c,
-        400,
-        'Login ou senha inválidos.'
-      );
-    }
+  await limit(
+    c,
+    `platform-login-account:${identifier}`,
+    10,
+    15 * 60000
+  );
 
-    const login = data.login.trim();
-    const password = data.password;
+  const admin = await c.get('db')
+    .prepare(`
+      SELECT
+        id,
+        login,
+        email,
+        display_name,
+        password_hash,
+        active,
+        auth_version
+      FROM platform_admins
+      WHERE login = ?
+    `)
+    .bind(identifier)
+    .first<PlatformAdmin>();
 
-    const admin = await c.get('db')
-      .prepare(`
-        SELECT
-          id,
-          login,
-          email,
-          display_name,
-          password_hash,
-          active,
-          auth_version
-        FROM platform_admins
-        WHERE login = ?
-      `)
-      .bind(login)
-      .first<PlatformAdmin>();
-
-    let valid = false;
-
-    if (admin) {
-      valid = await verifyPassword(
-        password,
+  const valid = admin
+    ? await verifyPassword(
+        input.password,
         admin.password_hash,
         c.env.AUTH_PEPPER
-      );
-    }
-
-    if (
-      !admin ||
-      admin.active !== 1 ||
-      !valid
-    ) {
-      return failure(
-        c,
-        401,
-        'Usuário ou senha inválidos.'
-      );
-    }
-
-    const token = randomToken();
-    const csrfToken = randomToken();
-    const now = Date.now();
-
-    const configuredHours = Number(
-      c.env.SESSION_HOURS || 8
-    );
-
-    const sessionHours =
-      Number.isFinite(configuredHours)
-        ? Math.min(
-            12,
-            Math.max(1, configuredHours)
-          )
-        : 8;
-
-    const expiresAt =
-      now + sessionHours * 3600000;
-
-    await c.get('db')
-      .prepare(`
-        INSERT INTO platform_sessions (
-          token_hash,
-          admin_id,
-          csrf_token,
-          created_at,
-          expires_at,
-          last_seen_at,
-          reauth_at,
-          auth_version
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        sha256(token),
-        admin.id,
-        csrfToken,
-        now,
-        expiresAt,
-        now,
-        now,
-        admin.auth_version
       )
-      .run();
-
-    setCookie(
-      c,
-      cookieName(c.env.ENVIRONMENT),
-      token,
-      {
-        ...cookieOptions(
-          c.env.ENVIRONMENT
+    : (
+        await hashPassword(
+          input.password,
+          c.env.AUTH_PEPPER
         ),
-        maxAge: Math.floor(
-          sessionHours * 3600
-        )
-      }
+        false
+      );
+
+  if (!valid || !admin || admin.active !== 1) {
+    await recordPlatformAudit(
+      c,
+      'platform.login_failed',
+      null,
+      'auth',
+      null
     );
 
     return c.json({
-      success: true,
-      message:
-        'Login realizado com sucesso.',
-      user: {
-        id: admin.id,
-        login: admin.login,
-        email: admin.email,
-        name: admin.display_name,
-        role: 'superadmin'
+      error: {
+        code: 'invalid_credentials',
+        message: 'Usuário ou senha inválidos.'
       }
-    });
+    }, 401);
   }
-);
 
-/*
- * CONSULTAR SESSÃO
- */
-platformAuthRoutes.get(
-  '/session',
-  async c => {
-    const session =
-      await getSession(c);
+  const token = randomToken();
+  const csrfToken = randomToken();
+  const now = Date.now();
 
-    if (!session) {
-      return failure(
-        c,
-        401,
-        'Sessão inválida ou expirada.'
-      );
+  const hours = Math.min(
+    12,
+    Math.max(
+      1,
+      Number(c.env.SESSION_HOURS) || 8
+    )
+  );
+
+  const expiresAt = now + hours * 3600000;
+
+  await c.get('db')
+    .prepare(`
+      INSERT INTO platform_sessions (
+        token_hash,
+        admin_id,
+        csrf_token,
+        created_at,
+        expires_at,
+        last_seen_at,
+        reauth_at,
+        auth_version
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      sha256(token),
+      admin.id,
+      csrfToken,
+      now,
+      expiresAt,
+      now,
+      now,
+      admin.auth_version
+    )
+    .run();
+
+  setCookie(
+    c,
+    platformCookieName(c),
+    token,
+    {
+      ...platformCookieOptions(c),
+      maxAge: Math.floor(hours * 3600)
     }
+  );
 
-    const token = getCookie(
-      c,
-      cookieName(c.env.ENVIRONMENT)
-    );
+  await c.get('db')
+    .prepare('DELETE FROM rate_limits WHERE key = ?')
+    .bind(
+      keyedHash(
+        `platform-login-account:${identifier}`,
+        c.env.AUTH_PEPPER
+      )
+    )
+    .run();
 
-    if (!token) {
-      return failure(
-        c,
-        401,
-        'Não autenticado.'
-      );
-    }
+  await recordPlatformAudit(
+    c,
+    'platform.login',
+    admin.id,
+    'platform_admin',
+    admin.id
+  );
 
+  return c.json({
+    success: true,
+    message: 'Acesso ao CR JORNADA autorizado.'
+  });
+});
+
+// CONSULTAR SESSÃO
+
+platformAuthRoutes.get('/session', async c => {
+  const session = await getPlatformSession(c);
+
+  ensure(
+    session,
+    401,
+    'unauthenticated',
+    'Sua sessão expirou. Entre novamente.'
+  );
+
+  const now = Date.now();
+
+  if (now - session.last_seen_at > 60000) {
     await c.get('db')
       .prepare(`
         UPDATE platform_sessions
         SET last_seen_at = ?
         WHERE token_hash = ?
       `)
-      .bind(
-        Date.now(),
-        sha256(token)
-      )
+      .bind(now, session.tokenHash)
       .run();
-
-    return c.json({
-      success: true,
-      user: {
-        id: session.id,
-        login: session.login,
-        email: session.email,
-        name: session.display_name,
-        role: 'superadmin'
-      },
-      csrf_token: session.csrf_token,
-      expires_at: session.expires_at
-    });
   }
-);
 
-/*
- * LOGOUT DO SUPERADMIN
- */
-platformAuthRoutes.post(
-  '/logout',
-  async c => {
-    const session =
-      await getSession(c);
+  return c.json({
+    user: {
+      id: session.id,
+      login: session.login,
+      email: session.email,
+      name: session.display_name,
+      role: 'superadmin'
+    },
+    csrf_token: session.csrf_token,
+    expires_at: session.expires_at,
+    server_now: now
+  });
+});
 
-    if (!session) {
-      return failure(
-        c,
-        401,
-        'Sessão inválida ou expirada.'
-      );
-    }
+// LOGOUT DO SUPERADMIN
 
-    const csrfToken =
-      c.req.header('X-CSRF-Token') || '';
+platformAuthRoutes.post('/logout', async c => {
+  const session = await getPlatformSession(c);
 
-    if (
-      !safeEqual(
-        csrfToken,
-        session.csrf_token
-      )
-    ) {
-      return failure(
-        c,
-        403,
-        'Token de segurança inválido.'
-      );
-    }
+  ensure(
+    session,
+    401,
+    'unauthenticated',
+    'Sua sessão expirou. Entre novamente.'
+  );
 
-    const token = getCookie(
-      c,
-      cookieName(c.env.ENVIRONMENT)
-    );
+  ensure(
+    safeEqual(
+      c.req.header('X-CSRF-Token') || '',
+      session.csrf_token
+    ),
+    403,
+    'csrf',
+    'Token de segurança inválido.'
+  );
 
-    if (!token) {
-      return failure(
-        c,
-        401,
-        'Não autenticado.'
-      );
-    }
+  await c.get('db')
+    .prepare(`
+      DELETE FROM platform_sessions
+      WHERE token_hash = ?
+    `)
+    .bind(session.tokenHash)
+    .run();
 
-    await c.get('db')
-      .prepare(`
-        DELETE FROM platform_sessions
-        WHERE token_hash = ?
-      `)
-      .bind(sha256(token))
-      .run();
+  deleteCookie(
+    c,
+    platformCookieName(c),
+    platformCookieOptions(c)
+  );
 
-    deleteCookie(
-      c,
-      cookieName(c.env.ENVIRONMENT),
-      cookieOptions(
-        c.env.ENVIRONMENT
-      )
-    );
+  await recordPlatformAudit(
+    c,
+    'platform.logout',
+    session.id,
+    'platform_admin',
+    session.id
+  );
 
-    return c.json({
-      success: true,
-      message:
-        'Sessão encerrada com sucesso.'
-    });
-  }
-);
+  return c.json({
+    success: true,
+    message: 'Sessão encerrada com sucesso.'
+  });
+});
