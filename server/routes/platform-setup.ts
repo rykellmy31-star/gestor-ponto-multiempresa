@@ -40,12 +40,12 @@ platformSetupRoutes.post('/setup', async c => {
     }).strict()
   );
 
+  const bootstrapToken =
+    c.env.PLATFORM_BOOTSTRAP_TOKEN;
+
   ensure(
-    c.env.BOOTSTRAP_TOKEN &&
-    safeEqual(
-      input.token,
-      c.env.BOOTSTRAP_TOKEN
-    ),
+    bootstrapToken &&
+    safeEqual(input.token, bootstrapToken),
     403,
     'invalid_platform_setup',
     'Código de configuração inválido.'
@@ -74,7 +74,7 @@ platformSetupRoutes.post('/setup', async c => {
     c.env.AUTH_PEPPER
   );
 
-  await c.get('db')
+  const result = await c.get('db')
     .prepare(`
       INSERT INTO platform_admins (
         id,
@@ -101,15 +101,38 @@ platformSetupRoutes.post('/setup', async c => {
       now,
       now
     )
-    .run()
-    .then(result => {
-      ensure(
-        result.meta.changes === 1,
-        410,
-        'platform_setup_completed',
-        'O Superadministrador já foi configurado.'
-      );
-    });
+    .run();
+
+  ensure(
+    result.meta.changes === 1,
+    410,
+    'platform_setup_completed',
+    'O Superadministrador já foi configurado.'
+  );
+
+  await c.get('db')
+    .prepare(`
+      INSERT INTO platform_audit_log (
+        id,
+        actor_id,
+        action,
+        entity_type,
+        entity_id,
+        details_json,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(
+      crypto.randomUUID(),
+      id,
+      'platform.setup_completed',
+      'platform_admin',
+      id,
+      '{}',
+      now
+    )
+    .run();
 
   return c.json(
     {
