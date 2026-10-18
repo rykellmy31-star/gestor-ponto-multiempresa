@@ -53,7 +53,7 @@ export type App = {
     principal: Principal;
 
     // Empresa identificada pela sessao autenticada.
-    // Somente id e slug sao disponibilizados pelo middleware.
+    // O middleware disponibiliza o ID e o slug da empresa.
     company: Pick<Company, 'id' | 'slug'> | null;
 
     requestId: string;
@@ -164,12 +164,16 @@ export interface Report {
   to: string;
   generated_at: number;
   days: DayResult[];
-  totals: Totals[];
+
+  // Corrigido: totals e um objeto, nao um array.
+  totals: Totals;
+
   weeks: {
     from: string;
     to: string;
     totals: Totals;
   }[];
+
   closure: null | {
     id: string;
     status: string;
@@ -177,5 +181,6 @@ export interface Report {
     closed_at: number;
     report_hash: string;
   };
+
   revision: number;
 }
