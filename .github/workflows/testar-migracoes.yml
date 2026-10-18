@@ -1,0 +1,34 @@
+
+name: Testar migracoes CR JORNADA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Aplicar migracoes em banco local
+        run: |
+          npx wrangler d1 migrations apply cr-jornada-db --local
+
+      - name: Conferir tabelas
+        run: |
+          npx wrangler d1 execute cr-jornada-db --local \
+            --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('companies','company_settings','platform_admins');"
