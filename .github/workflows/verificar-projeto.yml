@@ -1,0 +1,41 @@
+
+name: Verificar CR JORNADA
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Compilação e TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificar TypeScript
+        run: npm run typecheck
+
+      - name: Compilar interface React
+        run: npm run build:web
+
+      - name: Verificar compilação do Cloudflare Worker
+        run: npx wrangler deploy --dry-run --outdir .worker-bundle
