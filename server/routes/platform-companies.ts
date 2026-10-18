@@ -1,0 +1,395 @@
+
+import { Hono } from 'hono';
+import { z } from 'zod';
+
+import type { App, Ctx } from '../types';
+import { ensure } from '../core/errors';
+import { safeEqual } from '../core/crypto';
+import { getPlatformSession } from './platform-auth';
+
+export const platformCompaniesRoutes = new Hono<App>();
+
+const companySchema = z.object({
+  name: z.string().trim().min(2).max(150),
+  document: z.string().trim().max(30).default(''),
+  slug: z.string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .min(3)
+    .max(60),
+  logo_url: z.union([
+    z.string().trim().url().max(2048)
+      .refine(value => value.startsWith('https://')),
+    z.literal(''),
+    z.null()
+  ]).optional(),
+  primary_color: z.string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#0F766E'),
+  timezone: z.enum([
+    'America/Bahia',
+    'America/Sao_Paulo'
+  ]).default('America/Bahia')
+}).strict();
+
+const statusSchema = z.object({
+  status: z.enum(['active', 'suspended'])
+}).strict();
+
+type CompanyRow = {
+  id: string;
+  name: string;
+  document: string;
+  slug: string;
+  logo_url: string | null;
+  primary_color: string;
+  timezone: string;
+  status: string;
+  created_at: number;
+  updated_at: number;
+};
+
+async function requirePlatformAdmin(
+  c: Ctx,
+  checkCsrf = false
+) {
+  const session = await getPlatformSession(c);
+
+  ensure(
+    session,
+    401,
+    'unauthenticated',
+    'Entre como Superadministrador.'
+  );
+
+  if (checkCsrf) {
+    ensure(
+      safeEqual(
+        c.req.header('X-CSRF-Token') || '',
+        session.csrf_token
+      ),
+      403,
+      'csrf',
+      'Solicitação de segurança inválida.'
+    );
+  }
+
+  return session;
+}
+
+async function recordAudit(
+  c: Ctx,
+  actorId: string,
+  action: string,
+  companyId: string,
+  details: unknown
+) {
+  await c.get('db').prepare(`
+    INSERT INTO platform_audit_log (
+      id,
+      actor_id,
+      action,
+      entity_type,
+      entity_id,
+      details_json,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    crypto.randomUUID(),
+    actorId,
+    action,
+    'company',
+    companyId,
+    JSON.stringify(details),
+    Date.now()
+  ).run();
+}
+
+// Listar empresas cadastradas.
+platformCompaniesRoutes.get('/', async c => {
+  await requirePlatformAdmin(c);
+
+  const result = await c.get('db').prepare(`
+    SELECT
+      id, name, document, slug, logo_url,
+      primary_color, timezone, status,
+      created_at, updated_at
+    FROM companies
+    ORDER BY created_at DESC
+    LIMIT 500
+  `).all<CompanyRow>();
+
+  return c.json({
+    companies: result.results || []
+  });
+});
+
+// Cadastrar uma nova empresa.
+platformCompaniesRoutes.post('/', async c => {
+  const admin = await requirePlatformAdmin(c, true);
+
+  const parsed = companySchema.safeParse(
+    await c.req.json().catch(() => null)
+  );
+
+  ensure(
+    parsed.success,
+    400,
+    'invalid_company',
+    'Confira os dados informados.'
+  );
+
+  const data = parsed.data;
+  const db = c.get('db');
+
+  const existing = await db.prepare(`
+    SELECT id FROM companies
+    WHERE slug = ? COLLATE NOCASE
+    LIMIT 1
+  `).bind(data.slug).first();
+
+  ensure(
+    !existing,
+    409,
+    'duplicate_slug',
+    'Esse endereço de empresa já está em uso.'
+  );
+
+  const id = crypto.randomUUID();
+  const now = Date.now();
+
+  const statements = [
+    db.prepare(`
+      INSERT INTO companies (
+        id, name, document, slug,
+        logo_url, primary_color, timezone,
+        status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+    `).bind(
+      id,
+      data.name,
+      data.document,
+      data.slug,
+      data.logo_url || null,
+      data.primary_color,
+      data.timezone,
+      now,
+      now
+    ),
+    db.prepare(`
+      INSERT INTO platform_audit_log (
+        id, actor_id, action, entity_type,
+        entity_id, details_json, created_at
+      ) VALUES (?, ?, ?, 'company', ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      admin.id,
+      'company.created',
+      id,
+      JSON.stringify({
+        name: data.name,
+        slug: data.slug
+      }),
+      now
+    )
+  ];
+
+  await db.batch(statements);
+
+  return c.json({
+    success: true,
+    company: {
+      id,
+      ...data,
+      logo_url: data.logo_url || null,
+      status: 'active',
+      created_at: now,
+      updated_at: now
+    }
+  }, 201);
+});
+
+// Consultar uma empresa.
+platformCompaniesRoutes.get('/:id', async c => {
+  await requirePlatformAdmin(c);
+
+  const company = await c.get('db').prepare(`
+    SELECT
+      id, name, document, slug, logo_url,
+      primary_color, timezone, status,
+      created_at, updated_at
+    FROM companies
+    WHERE id = ?
+  `).bind(c.req.param('id')).first<CompanyRow>();
+
+  ensure(
+    company,
+    404,
+    'company_not_found',
+    'Empresa não encontrada.'
+  );
+
+  return c.json({ company });
+});
+
+// Atualizar dados de uma empresa.
+platformCompaniesRoutes.put('/:id', async c => {
+  const admin = await requirePlatformAdmin(c, true);
+  const id = c.req.param('id');
+
+  const parsed = companySchema.safeParse(
+    await c.req.json().catch(() => null)
+  );
+
+  ensure(
+    parsed.success,
+    400,
+    'invalid_company',
+    'Confira os dados informados.'
+  );
+
+  const data = parsed.data;
+  const db = c.get('db');
+
+  const existing = await db.prepare(`
+    SELECT id FROM companies WHERE id = ?
+  `).bind(id).first();
+
+  ensure(
+    existing,
+    404,
+    'company_not_found',
+    'Empresa não encontrada.'
+  );
+
+  const duplicate = await db.prepare(`
+    SELECT id FROM companies
+    WHERE slug = ? COLLATE NOCASE AND id != ?
+    LIMIT 1
+  `).bind(data.slug, id).first();
+
+  ensure(
+    !duplicate,
+    409,
+    'duplicate_slug',
+    'Esse endereço de empresa já está em uso.'
+  );
+
+  const now = Date.now();
+
+  await db.batch([
+    db.prepare(`
+      UPDATE companies
+      SET
+        name = ?,
+        document = ?,
+        slug = ?,
+        logo_url = ?,
+        primary_color = ?,
+        timezone = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).bind(
+      data.name,
+      data.document,
+      data.slug,
+      data.logo_url || null,
+      data.primary_color,
+      data.timezone,
+      now,
+      id
+    ),
+    db.prepare(`
+      INSERT INTO platform_audit_log (
+        id, actor_id, action, entity_type,
+        entity_id, details_json, created_at
+      ) VALUES (?, ?, ?, 'company', ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      admin.id,
+      'company.updated',
+      id,
+      JSON.stringify({
+        name: data.name,
+        slug: data.slug
+      }),
+      now
+    )
+  ]);
+
+  return c.json({ success: true });
+});
+
+// Ativar ou suspender empresa.
+platformCompaniesRoutes.patch('/:id/status', async c => {
+  const admin = await requirePlatformAdmin(c, true);
+  const id = c.req.param('id');
+
+  const parsed = statusSchema.safeParse(
+    await c.req.json().catch(() => null)
+  );
+
+  ensure(
+    parsed.success,
+    400,
+    'invalid_status',
+    'Situação inválida.'
+  );
+
+  const db = c.get('db');
+
+  const existing = await db.prepare(`
+    SELECT id, status
+    FROM companies
+    WHERE id = ?
+  `).bind(id).first<{
+    id: string;
+    status: string;
+  }>();
+
+  ensure(
+    existing,
+    404,
+    'company_not_found',
+    'Empresa não encontrada.'
+  );
+
+  ensure(
+    existing.status !== 'archived',
+    409,
+    'company_archived',
+    'Uma empresa arquivada não pode ser alterada.'
+  );
+
+  const now = Date.now();
+
+  await db.batch([
+    db.prepare(`
+      UPDATE companies
+      SET status = ?, updated_at = ?
+      WHERE id = ? AND status != 'archived'
+    `).bind(parsed.data.status, now, id),
+    db.prepare(`
+      INSERT INTO platform_audit_log (
+        id, actor_id, action, entity_type,
+        entity_id, details_json, created_at
+      ) VALUES (?, ?, ?, 'company', ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      admin.id,
+      'company.status_changed',
+      id,
+      JSON.stringify({
+        previous_status: existing.status,
+        new_status: parsed.data.status
+      }),
+      now
+    )
+  ]);
+
+  return c.json({
+    success: true,
+    status: parsed.data.status
+  });
+});
