@@ -9,12 +9,10 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 // CR JORNADA - Passo 56
+// Testes das restricoes de matricula no D1 local.
 //
-// Testes reais das restricoes de matricula no D1 local.
-//
-// Nao executa migracoes remotas.
-// Nao modifica o banco de producao.
-// Utiliza armazenamento temporario exclusivo.
+// Nenhuma operacao utiliza --remote.
+// Nenhuma alteracao e feita no banco de producao.
 
 const executable = join(
   process.cwd(),
@@ -50,7 +48,7 @@ function run(
 }
 
 function execute(
-  sql: string,
+  statement: string,
   directory: string
 ): string {
   return run(
@@ -58,7 +56,7 @@ function execute(
       'execute',
       'DB',
       '--command',
-      sql,
+      statement,
       '--json'
     ],
     directory
@@ -152,6 +150,32 @@ function insertEmployee(
   );
 }
 
+// Captura o resultado de uma operacao que
+// esperamos que seja rejeitada pelo banco.
+function captureFailure(
+  operation: () => void
+): string {
+  try {
+    operation();
+  } catch (error: unknown) {
+    const details = error as {
+      message?: string;
+      stderr?: string | Buffer;
+      stdout?: string | Buffer;
+    };
+
+    return [
+      details.message || '',
+      String(details.stderr || ''),
+      String(details.stdout || '')
+    ].join('\n');
+  }
+
+  throw new Error(
+    'A operacao foi aceita, mas deveria ter sido bloqueada.'
+  );
+}
+
 describe('CR JORNADA - matriculas no D1 local', () => {
   it('identifica bloqueio global entre empresas', () => {
     const directory = createDatabase();
@@ -176,14 +200,18 @@ describe('CR JORNADA - matriculas no D1 local', () => {
         '001'
       );
 
-      expect(() => {
+      const error = captureFailure(() => {
         insertEmployee(
           directory,
           'employee-b',
           'company-b',
           '001'
         );
-      }).toThrow(/UNIQUE constraint failed/i);
+      });
+
+      expect(error).toMatch(
+        /UNIQUE constraint failed/i
+      );
     } finally {
       rmSync(directory, {
         recursive: true,
@@ -209,14 +237,18 @@ describe('CR JORNADA - matriculas no D1 local', () => {
         '002'
       );
 
-      expect(() => {
+      const error = captureFailure(() => {
         insertEmployee(
           directory,
           'employee-b',
           'company-a',
           '002'
         );
-      }).toThrow(/UNIQUE constraint failed/i);
+      });
+
+      expect(error).toMatch(
+        /UNIQUE constraint failed/i
+      );
     } finally {
       rmSync(directory, {
         recursive: true,
