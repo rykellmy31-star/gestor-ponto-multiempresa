@@ -5,6 +5,15 @@
 
 PRAGMA defer_foreign_keys = ON;
 
+-- Compatibilidade com bancos que ainda nao possuem esta tabela.
+-- O IF NOT EXISTS preserva os cancelamentos quando ela ja existe.
+CREATE TABLE IF NOT EXISTS schedule_assignment_cancellations (
+  assignment_id TEXT PRIMARY KEY REFERENCES schedule_assignments(id),
+  cancelled_at INTEGER NOT NULL,
+  cancelled_by TEXT NOT NULL REFERENCES users(id),
+  reason TEXT NOT NULL DEFAULT 'Cancelamento administrativo'
+);
+
 -- Copias temporarias dos registros existentes.
 CREATE TABLE backup_assignments_0006 AS
 SELECT id, employee_id, schedule_id, effective_from, created_at
