@@ -139,7 +139,22 @@ app.get('/api/health', async c => {
   });
 });
 
-// Autenticacao original
+// CR JORNADA: bloqueio preventivo das rotas legadas de empresa única.
+// Estas rotas ainda não verificam company_id em todas as leituras e gravações.
+ // Nunca habilitar antes de concluir a migração e os testes de isolamento.
+app.use('/api/*', async (c, next) => {
+  if (!c.req.path.startsWith('/api/platform/') && c.req.path !== '/api/health') {
+    return c.json({
+      error: {
+        code: 'tenant_isolation_pending',
+        message: 'Módulo de funcionários e ponto indisponível até concluir o isolamento entre empresas.'
+      }
+    }, 503);
+  }
+  await next();
+});
+
+// Autenticacao original (bloqueada preventivamente pelo middleware acima)
 app.route('/api', authRoutes);
 
 // CR JORNADA - Autenticacao do Superadmin
@@ -195,6 +210,14 @@ app.get('*', async c => {
     target.search = new URL(c.req.url).search;
 
     return c.redirect(target.toString(), 302);
+  }
+
+  // Não disponibilizar telas legadas que ainda operam sem company_id.
+  if (path === '/admin' || path.startsWith('/admin/') ||
+      path === '/app' || path.startsWith('/app/') ||
+      path === '/entrar' || path === '/setup' ||
+      path === '/redefinir-senha') {
+    return c.redirect('/superadmin', 302);
   }
 
   if (

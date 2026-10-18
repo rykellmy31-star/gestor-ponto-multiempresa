@@ -1,6 +1,7 @@
 import {existsSync,readdirSync,readFileSync} from 'node:fs';
 import {config} from './lib.mjs';
 const c=config();const failures=[];
+failures.push('CR JORNADA: publicação bloqueada até implementação e auditoria do isolamento multiempresa em TODAS as rotas e migrações.');
 if(c.vars?.ENVIRONMENT!=='production')failures.push('ENVIRONMENT deve ser production no arquivo de publicação.');
 let origin;try{origin=new URL(c.vars?.APP_ORIGIN);if(origin.protocol!=='https:'||origin.origin!==c.vars.APP_ORIGIN||origin.hostname.endsWith('.invalid'))throw 0;}catch{failures.push('Configure APP_ORIGIN com a origem HTTPS real, sem caminho ou barra final.');}
 if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(c.d1_databases?.find(d=>d.binding==='DB')?.database_id||''))failures.push('Substitua o database_id pelo identificador REAL retornado por wrangler d1 create.');

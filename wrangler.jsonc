@@ -22,7 +22,7 @@
     }
   ],
   "vars": {
-    "ENVIRONMENT": "development",
+    "ENVIRONMENT": "production",
     "APP_ORIGIN": "https://cr-jornada.netssh3-0.workers.dev",
     "SESSION_HOURS": "8"
   },
