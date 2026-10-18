@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { App } from './types';
 import { ApiError } from './core/errors';
-import { auth, getPrincipal, originGuard } from './core/security';
+import { auth, originGuard } from './core/security';
 
 import { authRoutes } from './routes/auth';
 import { employeeRoutes } from './routes/employee';
@@ -30,8 +30,15 @@ import {
   platformCompaniesRoutes
 } from './routes/platform-companies';
 
-// CR JORNADA - Login dos administradores das empresas
-import { companyAuthRoutes } from './routes/company-auth';
+// CR JORNADA - Autenticacao empresarial
+import {
+  companyAuthRoutes
+} from './routes/company-auth';
+
+// CR JORNADA - Funcionarios por empresa
+import {
+  companyEmployeesRoutes
+} from './routes/company-employees';
 
 const app = new Hono<App>();
 
@@ -142,26 +149,53 @@ app.get('/api/health', async c => {
   });
 });
 
-// CR JORNADA: bloqueio preventivo das rotas legadas de empresa única.
-// Estas rotas ainda não verificam company_id em todas as leituras e gravações.
- // Nunca habilitar antes de concluir a migração e os testes de isolamento.
+// CR JORNADA - Bloqueio preventivo.
+//
+// Somente as APIs da plataforma, a autenticacao
+// empresarial e a listagem GET de funcionarios
+// estao liberadas.
+//
+// As rotas antigas permanecem bloqueadas ate
+// a conclusao do isolamento entre empresas.
 app.use('/api/*', async (c, next) => {
+  const path = c.req.path;
+
+  const isPlatformRoute =
+    path.startsWith('/api/platform/');
+
+  const isCompanyAuthRoute =
+    path.startsWith('/api/company/auth/');
+
+  const isCompanyEmployeesList =
+    path === '/api/company/employees' &&
+    c.req.method === 'GET';
+
+  const isHealthRoute =
+    path === '/api/health';
+
   if (
-    !c.req.path.startsWith('/api/platform/') &&
-    !c.req.path.startsWith('/api/company/auth/') &&
-    c.req.path !== '/api/health'
+    !isPlatformRoute &&
+    !isCompanyAuthRoute &&
+    !isCompanyEmployeesList &&
+    !isHealthRoute
   ) {
-    return c.json({
-      error: {
-        code: 'tenant_isolation_pending',
-        message: 'Módulo de funcionários e ponto indisponível até concluir o isolamento entre empresas.'
-      }
-    }, 503);
+    return c.json(
+      {
+        error: {
+          code: 'tenant_isolation_pending',
+          message:
+            'Modulo indisponivel ate concluir o isolamento entre empresas.'
+        }
+      },
+      503
+    );
   }
+
   await next();
 });
 
-// Autenticacao original (bloqueada preventivamente pelo middleware acima)
+// Autenticacao original:
+// permanece bloqueada pelo middleware acima.
 app.route('/api', authRoutes);
 
 // CR JORNADA - Autenticacao do Superadmin
@@ -171,18 +205,28 @@ app.route('/api/platform/auth', platformAuthRoutes);
 app.route('/api/platform', platformSetupRoutes);
 
 // CR JORNADA - Cadastro e gerenciamento de empresas
-app.route('/api/platform/companies', platformCompaniesRoutes);
+app.route(
+  '/api/platform/companies',
+  platformCompaniesRoutes
+);
 
-// Autenticacao empresarial (somente login, sessao e logout)
+// CR JORNADA - Autenticacao empresarial
 app.route('/api/company/auth', companyAuthRoutes);
 
-// Rotas dos funcionarios
+// CR JORNADA - Listagem de funcionarios da empresa
+app.route(
+  '/api/company/employees',
+  companyEmployeesRoutes
+);
+
+// Rotas antigas de funcionarios:
+// permanecem bloqueadas.
 app.route('/api/employee', employeeRoutes);
 
 // Termometro de Humor - funcionario
 app.route('/api/employee', employeeMoodRoutes);
 
-// Rotas administrativas
+// Rotas administrativas antigas
 const admin = new Hono<App>();
 
 admin.use('*', auth('admin'));
@@ -222,31 +266,18 @@ app.get('*', async c => {
     return c.redirect(target.toString(), 302);
   }
 
-  // Não disponibilizar telas legadas que ainda operam sem company_id.
-  if (path === '/admin' || path.startsWith('/admin/') ||
-      path === '/app' || path.startsWith('/app/') ||
-      path === '/entrar' || path === '/setup' ||
-      path === '/redefinir-senha') {
-    return c.redirect('/superadmin', 302);
-  }
-
+  // Bloqueia telas antigas que ainda nao
+  // utilizam isolamento empresarial.
   if (
-    (path === '/admin' || path.startsWith('/admin/')) &&
-    path !== '/admin/entrar'
+    path === '/admin' ||
+    path.startsWith('/admin/') ||
+    path === '/app' ||
+    path.startsWith('/app/') ||
+    path === '/entrar' ||
+    path === '/setup' ||
+    path === '/redefinir-senha'
   ) {
-    const user = await getPrincipal(c, 'admin');
-
-    if (!user) {
-      return c.redirect('/admin/entrar', 302);
-    }
-  }
-
-  if (path === '/app' || path.startsWith('/app/')) {
-    const user = await getPrincipal(c, 'employee');
-
-    if (!user) {
-      return c.redirect('/entrar', 302);
-    }
+    return c.redirect('/superadmin', 302);
   }
 
   // O painel Superadmin utiliza sua propria
@@ -345,7 +376,8 @@ app.onError((error, c) => {
       {
         error: {
           code: 'invalid_reference',
-          message: 'Um dos cadastros referenciados não existe ou foi alterado. Atualize a tela.'
+          message:
+            'Um dos cadastros referenciados não existe ou foi alterado. Atualize a tela.'
         }
       },
       422
@@ -364,7 +396,8 @@ app.onError((error, c) => {
     {
       error: {
         code: 'internal_error',
-        message: 'Não foi possível confirmar a operação. Atualize a página ou tente novamente com segurança.'
+        message:
+          'Não foi possível confirmar a operação. Atualize a página ou tente novamente com segurança.'
       },
       requestId: c.get('requestId')
     },
