@@ -51,7 +51,11 @@ export type App = {
   Variables: {
     db: D1DatabaseSession;
     principal: Principal;
-    company: Company | null;
+
+    // Empresa identificada pela sessao autenticada.
+    // Somente id e slug sao disponibilizados pelo middleware.
+    company: Pick<Company, 'id' | 'slug'> | null;
+
     requestId: string;
   };
 };
@@ -160,7 +164,7 @@ export interface Report {
   to: string;
   generated_at: number;
   days: DayResult[];
-  totals: Totals;
+  totals: Totals[];
   weeks: {
     from: string;
     to: string;
