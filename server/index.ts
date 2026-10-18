@@ -30,6 +30,9 @@ import {
   platformCompaniesRoutes
 } from './routes/platform-companies';
 
+// CR JORNADA - Login dos administradores das empresas
+import { companyAuthRoutes } from './routes/company-auth';
+
 const app = new Hono<App>();
 
 app.use('*', async (c, next) => {
@@ -143,7 +146,11 @@ app.get('/api/health', async c => {
 // Estas rotas ainda não verificam company_id em todas as leituras e gravações.
  // Nunca habilitar antes de concluir a migração e os testes de isolamento.
 app.use('/api/*', async (c, next) => {
-  if (!c.req.path.startsWith('/api/platform/') && c.req.path !== '/api/health') {
+  if (
+    !c.req.path.startsWith('/api/platform/') &&
+    !c.req.path.startsWith('/api/company/auth/') &&
+    c.req.path !== '/api/health'
+  ) {
     return c.json({
       error: {
         code: 'tenant_isolation_pending',
@@ -165,6 +172,9 @@ app.route('/api/platform', platformSetupRoutes);
 
 // CR JORNADA - Cadastro e gerenciamento de empresas
 app.route('/api/platform/companies', platformCompaniesRoutes);
+
+// Autenticacao empresarial (somente login, sessao e logout)
+app.route('/api/company/auth', companyAuthRoutes);
 
 // Rotas dos funcionarios
 app.route('/api/employee', employeeRoutes);
