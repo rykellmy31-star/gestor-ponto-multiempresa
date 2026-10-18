@@ -15,11 +15,11 @@ permissions:
 
 jobs:
   verificar:
-    name: Compilação e TypeScript
+    name: Compilacao e Testes
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar código
+      - name: Baixar codigo
         uses: actions/checkout@v4
 
       - name: Preparar Node.js
@@ -28,14 +28,17 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Instalar dependências
+      - name: Instalar dependencias
         run: npm ci
 
       - name: Verificar TypeScript
         run: npm run typecheck
 
+      - name: Executar testes automatizados
+        run: npm test
+
       - name: Compilar interface React
         run: npm run build:web
 
-      - name: Verificar compilação do Cloudflare Worker
+      - name: Verificar Cloudflare Worker
         run: npx wrangler deploy --dry-run --outdir .worker-bundle
