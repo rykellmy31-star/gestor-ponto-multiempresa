@@ -25,6 +25,11 @@ import {
   platformSetupRoutes
 } from './routes/platform-setup';
 
+// CR JORNADA - Gerenciamento de empresas
+import {
+  platformCompaniesRoutes
+} from './routes/platform-companies';
+
 const app = new Hono<App>();
 
 app.use('*', async (c, next) => {
@@ -143,6 +148,9 @@ app.route('/api/platform/auth', platformAuthRoutes);
 // CR JORNADA - Configuracao inicial do Superadmin
 app.route('/api/platform', platformSetupRoutes);
 
+// CR JORNADA - Cadastro e gerenciamento de empresas
+app.route('/api/platform/companies', platformCompaniesRoutes);
+
 // Rotas dos funcionarios
 app.route('/api/employee', employeeRoutes);
 
@@ -208,10 +216,11 @@ app.get('*', async c => {
     }
   }
 
-  // O painel Superadmin tera sua propria
-  // verificacao de sessao antes da publicacao.
-  // Nao habilitar paginas administrativas
-  // sem a protecao correspondente.
+  // O painel Superadmin utiliza sua propria
+  // verificacao de sessao no frontend.
+  // A API administrativa exige autenticacao.
+  // A protecao da rota HTML sera adicionada
+  // antes da publicacao.
 
   return c.env.ASSETS.fetch(c.req.raw);
 });
