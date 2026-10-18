@@ -5,10 +5,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// CR JORNADA - Passo 57.4
+// CR JORNADA - Passo 57.4 - CORRIGIDO
 // Auditoria das chaves estrangeiras de employees.
-// Somente banco D1 local e temporario.
-// Nao modifica o banco de producao.
+//
+// Consulta apenas tabelas conhecidas do CR JORNADA.
+// Nao acessa tabelas internas do Cloudflare.
+// Somente D1 local e temporario.
+// Nenhum deploy ou migracao remota.
 
 const executable = join(
   process.cwd(),
@@ -82,45 +85,56 @@ describe('CR JORNADA - seguranca das foreign keys', () => {
         directory
       );
 
-      const tables = query(
-        `SELECT name
-         FROM sqlite_master
-         WHERE type = 'table'
-           AND name NOT LIKE 'sqlite_%'`,
-        directory
-      );
+      // Apenas tabelas do sistema que possuem
+      // referencias diretas a employees.
+      //
+      // Evita consultar _cf_METADATA e outras
+      // tabelas internas protegidas pelo D1.
+
+      const tables = [
+        'users',
+        'schedule_assignments',
+        'work_days',
+        'punches',
+        'occurrences',
+        'overtime_decisions',
+        'monthly_closures'
+      ];
 
       const references: Array<{
         table: string;
         onDelete: string;
       }> = [];
 
-      for (const row of tables) {
-        const table = String(row.name);
-
-        // Identificadores obtidos do proprio
-        // catalogo local do SQLite.
-        const safeName = table.replace(/"/g, '""');
-
+      for (const table of tables) {
         const foreignKeys = query(
-          `PRAGMA foreign_key_list("${safeName}")`,
+          `PRAGMA foreign_key_list("${table}")`,
           directory
         );
 
-        for (const foreignKey of foreignKeys) {
-          if (foreignKey.table === 'employees') {
-            references.push({
-              table,
-              onDelete: String(foreignKey.on_delete)
-            });
-          }
+        const employeeReferences = foreignKeys.filter(
+          (foreignKey) =>
+            foreignKey.table === 'employees'
+        );
+
+        // Cada tabela listada deve continuar
+        // referenciando employees.
+        expect(
+          employeeReferences.length,
+          `Referencia ausente em ${table}`
+        ).toBeGreaterThan(0);
+
+        for (const foreignKey of employeeReferences) {
+          references.push({
+            table,
+            onDelete: String(foreignKey.on_delete)
+          });
         }
       }
 
-      // O banco deve possuir referencias a employees.
       expect(references.length).toBeGreaterThan(0);
 
-      // Impede exclusao em cascata de historicos.
+      // Impede exclusao automatica em cascata.
       const cascades = references.filter(
         (reference) =>
           reference.onDelete.toUpperCase() === 'CASCADE'
@@ -128,11 +142,10 @@ describe('CR JORNADA - seguranca das foreign keys', () => {
 
       expect(
         cascades,
-        'ON DELETE CASCADE encontrado em employees'
+        'ON DELETE CASCADE encontrado'
       ).toHaveLength(0);
 
-      // Impede que um DROP altere silenciosamente
-      // referencias historicas para NULL.
+      // Impede alteracao automatica das referencias.
       const setNull = references.filter(
         (reference) =>
           reference.onDelete.toUpperCase() === 'SET NULL'
@@ -140,16 +153,17 @@ describe('CR JORNADA - seguranca das foreign keys', () => {
 
       expect(
         setNull,
-        'ON DELETE SET NULL encontrado em employees'
+        'ON DELETE SET NULL encontrado'
       ).toHaveLength(0);
 
-      // Confirma a integridade do banco.
+      // Confirma integridade referencial local.
       const violations = query(
         'PRAGMA foreign_key_check',
         directory
       );
 
       expect(violations).toHaveLength(0);
+
     } finally {
       rmSync(directory, {
         recursive: true,
