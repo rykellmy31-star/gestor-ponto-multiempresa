@@ -100,7 +100,8 @@ async function getErrorMessage(
   response: Response,
   fallback: string
 ) {
-  const data = await response.json().catch(() => null);
+  const data: { error?: { code?: string; message?: string } } | null =
+    await response.json().catch(() => null);
 
   if (response.status === 401) {
     return 'Sua sessão expirou. Entre novamente.';
