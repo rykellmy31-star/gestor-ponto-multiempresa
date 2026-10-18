@@ -4,7 +4,9 @@ import { z } from 'zod';
 
 import type { App, Ctx } from '../types';
 import { ensure } from '../core/errors';
-import { safeEqual } from '../core/crypto';
+import { hashPassword, safeEqual } from '../core/crypto';
+import { login as loginSchema, password as passwordSchema } from '../core/validation';
+import { ipHash, limit } from '../core/security';
 import { getPlatformSession } from './platform-auth';
 
 export const platformCompaniesRoutes = new Hono<App>();
@@ -392,4 +394,60 @@ platformCompaniesRoutes.patch('/:id/status', async c => {
     success: true,
     status: parsed.data.status
   });
+});
+
+
+// CR JORNADA: cadastro de administradores vinculados a uma empresa.
+// A autenticação destes administradores será habilitada apenas após
+// a implementação e os testes do isolamento por company_id.
+const companyAdminSchema = z.object({
+  name: z.string().trim().min(3).max(140),
+  login: loginSchema,
+  email: z.union([z.email(), z.literal('')]),
+  password: passwordSchema
+}).strict();
+
+platformCompaniesRoutes.get('/:id/admins', async c => {
+  await requirePlatformAdmin(c);
+  const companyId = c.req.param('id');
+  const company = await c.get('db').prepare('SELECT id FROM companies WHERE id = ?')
+    .bind(companyId).first();
+  ensure(company, 404, 'company_not_found', 'Empresa não encontrada.');
+  const result = await c.get('db').prepare(`
+    SELECT id, company_id, login, email, display_name, active, created_at, updated_at
+    FROM company_admins WHERE company_id = ? ORDER BY created_at DESC LIMIT 100
+  `).bind(companyId).all();
+  return c.json({ admins: result.results || [] });
+});
+
+platformCompaniesRoutes.post('/:id/admins', async c => {
+  const admin = await requirePlatformAdmin(c, true);
+  await limit(c, `company-admin-create:${admin.id}:${ipHash(c)}`, 15, 3600000);
+  const companyId = c.req.param('id');
+  const parsed = companyAdminSchema.safeParse(await c.req.json().catch(() => null));
+  ensure(parsed.success, 400, 'invalid_company_admin', 'Confira os dados do administrador.');
+  const data = parsed.data;
+  const db = c.get('db');
+  const company = await db.prepare('SELECT id, status FROM companies WHERE id = ?')
+    .bind(companyId).first<{ id: string; status: string }>();
+  ensure(company, 404, 'company_not_found', 'Empresa não encontrada.');
+  ensure(company.status === 'active', 409, 'company_inactive', 'A empresa precisa estar ativa.');
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const passwordHash = await hashPassword(data.password, c.env.AUTH_PEPPER);
+  await db.batch([
+    db.prepare(`INSERT INTO company_admins
+      (id, company_id, login, email, display_name, password_hash, active, auth_version, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`)
+      .bind(id, companyId, data.login, data.email.toLowerCase() || null, data.name, passwordHash, now, now),
+    db.prepare(`INSERT INTO platform_audit_log
+      (id, actor_id, action, entity_type, entity_id, details_json, created_at)
+      VALUES (?, ?, 'company_admin.created', 'company_admin', ?, ?, ?)`)
+      .bind(crypto.randomUUID(), admin.id, id, JSON.stringify({ company_id: companyId, login: data.login }), now)
+  ]);
+  return c.json({ success: true, admin: {
+    id, company_id: companyId, login: data.login,
+    email: data.email.toLowerCase() || null,
+    display_name: data.name, active: 1, created_at: now, updated_at: now
+  } }, 201);
 });
