@@ -93,7 +93,9 @@ async function recordPlatformAudit(
     .run();
 }
 
-async function getPlatformSession(c: Ctx) {
+// FUNÇÃO EXPORTADA PARA OUTRAS ROTAS DO SUPERADMIN
+
+export async function getPlatformSession(c: Ctx) {
   const token = getCookie(c, platformCookieName(c));
 
   if (!token || !/^[a-f0-9]{64}$/.test(token)) {
