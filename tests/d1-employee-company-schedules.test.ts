@@ -46,6 +46,7 @@ describe('CR JORNADA - propriedade empresarial de jornadas no D1 local', () => {
         "INSERT INTO employees(id,company_id,full_name,registration,admission_date,status,notes,created_at,updated_at) VALUES('em-a','co-a','Pessoa A','100','2026-01-01','active','',1760000000000,1760000000000)",
         "INSERT INTO employees(id,company_id,full_name,registration,admission_date,status,notes,created_at,updated_at) VALUES('em-b','co-b','Pessoa B','200','2026-01-01','active','',1760000000000,1760000000000)",
         "INSERT INTO schedules(id,company_id,name,config_json,created_at) VALUES('sc-a','co-a','Horario A','" + config + "',1760000000000)",
+        "INSERT INTO schedules(id,company_id,name,config_json,created_at) VALUES('sc-b','co-b','Horario B','" + config + "',1760000000000)",
         "INSERT INTO schedules(id,name,config_json,created_at) VALUES('sc-legacy','Historico legado','" + config + "',1760000000000)",
         "INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('asg-a','em-a','sc-a','2026-01-01',1760000000000)"
       ];
@@ -64,6 +65,16 @@ describe('CR JORNADA - propriedade empresarial de jornadas no D1 local', () => {
       expect(query(
         "SELECT employee_id FROM schedule_assignments WHERE id='asg-a'", dir
       )).toEqual([{ employee_id: 'em-a' }]);
+
+      expect(reject(
+        "UPDATE schedule_assignments SET schedule_id='sc-b' WHERE id='asg-a'", dir
+      )).toMatch(/schedule_company_mismatch/);
+
+      expect(query(
+        "SELECT schedule_id FROM schedule_assignments WHERE id='asg-a'", dir
+      )).toEqual([{ schedule_id: 'sc-a' }]);
+
+
 
       expect(query(
         "SELECT company_id FROM schedules WHERE id='sc-legacy'", dir
