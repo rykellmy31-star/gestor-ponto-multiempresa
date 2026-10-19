@@ -51,3 +51,19 @@ Eventos de segurança ficam na tabela isolada `company_admin_security_events`, c
 **Teste:** `tests/company-admin-password-change.test.ts` cobre os bloqueios de primeira senha, acesso a jornadas, CSRF, troca e revogação. `tests/d1-company-admin-password.test.ts` cria duas empresas fictícias no D1 local e garante isolamento.
 
 **Pendências para operação:** aprovação de fluxo seguro de recuperação de contas, validação no Worker/D1 exclusivos de homologação, testes sob concorrência e revisão de política de credenciais e auditoria. O formulário funcional **não está ativo na Cloudflare Pages estática**. Nenhum banco remoto foi migrado.
+
+
+## Recuperação assistida de senha por meio do Superadmin
+
+O código da branch acrescenta o botão **Redefinir senha** na janela **Administradores**, dentro de cada empresa. Como ainda não existe provedor de e-mail verificado, **não há recuperação automática por e-mail** ou WhatsApp, nem botão de recuperação sem autenticação.
+
+O fluxo de homologação é:
+1. O Superadmin entra em sessão própria e abre os administradores de uma empresa ativa.
+2. Seleciona um responsável **ativo** daquela mesma empresa e confirma a operação.
+3. A API `POST /api/platform/companies/:id/admins/:adminId/reset-password` exige sessão válida do Superadmin, proteção CSRF e limite de dez redefinições por hora por administrador/IP. Gera senha provisória aleatória criptograficamente (96 bits), armazenando **apenas o hash**; marca `must_change_password=1`, incrementa `auth_version`, encerra sessões antigas e registra o evento `company_admin.password_reset` na auditoria da plataforma, sem senha ou token nos detalhes.
+4. **Somente a resposta daquela solicitação** fornece a senha provisória ao Superadmin. A resposta tem cabeçalhos `Cache-Control: private, no-store` e `Pragma: no-cache`. A tela mostra e permite copiar o valor, mas remove-o da memória visível ao ocultar ou fechar; não envia automaticamente a senha a terceiros.
+5. A senha provisória é válida por **24 horas**, usando o campo `temporary_password_expires_at` da migração local **0025**. Senhas expiradas não autenticam. Antes do vencimento, o gestor entra, informa essa senha e é obrigado a substituí-la por outra com pelo menos 12 caracteres; a troca limpa o vencimento, revoga sessões e exige login novamente.
+
+Não se pode redefinir senha de gestor suspenso ou de empresa inativa. Nenhuma operação aceita `company_id` de uma sessão empresarial na rota Superadmin: os alvos `companyId` e `adminId` são verificados juntos no D1. A recuperação assistida não permite visualizar a senha antiga.
+
+**Limitações para produção:** validar entrega segura do segredo ao destinatário correto, política de contas e privilégios, histórico de auditoria, alertas sobre redefinição e testes de ponta a ponta no Worker e D1 de homologação. A prévia estática Pages não oferece login real. Nenhum deploy remoto ou migração em produção foi feito.
