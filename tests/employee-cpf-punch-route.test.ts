@@ -44,6 +44,8 @@ function setup(options:{
     prepare(sql:string) {
       let args:unknown[]=[];
       const st = {
+        sql,
+        get args() { return args; },
         bind(...values:unknown[]) {args=values;return st;},
         async first() {
           statements.push({sql,args:[...args]});
