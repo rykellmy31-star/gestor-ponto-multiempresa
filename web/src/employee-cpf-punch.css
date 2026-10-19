@@ -15,3 +15,9 @@
 .cpf-punch-actions button:disabled{opacity:.55;cursor:not-allowed}
 .cpf-punch-panel small{display:block;color:#998b90;font-size:10px;line-height:1.6}
 @media(max-width:520px){.cpf-punch-panel{padding:15px}.cpf-punch-actions button{flex:1}}
+
+.cpf-punch-receipt{display:grid;gap:8px;border:1px solid #cfe6d7;background:#f3fbf5;border-radius:10px;padding:15px;margin-top:13px}
+.cpf-punch-receipt strong{font-size:13px;color:#225c3c}
+.cpf-punch-receipt span{font-size:12px;color:#3e5747}
+.cpf-punch-receipt small{color:#64756c;font-size:11px}
+.cpf-punch-receipt code{font-size:10px;color:#354d3e;line-height:1.6;overflow-wrap:anywhere}
