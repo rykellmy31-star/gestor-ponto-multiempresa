@@ -46,3 +46,23 @@ O Superadmin cadastra e edita a página comercial, incluindo títulos, subtítul
 2. Configurar o número real de contato e eventual checkout externo.
 3. Publicar com domínio real, HTTPS e configurar o Google Search Console.
 4. Revisar ofertas, conformidade, contrato e políticas antes da primeira venda.
+
+
+## Nova apresentação explicativa (referência editorial, não reprodução)
+A estrutura editorial foi inspirada **somente na clareza** de uma página pública de apresentação de software de gestão de ponto: começo com proposta de valor, descrição objetiva das funções, benefícios, etapas práticas e depois comparação de planos.
+
+**Identidade, cores, gráficos ilustrativos, textos, nomes e funcionalidades descritas são próprios do CR JORNADA.** Não copiar logomarcas, fotografias, preços, textos ou reivindicações de legislação de terceiros.
+
+A página `/vendas` agora organiza o conteúdo em:
+1. Proposta central e botões para conhecer recursos/planos.
+2. **Recursos explicados**: de 3 a 6 cartões com nome, parágrafo detalhado e estágio `Planejado`, `Em validação` ou `Disponível`.
+3. Benefícios para a rotina de empresa e funcionários.
+4. **Como funciona a implantação**: de 3 a 5 etapas personalizadas, com orientação de que o início de marcações depende de testes e aprovação.
+5. Planos com condições editáveis, sem preços inventados.
+6. Perguntas frequentes, contatos opcionais e rodapé.
+
+Em `/superadmin/vendas`, o editor permite mudar textos, status reais, ordem, remover e acrescentar recursos e etapas, além dos demais campos já existentes. Somente marcar um recurso como `Disponível` quando estiver de fato homologado. O preview privado permite conferir o resultado sem salvar nem publicar.
+
+Compatibilidade: `features` e `steps` são campos **opcionais** no schema compartilhado. Configurações existentes no D1 continuam válidas; quando ausentes, a página usa descrições sugeridas, que o Superadmin pode personalizar. Nenhuma migração adicional no D1 é necessária para esses campos porque a página comercial já armazena JSON.
+
+Os rótulos não prometem certificação legal, reconhecimento facial, aplicativos nativos, funcionamento offline nem redução estatística de custos. A publicação comercial definitiva exige verificação real dos recursos disponíveis, das condições de contratação e da legislação aplicável.
