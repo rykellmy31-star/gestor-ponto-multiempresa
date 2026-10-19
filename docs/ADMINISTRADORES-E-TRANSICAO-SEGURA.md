@@ -36,3 +36,18 @@ Nenhum funcionário antigo, senha, histórico de registro ou batida será criado
 `tests/platform-company-admins.test.ts` cobre a autenticação do Superadmin, proteção CSRF, consulta por empresa, senha não exposta, suspensão com revogação de sessões e bloqueio de administrador pertencente a outra empresa.
 
 **A branch `main`, os Workers remotos e os bancos de produção permanecem fora do escopo desta rodada.**
+
+
+## Troca obrigatória da senha inicial — novo controle
+
+A migração local `0024_company_admin_first_password.sql` acrescenta `must_change_password` a cada administrador, com valor inicial **1 (troca pendente)**. A migração não muda senhas, nem altera dados de funcionários, registros de ponto ou escalas.
+
+Ao entrar em `/empresa/entrar`, o gestor precisa usar a senha inicial para autenticar-se. A sessão devolve `must_change_password=true` sem expor hashes ou outros segredos. Enquanto houver troca pendente, todas as rotas protegidas pelo middleware `requireCompanyAdmin` (incluindo listagem de funcionários e configuração/atribuição de jornadas) ficam bloqueadas, mesmo para requisições diretas à API.
+
+A tela obriga o gestor a informar **senha atual, nova senha com 12 a 128 caracteres e confirmação**. A API `POST /api/company/auth/change-password` exige autenticação válida e proteção CSRF, aplica limite de tentativas, verifica a senha atual e rejeita reutilização da mesma senha. A nova senha é armazenada apenas como hash com salt; nenhuma senha é escrita em texto claro no banco. A alteração incrementa `auth_version`, revoga todas as sessões desse gestor **somente na empresa correspondente** e exige login com a nova senha.
+
+Eventos de segurança ficam na tabela isolada `company_admin_security_events`, contendo apenas identificadores de empresa/gestor, tipo de alteração e data — sem senha nem token. Alterações não podem ser lançadas na empresa errada por causa da restrição D1.
+
+**Teste:** `tests/company-admin-password-change.test.ts` cobre os bloqueios de primeira senha, acesso a jornadas, CSRF, troca e revogação. `tests/d1-company-admin-password.test.ts` cria duas empresas fictícias no D1 local e garante isolamento.
+
+**Pendências para operação:** aprovação de fluxo seguro de recuperação de contas, validação no Worker/D1 exclusivos de homologação, testes sob concorrência e revisão de política de credenciais e auditoria. O formulário funcional **não está ativo na Cloudflare Pages estática**. Nenhum banco remoto foi migrado.
