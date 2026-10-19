@@ -21,6 +21,19 @@ BEGIN
   SELECT RAISE(ABORT, 'schedule_active_company_required');
 END;
 
+-- Atribuir um proprietario a um horario legado por UPDATE tambem exige
+-- empresa ativa; INSERT ja possui a mesma verificacao acima.
+CREATE TRIGGER schedules_company_owner_valid_update
+BEFORE UPDATE OF company_id ON schedules
+WHEN NEW.company_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM companies c
+    WHERE c.id = NEW.company_id AND c.status = 'active'
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'schedule_active_company_required');
+END;
+
 CREATE TRIGGER schedules_company_owner_immutable
 BEFORE UPDATE OF company_id ON schedules
 WHEN OLD.company_id IS NOT NULL
