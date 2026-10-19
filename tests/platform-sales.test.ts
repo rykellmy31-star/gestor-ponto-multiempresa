@@ -14,6 +14,7 @@ function makeApp(options: {
   revision?: number;
   published?: boolean;
   changed?: number;
+  leadsEnabled?: boolean;
 } = {}) {
   const calls: Array<{ sql: string; args: unknown[] }> = [];
   const config = { ...defaultSalesPage, whatsapp: '5573999999999' };
@@ -78,7 +79,10 @@ function makeApp(options: {
   app.onError((err, c) => err instanceof ApiError
     ? c.json({ error: { code: err.code, message: err.message } }, err.status as any)
     : c.json({ error: { code: 'internal_error' } }, 500));
-  const env = { ENVIRONMENT: 'development' } as any;
+  const env = {
+    ENVIRONMENT: 'development',
+    ENABLE_SALES_LEADS: options.leadsEnabled ? 'true' : 'false'
+  } as any;
   function get(path: string, cookie = true) {
     return app.request(path, { headers: cookie
       ? { cookie: 'cr_jornada_platform_dev='+'a'.repeat(64) } : {}
@@ -172,6 +176,24 @@ describe('CR JORNADA - pagina de vendas', () => {
       config: defaultSalesPage, published: true, expected_revision: 0
     });
     expect(r.status).toBe(422);
+  });
+
+  it('só permite publicar formulário de interesse após habilitação do servidor', async () => {
+    const inactive = makeApp();
+    const blocked = await inactive.save({
+      config: { ...defaultSalesPage, lead_form_enabled: true },
+      published: true, expected_revision: 0
+    });
+    expect(blocked.status).toBe(422);
+    expect((await blocked.json()).error.code).toBe('sales_leads_not_ready');
+
+    const active = makeApp({ leadsEnabled: true });
+    const published = await active.save({
+      config: { ...defaultSalesPage, lead_form_enabled: true },
+      published: true, expected_revision: 0
+    });
+    expect(published.status).toBe(200);
+    expect((await published.json()).published).toBe(true);
   });
 
   it('grava e publica usando versao esperada e ID fixo', async () => {
