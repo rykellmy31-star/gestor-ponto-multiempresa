@@ -45,6 +45,8 @@ import {
 } from './routes/company-employees';
 import { companySchedulesRoutes } from './routes/company-schedules';
 import { salesPublicRoutes, platformSalesRoutes } from './routes/platform-sales';
+import { salesPageSchema } from '../shared/sales-page';
+import { renderSalesHead } from './core/sales-seo';
 
 const app = new Hono<App>();
 
@@ -311,6 +313,45 @@ app.get('*', async c => {
     path === '/redefinir-senha'
   ) {
     return c.redirect('/superadmin', 302);
+  }
+
+  if (path === '/vendas') {
+    const row = await c.get('db').prepare(
+      'SELECT published,published_json FROM sales_page_settings WHERE id=1'
+    ).first<{ published: number; published_json: string | null }>();
+
+    let salesConfig: {
+      headline: string;
+      description: string;
+    } | null = null;
+    if (row?.published === 1 && row.published_json) {
+      // Nunca inserir dados nao validados na resposta HTML.
+      const parsed = salesPageSchema.safeParse(
+        JSON.parse(row.published_json)
+      );
+      if (parsed.success) {
+        salesConfig = {
+          headline: parsed.data.headline,
+          description: parsed.data.description
+        };
+      }
+    }
+
+    const asset = await c.env.ASSETS.fetch(c.req.raw);
+    if (!asset.ok) return asset;
+
+    const origin = c.env.APP_ORIGIN &&
+      /^https:\/\/[^/]+$/.test(c.env.APP_ORIGIN)
+      ? c.env.APP_ORIGIN
+      : new URL(c.req.url).origin;
+
+    const html = renderSalesHead(
+      await asset.text(), salesConfig, origin + '/vendas'
+    );
+    c.header('Content-Type', 'text/html; charset=utf-8');
+    c.header('X-Robots-Tag', salesConfig ? 'index, follow' : 'noindex, nofollow');
+    c.header('Cache-Control', 'no-store');
+    return c.body(html, 200);
   }
 
   // O painel Superadmin utiliza sua propria
