@@ -45,6 +45,7 @@ describe('CR JORNADA - dias e marcacoes por empresa no D1', () => {
         "INSERT INTO companies(id,name,document,slug,created_at,updated_at) VALUES('co-b','Empresa B','b','empresa-b',1760000000000,1760000000000)",
         "INSERT INTO employees(id,company_id,full_name,registration,admission_date,status,notes,created_at,updated_at) VALUES('em-a','co-a','Pessoa A','100','2026-01-01','active','',1760000000000,1760000000000)",
         "INSERT INTO employees(id,company_id,full_name,registration,admission_date,status,notes,created_at,updated_at) VALUES('em-b','co-b','Pessoa B','200','2026-01-01','active','',1760000000000,1760000000000)",
+        "INSERT INTO company_punch_policies(company_id,enabled,rules_json,updated_at) VALUES('co-a',1,'{}',1760000000000)",
         "INSERT INTO work_days(id,company_id,employee_id,work_date,timezone,schedule_json,rules_json,next_seq,created_at) VALUES('day-a','co-a','em-a','2026-10-10','America/Bahia','{}','{}',0,1760000000000)",
         "INSERT INTO work_days(id,employee_id,work_date,timezone,schedule_json,rules_json,next_seq,created_at) VALUES('day-legacy','em-b','2026-10-11','America/Bahia','{}','{}',0,1760000000000)",
         "INSERT INTO punches(id,work_day_id,employee_id,seq,type,recorded_at,idempotency_key,ip_hash,receipt_hash) VALUES('punch-a','day-a','em-a',0,'entry',1791648000000,'idempotent-a','ip-hash-test','receipt-test')"
