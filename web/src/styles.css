@@ -265,3 +265,9 @@ a:hover {
 @media (max-width: 560px) {
   .cr-site-credit { padding: 12px; font-size: 10px; }
 }
+
+/* CR JORNADA — acesso a configuracao comercial no Superadmin */
+.platform-header-actions{display:flex;align-items:center;justify-content:center;gap:11px;flex:1;flex-wrap:wrap}
+.platform-header-link{display:inline-flex;align-items:center;min-height:38px;padding:9px 13px;border:1px solid #eadcdd;border-radius:9px;color:#800000!important;background:#fff;text-decoration:none;font-size:12px;font-weight:700}
+.platform-header-link:hover{background:#fcf1f1}
+@media (max-width:700px){.platform-header{flex-wrap:wrap}.platform-header-actions{order:3;width:100%;justify-content:flex-start}.platform-header-link{flex:1;justify-content:center}}
