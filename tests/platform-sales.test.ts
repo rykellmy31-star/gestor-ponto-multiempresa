@@ -17,7 +17,7 @@ function makeApp(options: {
 } = {}) {
   const calls: Array<{ sql: string; args: unknown[] }> = [];
   const config = { ...defaultSalesPage, whatsapp: '5573999999999' };
-  const row = options.revision
+  let row = options.revision
     ? {
       draft_json: JSON.stringify(config),
       published_json: options.published ? JSON.stringify(config) : null,
@@ -46,7 +46,23 @@ function makeApp(options: {
         },
         async run() {
           calls.push({ sql, args });
-          return { meta: { changes: options.changed ?? 1 } };
+          const changed = options.changed ?? 1;
+          if (changed === 1 && sql.includes('INSERT INTO sales_page_settings')) {
+            const publish = args[2] === 1;
+            row = {
+              draft_json: args[0] as string,
+              published_json: publish
+                ? args[0] as string
+                : row?.published_json || null,
+              published: publish ? 1 : row?.published || 0,
+              revision: (row?.revision || 0) + 1,
+              updated_at: args[4] as number
+            };
+          }
+          if (changed === 1 && sql.includes('UPDATE sales_page_settings')) {
+            if (row) row = { ...row, published: 0, revision: row.revision + 1 };
+          }
+          return { meta: { changes: changed } };
         }
       };
       return stmt;
@@ -78,7 +94,17 @@ function makeApp(options: {
       body: JSON.stringify(data)
     }, env);
   }
-  return { get, save, calls, config };
+  function unpublish(expected_revision: number, csrf = 'csrf-token') {
+    return app.request('/api/platform/sales-page/unpublish', {
+      method: 'POST', headers: {
+        'content-type': 'application/json',
+        'X-CSRF-Token': csrf,
+        cookie: 'cr_jornada_platform_dev='+'a'.repeat(64)
+      },
+      body: JSON.stringify({ expected_revision })
+    }, env);
+  }
+  return { get, save, unpublish, calls, config };
 }
 
 describe('CR JORNADA - pagina de vendas', () => {
@@ -182,6 +208,15 @@ describe('CR JORNADA - pagina de vendas', () => {
     const update = t.calls.find(x=>x.sql.includes('INSERT INTO sales_page_settings'));
     expect(update?.sql).toContain('ELSE sales_page_settings.published_json END');
     expect(update?.args[1]).toBe(null);
+  });
+
+  it('retira pagina publicada do ar com CSRF e versao', async () => {
+    const t = makeApp({ revision: 3, published: true });
+    const denied = await t.unpublish(3, 'csrf-incorreto');
+    expect(denied.status).toBe(403);
+    const allowed = await t.unpublish(3);
+    expect(allowed.status).toBe(200);
+    expect((await allowed.json()).published).toBe(false);
   });
 
   it('rejeita codigo HTML malicioso em URL e planos duplicados', () => {
