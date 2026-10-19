@@ -7,8 +7,10 @@ import React, {
 
 import {
   Link,
-  Navigate
+  Navigate,
+  useLocation
 } from 'react-router-dom';
+import { SalesPageEditor } from './sales-editor';
 
 import {
   Building2,
@@ -226,6 +228,7 @@ function CompanyAvatar({
 }
 
 export function PlatformPage() {
+  const location = useLocation();
   const [session, setSession] =
     useState<Session | null>(null);
 
@@ -727,6 +730,14 @@ export function PlatformPage() {
           </div>
         </div>
 
+        <div className="platform-header-actions">
+          <Link to="/superadmin" className="platform-header-link">
+            Empresas
+          </Link>
+          <Link to="/superadmin/vendas" className="platform-header-link">
+            Página de vendas
+          </Link>
+        </div>
         <button
           type="button"
           className="platform-logout"
@@ -738,6 +749,9 @@ export function PlatformPage() {
       </header>
 
       <div className="platform-content">
+        {location.pathname === '/superadmin/vendas'
+          ? <SalesPageEditor csrfToken={session.csrf_token}/>
+          : <>
         <div className="platform-welcome">
           <p>Bem-vindo à plataforma</p>
           <h2>{session.user.name}</h2>
@@ -1405,6 +1419,7 @@ export function PlatformPage() {
           </section>
         </div>
       )}
+      </>}
     </main>
   );
 }
