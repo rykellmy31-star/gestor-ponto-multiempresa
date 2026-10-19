@@ -145,3 +145,8 @@
 @media(max-width:1050px){.sales-resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sales-steps-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sales-header nav{gap:13px}.sales-header nav a{font-size:11px}}
 @media(max-width:720px){.sales-benefits-inner{grid-template-columns:1fr}.sales-benefits-band{padding:65px 20px}.sales-resource-grid{grid-template-columns:1fr}.sales-resource-card{min-height:0}.sales-step-body h3{min-height:0}.sales-resource-stage{font-size:10px}}
 @media(max-width:530px){.sales-steps-grid{grid-template-columns:1fr}.sales-step{padding:20px}.sales-step-number{margin-bottom:13px}.sales-benefits-list>div{padding:14px}.sales-hero-actions .sales-button{width:100%}.sales-how-note{padding:14px}.sales-resource-card{padding:20px}}
+
+/* Pedido comercial opcional, habilitado apenas na publicacao oficial. */
+.sales-lead-section{max-width:1060px;padding-top:84px;padding-bottom:82px}
+.sales-lead-container{max-width:840px;margin:0 auto}
+.sales-lead-section .sales-section-head{margin-bottom:30px}
