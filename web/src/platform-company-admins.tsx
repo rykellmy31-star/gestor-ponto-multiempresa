@@ -70,7 +70,7 @@ export function PlatformCompanyAdmins({
   async function create(e:FormEvent<HTMLFormElement>){
     e.preventDefault();
     if(busy||company.status!=='active')return;
-    setBusy(true);setError('');setNotice('');
+    setBusy(true);setError('');setNotice('');setTemporary(null);
     try{
       const response=await fetch(endpoint,{
         method:'POST',credentials:'same-origin',cache:'no-store',
@@ -135,7 +135,7 @@ export function PlatformCompanyAdmins({
     if(!window.confirm(next
       ? 'Reativar o acesso de '+manager.display_name+' à empresa '+company.name+'?'
       : 'Suspender '+manager.display_name+'? As sessões atuais serão encerradas.'))return;
-    setChanging(manager.id);setError('');setNotice('');
+    setChanging(manager.id);setError('');setNotice('');setTemporary(null);
     try {
       const res=await fetch(endpoint+'/'+encodeURIComponent(manager.id)+'/status',{
         method:'PATCH',credentials:'same-origin',cache:'no-store',
