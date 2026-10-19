@@ -678,6 +678,24 @@ export function PlatformPage() {
             </button>
           </form>
 
+          <div style={{
+            marginTop: 18, background: '#fff5e8', borderRadius: 10,
+            border: '1px solid #efdcc3', padding: 14, fontSize: 12,
+            lineHeight: 1.7, color: '#6c563d'
+          }}>
+            <strong>Quer conhecer o painel antes de ativar o servidor?</strong>
+            <p style={{ margin: '7px 0' }}>
+              A prévia visual utiliza apenas empresas fictícias, não exige
+              usuário ou senha e não altera o banco de dados.
+            </p>
+            <Link
+              to="/demo-superadmin"
+              style={{ color: '#800000', fontWeight: 700 }}
+            >
+              Abrir demonstração do Superadmin →
+            </Link>
+          </div>
+
           <Link
             to="/admin/entrar"
             className="platform-link"
