@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import type { App, Ctx } from '../types';
 import { ensure } from '../core/errors';
-import { hashPassword, safeEqual } from '../core/crypto';
+import { hashPassword, randomToken, safeEqual } from '../core/crypto';
 import { login as loginSchema, password as passwordSchema } from '../core/validation';
 import { ipHash, limit } from '../core/security';
 import { getPlatformSession } from './platform-auth';
@@ -512,4 +512,72 @@ platformCompaniesRoutes.patch('/:id/admins/:adminId/status', async c => {
     'O administrador foi alterado. Atualize a lista.');
   c.header('Cache-Control', 'private, no-store');
   return c.json({ success: true, active: !!active });
+});
+
+
+// Recuperação assistida: somente o Superadmin autenticado pode gerar uma nova
+// senha provisória para gestor da MESMA empresa. Exibida uma única vez,
+// jamais armazenada em texto claro, enviada por email ou gravada em auditoria.
+platformCompaniesRoutes.post('/:id/admins/:adminId/reset-password', async c => {
+  const platformAdmin = await requirePlatformAdmin(c, true);
+  await limit(c,
+    'company-admin-reset:' + platformAdmin.id + ':' + ipHash(c),
+    10, 3600000
+  );
+  const companyId = c.req.param('id');
+  const adminId = c.req.param('adminId');
+  const db = c.get('db');
+  const manager = await db.prepare([
+    'SELECT a.id,a.active,a.auth_version,co.status AS company_status',
+    'FROM company_admins a',
+    'JOIN companies co ON co.id=a.company_id',
+    'WHERE a.id=? AND a.company_id=?'
+  ].join(' ')).bind(adminId, companyId).first<{
+    id:string;active:number;auth_version:number;company_status:string
+  }>();
+
+  ensure(manager, 404, 'company_admin_not_found',
+    'Administrador não encontrado nesta empresa.');
+  ensure(manager.company_status === 'active', 409, 'company_inactive',
+    'Ative a empresa antes de redefinir senhas.');
+  ensure(manager.active === 1, 409, 'company_admin_inactive',
+    'Reative o administrador antes de redefinir sua senha.');
+
+  // 96 bits de entropia gerados no servidor. Válido por somente 24 horas.
+  const temporaryPassword = randomToken().slice(0, 24);
+  const hashed = await hashPassword(temporaryPassword, c.env.AUTH_PEPPER);
+  const now = Date.now();
+  const expiresAt = now + 24 * 3600000;
+
+  const result = await db.batch([
+    db.prepare([
+      'UPDATE company_admins SET password_hash=?,',
+      'must_change_password=1,temporary_password_expires_at=?,',
+      'auth_version=auth_version+1,updated_at=?',
+      'WHERE id=? AND company_id=? AND active=1 AND auth_version=?'
+    ].join(' ')).bind(hashed,expiresAt,now,adminId,companyId,
+      manager.auth_version),
+    db.prepare([
+      'DELETE FROM company_admin_sessions',
+      'WHERE admin_id=? AND company_id=?'
+    ].join(' ')).bind(adminId,companyId),
+    db.prepare([
+      'INSERT INTO platform_audit_log',
+      '(id,actor_id,action,entity_type,entity_id,details_json,created_at)',
+      "VALUES (?,?,'company_admin.password_reset','company_admin',?,?,?)"
+    ].join(' ')).bind(crypto.randomUUID(),platformAdmin.id,adminId,
+      JSON.stringify({company_id:companyId,expires_at:expiresAt}),now)
+  ]);
+
+  ensure(result[0].meta.changes === 1, 409, 'company_admin_conflict',
+    'O administrador foi alterado. Atualize a lista e tente novamente.');
+
+  c.header('Cache-Control','private, no-store');
+  c.header('Pragma','no-cache');
+  return c.json({
+    success:true,
+    temporary_password:temporaryPassword,
+    expires_at:expiresAt,
+    must_change_password:true
+  });
 });
