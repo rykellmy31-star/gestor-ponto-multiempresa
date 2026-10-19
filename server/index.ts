@@ -44,6 +44,7 @@ import {
   companyEmployeesRoutes
 } from './routes/company-employees';
 import { companySchedulesRoutes } from './routes/company-schedules';
+import { salesPublicRoutes, platformSalesRoutes } from './routes/platform-sales';
 
 const app = new Hono<App>();
 
@@ -168,6 +169,8 @@ app.use('/api/*', async (c, next) => {
   const isPlatformRoute =
     path.startsWith('/api/platform/');
 
+  const isPublicSalesRoute = path === '/api/public/sales-page' && c.req.method === 'GET';
+
   const isCompanyAuthRoute =
     path.startsWith('/api/company/auth/');
 
@@ -194,6 +197,7 @@ app.use('/api/*', async (c, next) => {
 
   if (
     !isPlatformRoute &&
+    !isPublicSalesRoute &&
     !isCompanyAuthRoute &&
     !isCompanyEmployeesList &&
     !isCompanySchedulesRoute &&
@@ -231,6 +235,9 @@ app.route(
   '/api/platform/companies',
   platformCompaniesRoutes
 );
+
+app.route('/api/public', salesPublicRoutes);
+app.route('/api/platform/sales-page', platformSalesRoutes);
 
 // CR JORNADA - Autenticacao empresarial
 app.route('/api/company/auth', companyAuthRoutes);
