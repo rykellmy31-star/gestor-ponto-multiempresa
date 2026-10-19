@@ -73,5 +73,8 @@ export async function backfillEmployeeCpfLinks(
 
   // Conflitos preexistentes, alteracoes concorrentes e links de outra
   // empresa sao bloqueados pelas constraints e verificacoes do INSERT.
-  return importEmployeeCpfBatch(db, prepared);
+  const originalCiphertexts = new Map(
+    result.results.map(row => [row.id, row.cpf_encrypted || ''])
+  );
+  return importEmployeeCpfBatch(db, prepared, originalCiphertexts);
 }
