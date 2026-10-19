@@ -8,6 +8,7 @@ import {
   defaultSalesPage, salesPageSchema, whatsappUrl,
   type SalesPageConfig
 } from '../../shared/sales-page';
+import { SalesPageView } from './sales-page';
 import './sales-editor.css';
 
 type AdminResponse = {
@@ -30,6 +31,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
   const [published, setPublished] = useState(false);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -181,6 +183,10 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
   return <div className="sales-editor">
     <div className="sales-editor-back">
       <Link to="/superadmin"><ArrowLeft size={17}/> Voltar ao painel</Link>
+      <button type="button" className="sales-editor-preview-trigger"
+        disabled={loading} onClick={() => setPreviewOpen(true)}>
+        <Eye size={17}/> Prévia das alterações
+      </button>
       <a href="/vendas" target="_blank" rel="noopener noreferrer">
         <ExternalLink size={17}/> Ver página pública
       </a>
@@ -391,5 +397,22 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
         </div>
       </section>
     </form>}
+    {previewOpen && <div className="sales-editor-preview-overlay" role="presentation">
+      <section className="sales-editor-preview-panel" role="dialog"
+        aria-modal="true" aria-label="Prévia privada da página de vendas">
+        <header className="sales-editor-preview-toolbar">
+          <div>
+            <strong>Prévia privada da página de vendas</strong>
+            <span>Mostra o que você está editando, sem salvar ou publicar.</span>
+          </div>
+          <button type="button" onClick={() => setPreviewOpen(false)}>
+            <ArrowLeft size={16}/> Voltar ao editor
+          </button>
+        </header>
+        <div className="sales-editor-preview-scroll">
+          <SalesPageView config={config} status="editing"/>
+        </div>
+      </section>
+    </div>}
   </div>;
 }
