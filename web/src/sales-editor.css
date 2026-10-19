@@ -53,3 +53,19 @@
 .sales-editor-publish-actions button:disabled,.sales-editor-add:disabled{opacity:.6;cursor:not-allowed}
 @media(max-width:830px){.sales-editor-plans{grid-template-columns:1fr}.sales-editor-publish{align-items:stretch;flex-direction:column}.sales-editor-cols{grid-template-columns:1fr}}
 @media(max-width:530px){.sales-editor-section{padding:20px 16px}.sales-editor-top{flex-direction:column;align-items:flex-start}.sales-editor-publish-actions{flex-direction:column;align-items:stretch}.sales-editor-publish-actions button{width:100%}}
+
+/* Visualizacao integral da pagina de vendas diretamente no editor:
+   o rascunho nao e enviado ao publico e nenhum CTA externo e ativado. */
+.sales-editor-preview-trigger{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;background:none;color:#800000;cursor:pointer;font-size:12px;font-weight:750}
+.sales-editor-preview-trigger:hover{text-decoration:underline}
+.sales-editor-preview-trigger:disabled{opacity:.5;cursor:not-allowed}
+.sales-editor-preview-overlay{position:fixed;inset:0;z-index:3000;padding:16px;background:#1d1418c9;display:flex;align-items:center;justify-content:center}
+.sales-editor-preview-panel{width:min(1520px,100%);height:min(100%,940px);background:#fff;border-radius:15px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 100px #140b0c44}
+.sales-editor-preview-toolbar{background:#fff;border-bottom:1px solid #ede3e5;padding:14px 21px;display:flex;justify-content:space-between;gap:18px;align-items:center;z-index:2}
+.sales-editor-preview-toolbar>div{display:grid;gap:4px}
+.sales-editor-preview-toolbar strong{font-size:14px;color:#3d222b}
+.sales-editor-preview-toolbar span{font-size:11px;color:#92878b}
+.sales-editor-preview-toolbar button{border:1px solid #e4d2d6;border-radius:9px;padding:11px 14px;display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:750;color:#800000;background:#fff;cursor:pointer}
+.sales-editor-preview-toolbar button:hover{background:#faf0f2}
+.sales-editor-preview-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:590px){.sales-editor-preview-overlay{padding:0}.sales-editor-preview-panel{border-radius:0;height:100%}.sales-editor-preview-toolbar{padding:10px;gap:8px}.sales-editor-preview-toolbar strong{font-size:12px}.sales-editor-preview-toolbar span{font-size:10px}.sales-editor-preview-toolbar button{padding:9px;font-size:10px}}
