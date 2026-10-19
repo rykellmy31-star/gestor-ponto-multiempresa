@@ -1,3 +1,4 @@
+import { companyAdminWrite } from '../core/company-admin-write';
 
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -549,12 +550,13 @@ platformCompaniesRoutes.post('/:id/admins/:adminId/reset-password', async c => {
   const now = Date.now();
   const expiresAt = now + 24 * 3600000;
 
-  const result = await db.batch([
+  const result = await companyAdminWrite(db, [
     db.prepare([
       'UPDATE company_admins SET password_hash=?,',
       'must_change_password=1,temporary_password_expires_at=?,',
       'auth_version=auth_version+1,updated_at=?',
-      'WHERE id=? AND company_id=? AND active=1 AND auth_version=?'
+      'WHERE id=? AND company_id=? AND active=1 AND auth_version=?',
+      "AND EXISTS (SELECT 1 FROM companies WHERE id=company_admins.company_id AND status='active')"
     ].join(' ')).bind(hashed,expiresAt,now,adminId,companyId,
       manager.auth_version),
     db.prepare([
@@ -567,7 +569,7 @@ platformCompaniesRoutes.post('/:id/admins/:adminId/reset-password', async c => {
       "VALUES (?,?,'company_admin.password_reset','company_admin',?,?,?)"
     ].join(' ')).bind(crypto.randomUUID(),platformAdmin.id,adminId,
       JSON.stringify({company_id:companyId,expires_at:expiresAt}),now)
-  ]);
+  ], 'company_admin_conflict');
 
   ensure(result[0].meta.changes === 1, 409, 'company_admin_conflict',
     'O administrador foi alterado. Atualize a lista e tente novamente.');

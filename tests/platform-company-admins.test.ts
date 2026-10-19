@@ -155,7 +155,8 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     expect(r.status).toBe(200);
     expect((await r.json()).active).toBe(false);
     expect(t.batches).toHaveLength(1);
-    const [update,revoke,audit]=t.batches[0];
+    const [update,...tail]=t.batches[0];
+    const [revoke,audit]=tail.slice(-2);
     expect(update.sql).toContain('auth_version=auth_version+1');
     expect(update.sql).toContain('company_id=?');
     expect(update.args).toContain('company-a');
@@ -213,7 +214,8 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     expect(result.temporary_password).toBe('c'.repeat(24));
     expect(result.expires_at).toBeGreaterThanOrEqual(before+24*3600000);
     expect(t.batches).toHaveLength(1);
-    const [update,revoke,audit]=t.batches[0];
+    const [update,...tail]=t.batches[0];
+    const [revoke,audit]=tail.slice(-2);
     expect(update.sql).toContain('must_change_password=1');
     expect(update.sql).toContain('temporary_password_expires_at=?');
     expect(update.sql).toContain('auth_version=auth_version+1');

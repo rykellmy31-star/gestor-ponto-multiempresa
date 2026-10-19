@@ -163,7 +163,8 @@ describe('CR JORNADA — troca obrigatoria de senha do gestor da empresa',()=>{
     expect(await res.json()).toEqual({success:true,requires_login:true});
     expect(res.headers.get('set-cookie')).toContain('cr_jornada_company_dev=');
     expect(t.batches).toHaveLength(1);
-    const [update,revoke,audit]=t.batches[0];
+    const [update,...tail]=t.batches[0];
+    const [revoke,audit]=tail.slice(-2);
     expect(update.sql).toContain('must_change_password=0');
     expect(update.sql).toContain('auth_version=auth_version+1');
     expect(update.sql).toContain('WHERE id=? AND company_id=?');
@@ -183,7 +184,7 @@ describe('CR JORNADA — troca obrigatoria de senha do gestor da empresa',()=>{
     });
     expect(res.status).toBe(200);
     expect(t.batches[0][0].args).toContain('co-b');
-    expect(t.batches[0][1].args).toContain('co-b');
+    expect(t.batches[0][3].args).toContain('co-b');
     expect(t.batches[0][0].args).not.toContain('co-a');
   });
 

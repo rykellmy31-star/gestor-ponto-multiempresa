@@ -1,3 +1,4 @@
+import { companyAdminWrite } from '../core/company-admin-write';
 
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
@@ -421,13 +422,14 @@ companyAuthRoutes.post('/change-password', async c => {
 
   const hashed = await hashPassword(new_password, c.env.AUTH_PEPPER);
   const now = Date.now();
-  const results = await db.batch([
+  const results = await companyAdminWrite(db, [
     db.prepare([
       'UPDATE company_admins',
       'SET password_hash=?,must_change_password=0,',
       'temporary_password_expires_at=NULL,',
       'auth_version=auth_version+1,updated_at=?',
-      'WHERE id=? AND company_id=? AND active=1 AND auth_version=?'
+      'WHERE id=? AND company_id=? AND active=1 AND auth_version=?',
+      "AND EXISTS (SELECT 1 FROM companies WHERE id=company_admins.company_id AND status='active')"
     ].join(' ')).bind(hashed, now, session.id, session.company_id,
       admin.auth_version),
     db.prepare([
@@ -439,7 +441,7 @@ companyAuthRoutes.post('/change-password', async c => {
       '(id,company_id,admin_id,action,created_at)',
       "VALUES (?,?,?,'password_changed',?)"
     ].join(' ')).bind(crypto.randomUUID(), session.company_id, session.id, now)
-  ]);
+  ], 'password_change_conflict');
   ensure(results[0].meta.changes === 1, 409, 'password_change_conflict',
     'Sua senha foi alterada em outra sessão. Entre novamente.');
 
