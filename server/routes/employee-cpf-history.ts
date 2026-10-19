@@ -53,6 +53,7 @@ employeeCpfHistoryRoutes.get('/history', async c => {
     JOIN employee_cpf_links l ON l.employee_id = e.id
       AND l.company_id = co.id
     JOIN work_days d ON d.employee_id = e.id
+      AND d.company_id = e.company_id
     LEFT JOIN punches p ON p.work_day_id = d.id
       AND p.employee_id = e.id
     WHERE s.token_hash = ?
