@@ -43,6 +43,7 @@ export type CompanyAdminSession = {
   token_hash: string;
   slug: string;
   must_change_password: number;
+  temporary_password_expires_at: number | null;
 };
 
 async function getSession(
@@ -63,6 +64,7 @@ async function getSession(
       a.login,
       a.display_name,
       a.must_change_password,
+      a.temporary_password_expires_at,
       s.csrf_token,
       s.expires_at,
       s.last_seen_at,
@@ -88,7 +90,9 @@ async function getSession(
     )
     .first<CompanyAdminSession>();
 
-  if (!session) {
+  if (!session || (session.must_change_password === 1 &&
+    session.temporary_password_expires_at !== null &&
+    session.temporary_password_expires_at <= now)) {
     return null;
   }
 
@@ -203,7 +207,9 @@ companyAuthRoutes.post('/login', async c => {
       a.id,
       a.company_id,
       a.password_hash,
-      a.auth_version
+      a.auth_version,
+      a.must_change_password,
+      a.temporary_password_expires_at
     FROM company_admins a
     JOIN companies co
       ON co.id = a.company_id
@@ -218,6 +224,8 @@ companyAuthRoutes.post('/login', async c => {
       company_id: string;
       password_hash: string;
       auth_version: number;
+      must_change_password?: number;
+      temporary_password_expires_at?: number | null;
     }>();
 
   const valid = row
@@ -235,7 +243,9 @@ companyAuthRoutes.post('/login', async c => {
       );
 
   ensure(
-    valid && row,
+    valid && row && !(row.must_change_password === 1 &&
+      row.temporary_password_expires_at != null &&
+      row.temporary_password_expires_at <= Date.now()),
     401,
     'invalid_credentials',
     'Empresa, usuário ou senha inválidos.'
@@ -415,6 +425,7 @@ companyAuthRoutes.post('/change-password', async c => {
     db.prepare([
       'UPDATE company_admins',
       'SET password_hash=?,must_change_password=0,',
+      'temporary_password_expires_at=NULL,',
       'auth_version=auth_version+1,updated_at=?',
       'WHERE id=? AND company_id=? AND active=1 AND auth_version=?'
     ].join(' ')).bind(hashed, now, session.id, session.company_id,
