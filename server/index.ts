@@ -2,6 +2,7 @@
 // CR JORNADA - Login isolado por CPF e selecao de empresa
 import { employeeCpfAuthRoutes } from './routes/employee-cpf-auth';
 import { employeeCpfHistoryRoutes } from './routes/employee-cpf-history';
+import { employeeCpfPunchRoutes } from './routes/employee-cpf-punch';
 
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -201,6 +202,11 @@ app.use('/api/*', async (c, next) => {
     path === '/api/employee/cpf-work/history' &&
     c.req.method === 'GET';
 
+  // Registros empresariais vinculados a sessao CPF, desligados sem flag.
+  const isEmployeeCpfPunchRoute =
+    (path === '/api/employee/cpf-work/today' && c.req.method === 'GET') ||
+    (path === '/api/employee/cpf-work/punch' && c.req.method === 'POST');
+
   if (
     !isPlatformRoute &&
     !isPublicSalesRoute &&
@@ -209,6 +215,7 @@ app.use('/api/*', async (c, next) => {
     !isCompanySchedulesRoute &&
     !isEmployeeCpfAuthRoute &&
     !isEmployeeCpfHistoryRoute &&
+    !isEmployeeCpfPunchRoute &&
     !isHealthRoute
   ) {
     return c.json(
@@ -259,6 +266,7 @@ app.route('/api/company/schedules', companySchedulesRoutes);
 
 app.route('/api/employee/cpf-auth', employeeCpfAuthRoutes);
 app.route('/api/employee/cpf-work', employeeCpfHistoryRoutes);
+app.route('/api/employee/cpf-work', employeeCpfPunchRoutes);
 
 // Rotas antigas de funcionarios:
 // permanecem bloqueadas.
