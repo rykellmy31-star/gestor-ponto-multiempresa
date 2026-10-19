@@ -43,6 +43,7 @@ import {
 import {
   companyEmployeesRoutes
 } from './routes/company-employees';
+import { companySchedulesRoutes } from './routes/company-schedules';
 
 const app = new Hono<App>();
 
@@ -174,6 +175,11 @@ app.use('/api/*', async (c, next) => {
     path === '/api/company/employees' &&
     c.req.method === 'GET';
 
+  // Autenticacao empresarial obrigatoria; funcao desligada sem flag.
+  const isCompanySchedulesRoute =
+    path.startsWith('/api/company/schedules/') ||
+    path === '/api/company/schedules';
+
   const isHealthRoute =
     path === '/api/health';
 
@@ -190,6 +196,7 @@ app.use('/api/*', async (c, next) => {
     !isPlatformRoute &&
     !isCompanyAuthRoute &&
     !isCompanyEmployeesList &&
+    !isCompanySchedulesRoute &&
     !isEmployeeCpfAuthRoute &&
     !isEmployeeCpfHistoryRoute &&
     !isHealthRoute
@@ -233,6 +240,7 @@ app.route(
   '/api/company/employees',
   companyEmployeesRoutes
 );
+app.route('/api/company/schedules', companySchedulesRoutes);
 
 app.route('/api/employee/cpf-auth', employeeCpfAuthRoutes);
 app.route('/api/employee/cpf-work', employeeCpfHistoryRoutes);
