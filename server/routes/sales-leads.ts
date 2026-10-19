@@ -32,6 +32,8 @@ async function authorizedAdmin(c: Ctx, csrf = false) {
 }
 
 salesLeadPublicRoutes.post('/leads', async c => {
+  ensure(c.env.ENABLE_SALES_LEADS === 'true', 503,
+    'sales_leads_disabled', 'Canal de contato ainda não disponível.');
   // Limite de requisicoes por IP com HMAC: IP nao e armazenado no cadastro.
   await limit(c, 'public-sales-leads:' + ipHash(c), 5, 60 * 60000);
   const parsed = salesLeadInputSchema.safeParse(await c.req.json().catch(() => null));
