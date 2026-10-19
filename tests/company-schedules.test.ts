@@ -103,20 +103,20 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
 describe('CR JORNADA - administracao de jornadas por empresa', () => {
   it('bloqueia acesso antes da flag de liberacao', async () => {
     const t = makeApp('active', '');
-    const result = await t.request('/');
+    const result = await t.request('');
     expect(result.status).toBe(503);
     expect(t.sqls.some(x => x.sql.includes('FROM schedules s'))).toBe(false);
   });
 
   it('rejeita acesso sem sessao empresarial', async () => {
     const t = makeApp('anonymous');
-    const result = await t.request('/', 'GET', undefined, { cookie: false });
+    const result = await t.request('', 'GET', undefined, { cookie: false });
     expect(result.status).toBe(401);
   });
 
   it('lista apenas jornadas da empresa autenticada', async () => {
     const t = makeApp();
-    const result = await t.request('/');
+    const result = await t.request('');
     expect(result.status).toBe(200);
     const data = await result.json();
     expect(data.company_id).toBe('company-a');
@@ -128,14 +128,14 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
 
   it('exige CSRF para criar jornadas', async () => {
     const t = makeApp();
-    const denied = await t.request('/', 'POST', schedule);
+    const denied = await t.request('', 'POST', schedule);
     expect(denied.status).toBe(403);
     expect(t.batches).toHaveLength(0);
   });
 
   it('cria jornada e auditoria em um batch atomico', async () => {
     const t = makeApp();
-    const result = await t.request('/', 'POST', schedule, { csrf: 'csrf-a' });
+    const result = await t.request('', 'POST', schedule, { csrf: 'csrf-a' });
     expect(result.status).toBe(201);
     expect((await result.json()).company_id).toBe('company-a');
     expect(t.batches).toHaveLength(1);
@@ -144,7 +144,7 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
 
   it('bloqueia jornada invalida mesmo com sessao empresarial', async () => {
     const t = makeApp();
-    const result = await t.request('/', 'POST', {
+    const result = await t.request('', 'POST', {
       ...schedule, weekdays: [1, 1]
     }, { csrf: 'csrf-a' });
     expect(result.status).toBe(400);
