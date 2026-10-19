@@ -8,7 +8,7 @@ import type {
 // D1DatabaseSession.batch: todas as instrucoes sao atomicas.
 const MAX_IMPORT_ITEMS = 50;
 
-export const INSERT_EMPLOYEE_CPF_LINK_SQL = \`
+export const INSERT_EMPLOYEE_CPF_LINK_SQL = `
   INSERT INTO employee_cpf_links (
     employee_id, company_id, cpf_lookup_key,
     created_at, updated_at
@@ -28,7 +28,7 @@ export const INSERT_EMPLOYEE_CPF_LINK_SQL = \`
     ) THEN ? ELSE NULL END,
     ?, ?, ?
   )
-\`;
+`;
 
 function validateBatch(batch: EmployeeCpfImportBatch): EmployeeCpfImportItem[] {
   if (
