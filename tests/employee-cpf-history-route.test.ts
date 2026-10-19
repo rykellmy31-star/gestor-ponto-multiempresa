@@ -42,10 +42,10 @@ function createApp(scenario: Scenario = 'active') {
             results: [
               { work_date: '2026-10-10', next_seq: 2,
                 punch_id: 'p-1', seq: 0, type: 'entry',
-                recorded_at: 1791644400000 },
+                recorded_at: 1791644400000, receipt_hash: 'hash-entrada' },
               { work_date: '2026-10-10', next_seq: 2,
                 punch_id: 'p-2', seq: 1, type: 'break_start',
-                recorded_at: 1791658800000 },
+                recorded_at: 1791658800000, receipt_hash: 'hash-intervalo' },
               { work_date: '2026-10-11', next_seq: 0,
                 punch_id: null, seq: null, type: null,
                 recorded_at: null }
@@ -91,17 +91,20 @@ describe('CR JORNADA - historico de ponto isolado no CPF', () => {
     expect(data.days).toHaveLength(2);
     expect(data.days[0].punches).toHaveLength(2);
     expect(data.days[1].punches).toEqual([]);
+    expect(data.days[0].punches[0].receipt_hash).toBe('hash-entrada');
     const sql = t.calls.find(call => call.sql.includes('JOIN work_days d'));
     expect(sql).toBeDefined();
     expect(sql?.sql).toContain('e.company_id = ?');
     expect(sql?.sql).toContain('d.company_id = e.company_id');
     expect(sql?.sql).toContain('p.employee_id = e.id');
+    expect(sql?.sql).toContain('p.receipt_hash');
     expect(sql?.sql).toContain("co.status = 'active'");
     expect(sql?.params.slice(3)).toEqual([
       'employee-a', 'company-a', '2026-10-01', '2026-11-01'
     ]);
     expect(JSON.stringify(data)).not.toContain('ip_hash');
     expect(JSON.stringify(data)).not.toContain('idempotency_key');
+    expect(JSON.stringify(data)).not.toContain('token_hash');
   });
 
   it('recusa acesso sem sessao CPF', async () => {
