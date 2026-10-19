@@ -458,6 +458,12 @@ function ScheduleModal({
         </span>
       </div>
 
+      {weekly>2640&&<p className="form-footnote" role="status">
+        Atenção: esta escala soma {hm(weekly)} por semana, acima de 44h.
+        Confira a jornada contratual, os limites aplicáveis e o tratamento
+        de horas extras antes de atribuí-la.
+      </p>}
+
       <p className="form-footnote">
         Se a saída for menor que a entrada, ela ocorre no dia
         seguinte. O turno deve ter menos de 24 horas.
