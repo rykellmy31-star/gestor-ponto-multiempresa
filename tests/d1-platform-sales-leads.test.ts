@@ -50,6 +50,22 @@ describe('CR JORNADA — cadastro comercial isolado no D1 local',()=>{
       query("DELETE FROM sales_leads WHERE id='lead-a'",dir);
       expect(query('SELECT COUNT(*) AS total FROM sales_leads',dir))
         .toEqual([{total:0}]);
+
+      // Limpeza agendada deve retirar SOMENTE solicitacoes vencidas.
+      query([
+        "INSERT INTO sales_leads(id,name,email,company,message,plan_id,consent_at,created_at,updated_at) VALUES",
+        "('lead-antigo','Teste Antigo','antigo@exemplo.com','',
+          'Solicitacao de teste expirada','',1750000000000,1750000000000,1750000000000)",
+        ",('lead-recente','Teste Atual','atual@exemplo.com','',
+          'Solicitacao de teste recente','',1800000000000,1800000000000,1800000000000)"
+      ].join(' ').replace(/\s+/g,' '),dir);
+      const cutoff = 1800000000000 - 90 * 86400000;
+      query('DELETE FROM sales_leads WHERE id IN (' +
+        'SELECT id FROM sales_leads WHERE created_at < ' + cutoff +
+        ' ORDER BY created_at ASC LIMIT 100)',dir);
+      expect(query('SELECT id FROM sales_leads ORDER BY id',dir))
+        .toEqual([{id:'lead-recente'}]);
+
     } finally {
       rmSync(dir,{recursive:true,force:true});
     }
