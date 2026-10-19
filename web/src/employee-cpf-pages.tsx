@@ -79,6 +79,7 @@ const primary: CSSProperties = {
 export function EmployeeCpfPage() {
   const staticPreview = window.location.hostname.endsWith('.pages.dev');
   const [session, setSession] = useState<EmployeeSession | null>(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const [checking, setChecking] = useState(true);
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
@@ -272,9 +273,14 @@ export function EmployeeCpfPage() {
                 Sua sessão está vinculada exclusivamente a esta empresa.
               </p>
             </div>
-            <EmployeeCpfPunch companyId={session.company.id}
-              csrfToken={session.csrf_token}/>
-            <EmployeeCpfPointHistory timezone={session.company.timezone}/>
+            <EmployeeCpfPunch key={session.user.id + session.company.id}
+              companyId={session.company.id}
+              csrfToken={session.csrf_token}
+              timezone={session.company.timezone}
+              onConfirmed={() => setHistoryVersion(v => v + 1)}/>
+            <EmployeeCpfPointHistory key={session.company.id}
+              timezone={session.company.timezone}
+              refreshVersion={historyVersion}/>
             <button type="button" style={primary} onClick={logout} disabled={busy}>
               <LogOut size={18}/>{busy ? 'Saindo…' : 'Encerrar sessão'}
             </button>
