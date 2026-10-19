@@ -14,6 +14,7 @@ import {RecordsPage, AdminReportsPage, AdminOccurrencesPage} from './admin-recor
 import {SchedulesPage, SettingsPage, AdminUsersPage, AuditPage} from './admin-settings';
 import {AdminMoodPage} from './admin-mood';
 import {PlatformPage} from './platform-pages';
+import {EmployeeCpfPage} from './employee-cpf-pages';
 
 class ErrorBoundary extends React.Component<
   {children: React.ReactNode},
@@ -67,6 +68,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/redefinir-senha" element={<ResetPage/>}/>
 
           <Route path="/superadmin" element={<PlatformPage/>}/>
+          <Route path="/funcionario" element={<EmployeeCpfPage/>}/>
 
           <Route path="/app" element={<ProtectedLayout realm="employee"/>}>
             <Route index element={<ClockPage/>}/>
