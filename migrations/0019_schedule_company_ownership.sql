@@ -48,6 +48,26 @@ AND NOT EXISTS (
 )
 BEGIN SELECT RAISE(ABORT, 'schedule_company_mismatch'); END;
 
+-- Impedir que atribuicoes existentes sejam redirecionadas entre empresas
+-- por UPDATE direto no banco, mantendo compatibilidade com legados.
+CREATE TRIGGER schedule_assignments_company_match_update
+BEFORE UPDATE OF employee_id, schedule_id ON schedule_assignments
+WHEN EXISTS (
+  SELECT 1 FROM schedules s
+  WHERE s.id = NEW.schedule_id AND s.company_id IS NOT NULL
+)
+AND NOT EXISTS (
+  SELECT 1 FROM employees e
+  JOIN schedules s ON s.id = NEW.schedule_id
+  JOIN companies c ON c.id = e.company_id
+  WHERE e.id = NEW.employee_id
+    AND e.company_id = s.company_id
+    AND e.status = 'active'
+    AND e.deleted_at IS NULL
+    AND c.status = 'active'
+)
+BEGIN SELECT RAISE(ABORT, 'schedule_company_mismatch'); END;
+
 -- Mesma garantia para historico novo das jornadas com proprietario,
 -- sem interromper o historico anterior a migracao.
 CREATE TRIGGER schedule_history_company_valid
