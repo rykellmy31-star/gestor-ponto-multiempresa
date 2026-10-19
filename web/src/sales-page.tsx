@@ -245,11 +245,11 @@ export function SalesPageView({
             href={waLink} target="_blank" rel="noopener noreferrer">
             <MessageCircle size={19}/> Conversar pelo WhatsApp
           </a>}
-          {config.contact_email && <a className="sales-button sales-button-translucent"
+          {status === 'live' && config.contact_email && <a className="sales-button sales-button-translucent"
             href={'mailto:' + config.contact_email}>
             <Mail size={17}/> {config.contact_email}
           </a>}
-          {!waLink && !config.contact_email &&
+          {!waLink && (status !== 'live' || !config.contact_email) &&
             <p>Os canais de contato serão exibidos quando forem configurados pelo Superadmin.</p>}
         </div>
       </div>
