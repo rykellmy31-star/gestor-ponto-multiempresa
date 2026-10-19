@@ -99,7 +99,13 @@ export function SalesLeadForm({
     <label className="sales-lead-consent">
       <input type="checkbox" checked={consent} disabled={!enabled||busy}
         required onChange={e=>setConsent(e.target.checked)}/>
-      <span>Autorizo o uso das informações enviadas exclusivamente para responder à minha solicitação comercial. Não envie CPF, senhas ou outros dados sensíveis.</span>
+      <span>Autorizo o uso das informações enviadas para responder à minha solicitação comercial, conforme a{' '}
+        {config.privacy_url
+          ? <a href={config.privacy_url} target="_blank" rel="noopener noreferrer">
+              política de privacidade
+            </a>
+          : 'política de privacidade, ainda não configurada'}. Não envie CPF, senhas ou outros dados sensíveis.
+      </span>
     </label>
     {error && <p className="sales-lead-error" role="alert">{error}</p>}
     <button className="sales-lead-submit" type="submit"
