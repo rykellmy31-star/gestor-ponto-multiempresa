@@ -80,3 +80,5 @@
 .sales-editor-detail-card select{width:100%;min-height:42px;border:1px solid #ddd1d4;border-radius:9px;padding:10px 12px;color:#503b42;background:#fff;font-size:12px}
 @media(max-width:800px){.sales-editor-detail-grid{grid-template-columns:1fr}}
 @media(max-width:530px){.sales-editor-detail-card{padding:17px}}
+
+.sales-editor-form-warning{font-size:11px;color:#826774;background:#faf5f6;padding:10px 13px;border-radius:9px;line-height:1.7}
