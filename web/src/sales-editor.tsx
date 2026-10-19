@@ -9,6 +9,7 @@ import {
   type SalesPageConfig
 } from '../../shared/sales-page';
 import { SalesPageView } from './sales-page';
+import { SalesLeadsInbox } from './sales-leads-inbox';
 import './sales-editor.css';
 
 type AdminResponse = {
@@ -153,9 +154,9 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
       setError('Confira os campos. ' + validated.error.issues[0]?.message);
       return;
     }
-    if (makePublic && !config.whatsapp &&
+    if (makePublic && !config.lead_form_enabled && !config.whatsapp &&
       !config.plans.some(plan => plan.checkout_url)) {
-      setError('Para publicar, informe seu WhatsApp ou um link HTTPS de compra.');
+      setError('Para publicar, habilite o formulário de interesse ou configure uma forma de contato/compra.');
       return;
     }
     if (!ensureHttps(config.logo_url) ||
@@ -254,6 +255,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
     {notice && <div className="sales-editor-success" role="status">
       <CheckCircle2 size={18}/>{notice}
     </div>}
+    {!loading && <SalesLeadsInbox csrfToken={csrfToken}/>}
     {!loading && <form onSubmit={event => { event.preventDefault(); void save(false); }}>
       <section className="sales-editor-section">
         <div className="sales-editor-section-title"><span>01</span><div>
@@ -297,8 +299,22 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
       <section className="sales-editor-section">
         <div className="sales-editor-section-title"><span>02</span><div>
           <h3>Contato comercial</h3>
-          <p>Configure seu próprio WhatsApp para receber dúvidas e propostas.</p>
+          <p>Escolha como os interessados poderão falar com você. O WhatsApp é opcional e pode ser configurado depois.</p>
         </div></div>
+        <div className="sales-editor-fields">
+          <label className="sales-editor-check">
+            <input type="checkbox"
+              checked={config.lead_form_enabled === true}
+              disabled={panelDisabled}
+              onChange={e => update('lead_form_enabled', e.target.checked)}/>
+            Receber solicitações comerciais pelo formulário do próprio site
+          </label>
+          <p className="sales-editor-form-warning">
+            Desativado por padrão. Antes de publicar, valide o atendimento,
+            a proteção contra spam e o prazo de retenção dos dados dos interessados.
+            Não exige WhatsApp nem gera cobranças.
+          </p>
+        </div>
         <div className="sales-editor-fields">
           <div className="sales-editor-cols">
             <label>WhatsApp com código do Brasil (55 + DDD + número)
