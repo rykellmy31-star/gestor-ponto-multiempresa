@@ -21,7 +21,7 @@ vi.mock('../server/core/crypto', () => ({
 
 type Scenario = 'active' | 'suspended';
 
-function makeApp(scenario: Scenario) {
+function makeApp(scenario: Scenario, expiresAt: number | null = null) {
   const statements: string[] = [];
 
   const db = {
@@ -44,7 +44,9 @@ function makeApp(scenario: Scenario) {
                   id: 'admin-1',
                   company_id: 'company-1',
                   password_hash: 'hash-valido',
-                  auth_version: 0
+                  auth_version: 0,
+                  must_change_password: expiresAt === null ? 0 : 1,
+                  temporary_password_expires_at: expiresAt
                 }
               : null;
           }
@@ -60,7 +62,8 @@ function makeApp(scenario: Scenario) {
                   expires_at: Date.now() + 60000,
                   last_seen_at: Date.now(),
                   token_hash: 'token-hash',
-                  must_change_password: 0,
+                  must_change_password: expiresAt === null ? 0 : 1,
+                  temporary_password_expires_at: expiresAt,
                   slug: 'empresa-a'
                 }
               : null;
@@ -143,6 +146,26 @@ function makeApp(scenario: Scenario) {
 }
 
 describe('CR JORNADA - autenticacao empresarial', () => {
+  it('rejeita senha provisoria vencida e impede criar sessao',async()=>{
+    const t=makeApp('active', Date.now()-1000);
+    const res=await t.postLogin('senha-correta');
+    expect(res.status).toBe(401);
+    expect((await res.json()).error.code).toBe('invalid_credentials');
+    expect(t.statements.some(x=>x.includes('INSERT INTO company_admin_sessions')))
+      .toBe(false);
+  });
+
+  it('permite autenticar senha provisoria nao vencida apenas para troca',async()=>{
+    const t=makeApp('active',Date.now()+3600000);
+    const login=await t.postLogin('senha-correta');
+    expect(login.status).toBe(200);
+    const session=await t.app.request('/api/company/auth/session',{
+      headers:{cookie:'cr_jornada_company_dev='+'a'.repeat(64)}
+    },t.env as any);
+    expect(session.status).toBe(200);
+    expect((await session.json()).must_change_password).toBe(true);
+  });
+
   it(
     'permite login com credenciais corretas em empresa ativa',
     async () => {
