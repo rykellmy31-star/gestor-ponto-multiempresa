@@ -69,3 +69,14 @@
 .sales-editor-preview-toolbar button:hover{background:#faf0f2}
 .sales-editor-preview-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 @media(max-width:590px){.sales-editor-preview-overlay{padding:0}.sales-editor-preview-panel{border-radius:0;height:100%}.sales-editor-preview-toolbar{padding:10px;gap:8px}.sales-editor-preview-toolbar strong{font-size:12px}.sales-editor-preview-toolbar span{font-size:10px}.sales-editor-preview-toolbar button{padding:9px;font-size:10px}}
+
+/* Campos novos da pagina comercial explicativa. */
+.sales-editor-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.sales-editor-detail-card{border:1px solid #ede2e5;border-radius:13px;background:linear-gradient(155deg,#fff,#fdfafa);padding:21px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.sales-editor-detail-card header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sales-editor-detail-card header strong{font-size:13px}
+.sales-editor-detail-card header button{border:0;background:transparent;color:#97505c;font-size:11px;display:inline-flex;gap:5px;align-items:center;cursor:pointer}
+.sales-editor-detail-card textarea{min-height:115px}
+.sales-editor-detail-card select{width:100%;min-height:42px;border:1px solid #ddd1d4;border-radius:9px;padding:10px 12px;color:#503b42;background:#fff;font-size:12px}
+@media(max-width:800px){.sales-editor-detail-grid{grid-template-columns:1fr}}
+@media(max-width:530px){.sales-editor-detail-card{padding:17px}}
