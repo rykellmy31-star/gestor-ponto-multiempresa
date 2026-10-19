@@ -164,6 +164,20 @@ describe('CR JORNADA - autenticacao empresarial', () => {
     expect((await session.json()).error.code).toBe('unauthenticated');
   });
 
+  it('recusa senha provisoria expirada exatamente no instante limite', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      const t = makeApp('active', now);
+      const res = await t.postLogin('senha-correta');
+      expect(res.status).toBe(401);
+      expect(t.statements.some(sql => sql.includes('INSERT INTO company_admin_sessions')))
+        .toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('permite autenticar senha provisoria nao vencida apenas para troca',async()=>{
     const t=makeApp('active',Date.now()+3600000);
     const login=await t.postLogin('senha-correta');
