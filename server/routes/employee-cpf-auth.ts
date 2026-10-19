@@ -53,7 +53,7 @@ type Choice = {
   auth_version: number;
 };
 
-type ActiveSession = {
+export type ActiveSession = {
   user_id: string;
   employee_id: string;
   company_id: string;
@@ -125,7 +125,7 @@ function setSessionCookie(c: Ctx, token: string) {
   });
 }
 
-async function getSession(c: Ctx): Promise<ActiveSession | null> {
+export async function getEmployeeCpfSession(c: Ctx): Promise<ActiveSession | null> {
   const token = getCookie(c, sessionCookie(c));
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const now = Date.now();
@@ -344,7 +344,7 @@ employeeCpfAuthRoutes.post('/select', async c => {
 });
 
 employeeCpfAuthRoutes.get('/session', async c => {
-  const session = await getSession(c);
+  const session = await getEmployeeCpfSession(c);
   ensure(session, 401, 'unauthenticated', 'Entre para continuar.');
   return c.json({
     user: {
@@ -366,7 +366,7 @@ employeeCpfAuthRoutes.get('/session', async c => {
 
 
 employeeCpfAuthRoutes.post('/password', async c => {
-  const session = await getSession(c);
+  const session = await getEmployeeCpfSession(c);
   ensure(session, 401, 'unauthenticated', 'Entre para continuar.');
   ensure(safeEqual(
     c.req.header('X-CSRF-Token') || '', session.csrf_token
@@ -425,7 +425,7 @@ employeeCpfAuthRoutes.post('/password', async c => {
 });
 
 employeeCpfAuthRoutes.post('/logout', async c => {
-  const session = await getSession(c);
+  const session = await getEmployeeCpfSession(c);
   ensure(session, 401, 'unauthenticated', 'Sua sessão expirou.');
   ensure(safeEqual(
     c.req.header('X-CSRF-Token') || '', session.csrf_token
