@@ -3,6 +3,13 @@ import { Clock3, CheckCircle2, RefreshCw, ShieldCheck } from 'lucide-react';
 import './employee-cpf-punch.css';
 
 type PunchType = 'entry'|'break_start'|'break_end'|'exit';
+type Confirmation = {
+  id: string;
+  type: PunchType;
+  recorded_at: number;
+  work_date: string;
+  receipt_hash: string;
+};
 type Today = {
   company_id:string; employee_id:string; work_date:string;
   next_seq:number; next_type:PunchType|null; completed:boolean;
@@ -16,10 +23,11 @@ const descriptions:Record<PunchType,string> = {
 };
 
 export function EmployeeCpfPunch({
-  companyId, csrfToken, onConfirmed
+  companyId, csrfToken, timezone = 'America/Bahia', onConfirmed
 }: {
   companyId:string;
   csrfToken:string;
+  timezone?: 'America/Bahia' | 'America/Sao_Paulo';
   onConfirmed?:()=>void;
 }) {
   const [today,setToday]=useState<Today|null>(null);
@@ -28,6 +36,7 @@ export function EmployeeCpfPunch({
   const [disabled,setDisabled]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [lastConfirmation,setLastConfirmation]=useState<Confirmation|null>(null);
   // Enquanto a confirmacao nao vier, reutiliza a MESMA chave no retry.
   const pendingKey=useRef<{type:PunchType;key:string}|null>(null);
 
@@ -58,7 +67,11 @@ export function EmployeeCpfPunch({
 
   // Renderiza o modulo mesmo que ainda esteja desligado. A requisicao
   // so acontece depois da autenticacao confirmada do funcionario.
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{
+    pendingKey.current=null;
+    setLastConfirmation(null);
+    void load();
+  },[load]);
 
   async function punch(){
     const type=today?.next_type;
@@ -77,12 +90,14 @@ export function EmployeeCpfPunch({
         body:JSON.stringify({type,idempotency_key:key})
       });
       const data=await response.json().catch(()=>null) as
-        {success?:boolean;replayed?:boolean;error?:{message?:string}}|null;
-      if(!response.ok||!data?.success){
+        {success?:boolean;replayed?:boolean;punch?:Confirmation;
+          error?:{message?:string}}|null;
+      if(!response.ok||!data?.success||!data.punch){
         throw new Error(data?.error?.message||
           'Não foi possível confirmar o ponto. Confira e tente novamente.');
       }
       pendingKey.current=null;
+      setLastConfirmation(data.punch);
       setNotice(data.replayed
         ? 'Registro anteriormente confirmado. Nenhuma marcação duplicada.'
         : 'Ponto registrado com sucesso.');
@@ -115,6 +130,17 @@ export function EmployeeCpfPunch({
     {error&&<p role="alert" className="cpf-punch-error">{error}</p>}
     {notice&&<p role="status" className="cpf-punch-success">
       <CheckCircle2 size={16}/>{notice}</p>}
+    {lastConfirmation&&<div className="cpf-punch-receipt">
+      <strong>Última marcação confirmada</strong>
+      <span>{descriptions[lastConfirmation.type]} — {
+        new Intl.DateTimeFormat('pt-BR', {
+          timeZone: timezone, day:'2-digit',month:'2-digit',year:'numeric',
+          hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
+        }).format(new Date(lastConfirmation.recorded_at))
+      }</span>
+      <small>Identificação técnica do registro (não substitui comprovante oficial):</small>
+      <code>{lastConfirmation.receipt_hash}</code>
+    </div>}
     <div className="cpf-punch-actions">
       <button type="button" onClick={()=>void load()} disabled={loading||busy}>
         <RefreshCw size={16}/> Atualizar
