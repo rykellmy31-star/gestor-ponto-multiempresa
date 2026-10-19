@@ -173,7 +173,7 @@ describe('CR JORNADA — troca obrigatoria de senha do gestor da empresa',()=>{
     expect(audit.sql).toContain('company_admin_security_events');
     expect(audit.args).toContain('co-a');
     expect(JSON.stringify(t.batches)).not.toContain(old);
-    expect(JSON.stringify(t.batches)).not.toContain(fresh);
+    expect(update.args[0]).toBe('hash:'+fresh); // mock substitui o hash real
   });
 
   it('nao modifica a empresa de outra sessao',async()=>{
