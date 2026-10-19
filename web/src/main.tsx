@@ -16,6 +16,7 @@ import {AdminMoodPage} from './admin-mood';
 import {PlatformPage} from './platform-pages';
 import {PlatformDemoPage} from './platform-demo';
 import {EmployeeCpfPage} from './employee-cpf-pages';
+import {DeveloperCredit} from './developer-credit';
 
 class ErrorBoundary extends React.Component<
   {children: React.ReactNode},
@@ -60,6 +61,8 @@ createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <BrowserRouter>
       <ToastProvider>
+        <div className="cr-site-frame">
+          <div className="cr-site-content">
         <Routes>
           <Route path="/" element={<Navigate to="/funcionario" replace/>}/>
           <Route path="/entrar" element={<Navigate to="/funcionario" replace/>}/>
@@ -97,6 +100,9 @@ createRoot(document.getElementById('root')!).render(
 
           <Route path="*" element={<NotFound/>}/>
         </Routes>
+          </div>
+          <DeveloperCredit/>
+        </div>
       </ToastProvider>
     </BrowserRouter>
   </ErrorBoundary>
