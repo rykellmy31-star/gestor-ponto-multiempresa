@@ -14,6 +14,7 @@ vi.mock('../server/core/security', () => ({
 }));
 vi.mock('../server/core/crypto', () => ({
   hashPassword: async () => 'safe-hash-test',
+  randomToken: () => 'c'.repeat(64),
   safeEqual: (a:string,b:string) => a===b
 }));
 
@@ -35,6 +36,12 @@ function makeApp(options:{
         bind(...values:unknown[]){args=values;return statement;},
         async first(){
           calls.push({sql,args});
+          if(sql.includes('SELECT a.id,a.active,a.auth_version,co.status AS company_status')){
+            return options.otherCompany?null:{
+              id:'manager-a',active:options.targetActive??1,
+              auth_version:3,company_status:companyStatus
+            };
+          }
           if(sql.includes('SELECT a.id,a.active,co.status AS company_status')) {
             return options.otherCompany ? null : {
               id:'manager-a',active:options.targetActive??1,
@@ -166,6 +173,59 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     expect((await archived.call('/company-a/admins/manager-a/status','PATCH',
       {active:false})).status).toBe(409);
     expect(archived.batches).toHaveLength(0);
+  });
+
+
+  it('redefinicao exige Superadmin autenticado e CSRF',async()=>{
+    const t=makeApp();
+    vi.mocked(getPlatformSession).mockResolvedValueOnce(null);
+    expect((await t.call('/company-a/admins/manager-a/reset-password','POST'))
+      .status).toBe(401);
+    expect((await t.call('/company-a/admins/manager-a/reset-password','POST',
+      undefined,'invalido')).status).toBe(403);
+    expect(t.batches).toHaveLength(0);
+  });
+
+  it('rejeita redefinir senha de outra empresa, gestor suspenso ou empresa inativa',async()=>{
+    const foreign=makeApp({otherCompany:true});
+    expect((await foreign.call('/company-a/admins/manager-b/reset-password','POST'))
+      .status).toBe(404);
+    const suspended=makeApp({targetActive:0});
+    expect((await suspended.call('/company-a/admins/manager-a/reset-password','POST'))
+      .status).toBe(409);
+    const blocked=makeApp({companyStatus:'suspended'});
+    expect((await blocked.call('/company-a/admins/manager-a/reset-password','POST'))
+      .status).toBe(409);
+    expect(foreign.batches).toHaveLength(0);
+    expect(suspended.batches).toHaveLength(0);
+    expect(blocked.batches).toHaveLength(0);
+  });
+
+  it('gera senha provisoria unica, expira em 24h, revoga sessoes e audita sem segredo',async()=>{
+    const t=makeApp();
+    const before=Date.now();
+    const res=await t.call('/company-a/admins/manager-a/reset-password','POST');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('no-store');
+    const result=await res.json();
+    expect(result.success).toBe(true);
+    expect(result.must_change_password).toBe(true);
+    expect(result.temporary_password).toBe('c'.repeat(24));
+    expect(result.expires_at).toBeGreaterThanOrEqual(before+24*3600000);
+    expect(t.batches).toHaveLength(1);
+    const [update,revoke,audit]=t.batches[0];
+    expect(update.sql).toContain('must_change_password=1');
+    expect(update.sql).toContain('temporary_password_expires_at=?');
+    expect(update.sql).toContain('auth_version=auth_version+1');
+    expect(update.args).toEqual([
+      'safe-hash-test',result.expires_at,expect.any(Number),
+      'manager-a','company-a',3
+    ]);
+    expect(revoke.sql).toContain('DELETE FROM company_admin_sessions');
+    expect(revoke.args).toEqual(['manager-a','company-a']);
+    expect(audit.sql).toContain('company_admin.password_reset');
+    expect(audit.args.join(' ')).toContain('company-a');
+    expect(JSON.stringify(t.batches)).not.toContain(result.temporary_password);
   });
 
   it('nao reativa administrador de empresa suspensa',async()=>{
