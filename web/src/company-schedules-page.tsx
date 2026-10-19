@@ -11,6 +11,7 @@ type CompanySession = {
   user: { id:string; name:string; login:string };
   company: { id:string; slug:string };
   csrf_token:string;
+  must_change_password?: boolean;
 };
 type CompanySchedule = {
   id:string; name:string; config:Schedule; created_at:number;
@@ -87,6 +88,10 @@ export function CompanySchedulesPage() {
   const [slug,setSlug]=useState('');
   const [login,setLogin]=useState('');
   const [password,setPassword]=useState('');
+  const [currentPassword,setCurrentPassword]=useState('');
+  const [newPassword,setNewPassword]=useState('');
+  const [confirmPassword,setConfirmPassword]=useState('');
+  const [changingPassword,setChangingPassword]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [schedules,setSchedules]=useState<CompanySchedule[]>([]);
@@ -112,7 +117,7 @@ export function CompanySchedulesPage() {
   useEffect(()=>{void check();},[check]);
 
   const load=useCallback(async()=>{
-    if(!session)return;
+    if(!session||session.must_change_password)return;
     setLoading(true);setError('');
     try {
       const [a,b]=await Promise.all([
@@ -146,6 +151,43 @@ export function CompanySchedulesPage() {
       setError(err instanceof Error?err.message:'Não foi possível entrar.');
       setPassword('');
     }finally{setLoginBusy(false);setChecking(false);}
+  }
+  async function changeInitialPassword(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();
+    if(!session||changingPassword)return;
+    if(newPassword!==confirmPassword){
+      setError('A confirmação não corresponde à nova senha.');
+      return;
+    }
+    if(newPassword===currentPassword){
+      setError('A nova senha precisa ser diferente da senha inicial.');
+      return;
+    }
+    setChangingPassword(true);setError('');setNotice('');
+    try{
+      const result=await jsonRequest<{success:boolean;requires_login:boolean}>(
+        '/company/auth/change-password',{
+          method:'POST',headers:{
+            'Content-Type':'application/json',
+            'X-CSRF-Token':session.csrf_token
+          },
+          body:JSON.stringify({
+            current_password:currentPassword,
+            new_password:newPassword
+          })
+        });
+      if(!result.success||!result.requires_login){
+        throw new Error('A troca de senha não foi confirmada.');
+      }
+      setSession(null);
+      setSchedules([]);setEmployees([]);
+      setNotice('Senha alterada. Entre novamente com a nova senha para acessar as escalas.');
+    }catch(err){
+      setError(err instanceof Error?err.message:'Falha na troca de senha.');
+    }finally{
+      setCurrentPassword('');setNewPassword('');setConfirmPassword('');
+      setChangingPassword(false);
+    }
   }
   async function signOut(){
     if(!session)return;
@@ -276,6 +318,43 @@ export function CompanySchedulesPage() {
       </p>
       <Link to="/superadmin">Acesso Superadmin</Link>
     </div>
+  </main>;
+
+  if(session.must_change_password)return <main className="company-schedules-page">
+    <section className="company-schedules-login">
+      <div className="company-schedules-brand"><ShieldCheck size={27}/> CR JORNADA</div>
+      <h1>Proteja sua conta</h1>
+      <p>Antes de acessar os funcionários e as escalas da empresa
+        <strong> {session.company.slug}</strong>, substitua a senha inicial
+        recebida do Superadmin. Depois você precisará entrar novamente.</p>
+      <form onSubmit={changeInitialPassword}>
+        <label>Senha inicial
+          <input type="password" value={currentPassword}
+            required autoComplete="current-password" minLength={1}
+            onChange={e=>setCurrentPassword(e.target.value)}/>
+        </label>
+        <label>Nova senha (mínimo 12 caracteres)
+          <input type="password" value={newPassword} required
+            minLength={12} maxLength={128} autoComplete="new-password"
+            onChange={e=>setNewPassword(e.target.value)}/>
+        </label>
+        <label>Confirme a nova senha
+          <input type="password" value={confirmPassword} required
+            minLength={12} maxLength={128} autoComplete="new-password"
+            onChange={e=>setConfirmPassword(e.target.value)}/>
+        </label>
+        {error&&<p role="alert" className="company-schedules-error">{error}</p>}
+        <button type="submit" disabled={changingPassword}>
+          {changingPassword?'Protegendo acesso…':'Alterar senha inicial'}
+        </button>
+      </form>
+      <p className="company-schedules-hint">
+        A nova senha não será exibida na tela nem enviada por e-mail.
+        Não insira credenciais reais na prévia estática do Cloudflare Pages.
+      </p>
+      <button type="button" className="company-schedules-secondary"
+        onClick={()=>void signOut()}>Sair da conta</button>
+    </section>
   </main>;
 
   const saturday=form.day_overrides?.['6']||{
