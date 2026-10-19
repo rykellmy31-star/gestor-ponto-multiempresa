@@ -89,11 +89,13 @@ platformSalesRoutes.put('/', async c => {
     'Para publicar, configure seu WhatsApp ou o link de compra de um plano.'
   );
 
+  // No primeiro cadastro aceita somente revisao 0. Uma aba antiga
+  // nunca pode recriar a pagina ignorando expected_revision.
   const now = Date.now();
   const result = await c.get('db').prepare([
     'INSERT INTO sales_page_settings (',
     'id,draft_json,published_json,published,revision,updated_by,updated_at',
-    ') VALUES (1,?,?,?,1,?,?)',
+    ') SELECT 1,?,?,?,1,?,? WHERE ?=0',
     'ON CONFLICT(id) DO UPDATE SET',
     'draft_json=excluded.draft_json,',
     'published_json=CASE WHEN excluded.published=1',
@@ -107,7 +109,7 @@ platformSalesRoutes.put('/', async c => {
     JSON.stringify(config),
     published ? JSON.stringify(config) : null,
     published ? 1 : 0,
-    session.id, now, expected_revision
+    session.id, now, expected_revision, expected_revision
   ).run();
 
   ensure(result.meta.changes === 1, 409, 'sales_page_conflict',
