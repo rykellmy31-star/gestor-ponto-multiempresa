@@ -451,3 +451,65 @@ platformCompaniesRoutes.post('/:id/admins', async c => {
     display_name: data.name, active: 1, created_at: now, updated_at: now
   } }, 201);
 });
+
+
+// Bloqueio imediato de acesso a empresa, inclusive nas sessoes emitidas.
+// A alteracao nao toca administradores de outras empresas.
+const adminStatusSchema = z.object({
+  active: z.boolean()
+}).strict();
+
+platformCompaniesRoutes.patch('/:id/admins/:adminId/status', async c => {
+  const platformAdmin = await requirePlatformAdmin(c, true);
+  await limit(c, 'company-admin-status:' + platformAdmin.id + ':' + ipHash(c),
+    30, 3600000);
+  const companyId = c.req.param('id');
+  const adminId = c.req.param('adminId');
+  const parsed = adminStatusSchema.safeParse(await c.req.json().catch(() => null));
+  ensure(parsed.success, 400, 'invalid_admin_status', 'Situação inválida.');
+
+  const db = c.get('db');
+  const row = await db.prepare([
+    'SELECT a.id,a.active,co.status AS company_status FROM company_admins a',
+    'JOIN companies co ON co.id=a.company_id',
+    'WHERE a.id=? AND a.company_id=?'
+  ].join(' ')).bind(adminId, companyId).first<{
+    id: string; active: number; company_status: string
+  }>();
+
+  ensure(row, 404, 'company_admin_not_found',
+    'Administrador não encontrado nesta empresa.');
+  ensure(row.company_status !== 'archived', 409, 'company_archived',
+    'A empresa arquivada não pode ser alterada.');
+  ensure(!parsed.data.active || row.company_status === 'active',
+    409, 'company_inactive', 'Ative a empresa antes de liberar um administrador.');
+
+  const active = parsed.data.active ? 1 : 0;
+  if (row.active === active) {
+    return c.json({ success: true, active: !!active, unchanged: true });
+  }
+
+  const now = Date.now();
+  const results = await db.batch([
+    db.prepare([
+      'UPDATE company_admins',
+      'SET active=?,auth_version=auth_version+1,updated_at=?',
+      'WHERE id=? AND company_id=? AND active=?'
+    ].join(' ')).bind(active, now, adminId, companyId, row.active),
+    db.prepare([
+      'DELETE FROM company_admin_sessions',
+      'WHERE admin_id=? AND company_id=?'
+    ].join(' ')).bind(adminId, companyId),
+    db.prepare([
+      'INSERT INTO platform_audit_log',
+      '(id,actor_id,action,entity_type,entity_id,details_json,created_at)',
+      "VALUES (?,?,'company_admin.status_changed','company_admin',?,?,?)"
+    ].join(' ')).bind(crypto.randomUUID(), platformAdmin.id, adminId,
+      JSON.stringify({ company_id: companyId, previous_active: !!row.active,
+        active: !!active }), now)
+  ]);
+  ensure(results[0].meta.changes === 1, 409, 'company_admin_conflict',
+    'O administrador foi alterado. Atualize a lista.');
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ success: true, active: !!active });
+});
