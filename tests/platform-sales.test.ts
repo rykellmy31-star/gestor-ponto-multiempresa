@@ -19,7 +19,8 @@ function makeApp(options: {
   const config = { ...defaultSalesPage, whatsapp: '5573999999999' };
   const row = options.revision
     ? {
-      config_json: JSON.stringify(config),
+      draft_json: JSON.stringify(config),
+      published_json: options.published ? JSON.stringify(config) : null,
       published: options.published ? 1 : 0,
       revision: options.revision,
       updated_at: 1760000000000
@@ -158,6 +159,7 @@ describe('CR JORNADA - pagina de vendas', () => {
     expect(data.published).toBe(true);
     const update = t.calls.find(x=>x.sql.includes('INSERT INTO sales_page_settings'));
     expect(update?.sql).toContain('WHERE sales_page_settings.revision=?');
+    expect(update?.sql).toContain('published_json=CASE');
     expect(update?.args.slice(-1)).toEqual([3]);
   });
 
@@ -168,6 +170,18 @@ describe('CR JORNADA - pagina de vendas', () => {
     });
     expect(r.status).toBe(409);
     expect((await r.json()).error.code).toBe('sales_page_conflict');
+  });
+
+  it('salva rascunho preservando conteudo publicado', async () => {
+    const t = makeApp({ revision: 2, published: true });
+    const r = await t.save({
+      config: t.config, published: false, expected_revision: 2
+    });
+    expect(r.status).toBe(200);
+    expect((await r.json()).published).toBe(true);
+    const update = t.calls.find(x=>x.sql.includes('INSERT INTO sales_page_settings'));
+    expect(update?.sql).toContain('ELSE sales_page_settings.published_json END');
+    expect(update?.args[1]).toBe(null);
   });
 
   it('rejeita codigo HTML malicioso em URL e planos duplicados', () => {
