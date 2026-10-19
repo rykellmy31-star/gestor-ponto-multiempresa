@@ -75,6 +75,7 @@ const primary: CSSProperties = {
 };
 
 export function EmployeeCpfPage() {
+  const staticPreview = window.location.hostname.endsWith('.pages.dev');
   const [session, setSession] = useState<EmployeeSession | null>(null);
   const [checking, setChecking] = useState(true);
   const [cpf, setCpf] = useState('');
@@ -95,6 +96,10 @@ export function EmployeeCpfPage() {
   }
 
   useEffect(() => {
+    if (staticPreview) {
+      setChecking(false);
+      return;
+    }
     let active = true;
     requestEmployee<EmployeeSession>('/session').then(data => {
       if (active) setSession(data);
@@ -108,6 +113,7 @@ export function EmployeeCpfPage() {
 
   async function login(event: FormEvent) {
     event.preventDefault();
+    if (staticPreview) return;
     setError('');
     setBusy(true);
     try {
@@ -203,6 +209,16 @@ export function EmployeeCpfPage() {
             Acesso seguro por CPF e senha
           </p>
         </header>
+
+        {staticPreview && <div role="status" style={{
+          background: '#fff8ed', border: '1px solid #f1dcc2',
+          color: '#78542e', padding: 12, borderRadius: 9,
+          marginBottom: 18, fontSize: 13
+        }}>
+          Versão de demonstração visual. O login ficará disponível
+          quando conectarmos um Worker e um banco de testes.
+          Não utilize dados pessoais reais.
+        </div>}
 
         {error && <div role="alert" style={{
           color: '#921e1e', background: '#fff1f1', border: '1px solid #f1cece',
@@ -309,8 +325,8 @@ export function EmployeeCpfPage() {
                   position: 'absolute', top: 8, right: 9, padding: 5
                 }}>{showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button>
             </div>
-            <button type="submit" disabled={busy} style={primary}>
-              {busy ? 'Conferindo…' : 'Entrar com segurança'}
+            <button type="submit" disabled={busy || staticPreview} style={primary}>
+              {staticPreview ? 'Login indisponível na prévia' : busy ? 'Conferindo…' : 'Entrar com segurança'}
             </button>
           </form>
         )}
