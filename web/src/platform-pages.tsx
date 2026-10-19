@@ -1135,7 +1135,6 @@ export function PlatformPage() {
             Integração multiempresa em desenvolvimento
           </span>
         </section>
-      </div>
 
       {formOpen && (
         <div
@@ -1420,6 +1419,7 @@ export function PlatformPage() {
         </div>
       )}
       </>}
+      </div>
     </main>
   );
 }
