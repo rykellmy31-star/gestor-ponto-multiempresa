@@ -503,12 +503,11 @@ export async function runScheduledLeadRetention(env: Env, now = Date.now()): Pro
   return removed;
 }
 
-export default {
-  fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    return app.fetch(request, env, ctx);
-  },
+// Mantem app.request e app.fetch para os testes e a compatibilidade com
+// o Worker, acrescentando somente o handler scheduled.
+export default Object.assign(app, {
   async scheduled(_controller: ScheduledController, env: Env) {
     await runScheduledLeadRetention(env);
   }
-};
+});
 
