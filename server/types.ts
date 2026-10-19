@@ -10,6 +10,7 @@ export interface Env {
   APP_ORIGIN: string;
   AUTH_PEPPER: string;
   DATA_KEY: string;
+  CPF_LOOKUP_SECRET?: string;
   BOOTSTRAP_TOKEN?: string;
   PLATFORM_BOOTSTRAP_TOKEN?: string;
   SESSION_HOURS?: string;
