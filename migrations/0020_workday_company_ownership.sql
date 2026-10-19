@@ -29,6 +29,18 @@ WHEN NEW.company_id IS NOT NULL
   )
 BEGIN SELECT RAISE(ABORT, 'work_day_company_mismatch'); END;
 
+-- Nao permitir vinculacao (inclusive conciliacao de legado) a empresa
+-- diferente daquela a que o funcionario pertence.
+CREATE TRIGGER work_days_company_update_guard
+BEFORE UPDATE OF company_id ON work_days
+WHEN NEW.company_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM employees e
+    WHERE e.id = NEW.employee_id
+      AND e.company_id = NEW.company_id
+  )
+BEGIN SELECT RAISE(ABORT, 'work_day_company_mismatch'); END;
+
 -- Nunca transferir um dia iniciado para outra empresa.
 CREATE TRIGGER work_days_company_immutable
 BEFORE UPDATE OF company_id ON work_days
