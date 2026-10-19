@@ -142,6 +142,12 @@ export function SchedulesPage(){
                {s.overnight&&<small>+1 dia</small>}
              </div>
 
+             {s.config.day_overrides?.['6']&&s.config.weekdays.includes(6)&&
+               <p className="schedule-saturday-summary">
+                 Sáb: {s.config.day_overrides['6'].start}–{s.config.day_overrides['6'].end}
+                 {' · '}intervalo {s.config.day_overrides['6'].break_start}–
+                 {s.config.day_overrides['6'].break_end}
+               </p>}
              <p>
                Intervalo {s.config.break_start} — {s.config.break_end}
                <small>
@@ -251,6 +257,39 @@ function ScheduleModal({
 
   const set=(key:string,value:any)=>
     setConfig((v:any)=>({...v,[key]:value}));
+  // Seleciona 2a a 6a de uma so vez, mantendo sabados e domingos.
+  const weekdaysGroup=[1,2,3,4,5];
+  const allWeekdays=weekdaysGroup.every(d=>config.weekdays.includes(d));
+  const selectWeekdays=()=>{
+    const others=config.weekdays.filter((d:number)=>!weekdaysGroup.includes(d));
+    set('weekdays',allWeekdays?others:[...others,...weekdaysGroup].sort());
+  };
+  const saturdaySelected=config.weekdays.includes(6);
+  const saturday={
+    start:'07:00',break_start:'10:00',break_end:'10:15',
+    end:'13:00',paid_break:true,
+    ...(config.day_overrides?.['6']||{})
+  };
+  const enableSaturday=(enabled:boolean)=>{
+    setConfig((old:any)=>{
+      const days=enabled?[...new Set([...old.weekdays,6])].sort():
+        old.weekdays.filter((d:number)=>d!==6);
+      const overrides={...(old.day_overrides||{})};
+      if(enabled) overrides['6']=overrides['6']||{
+        start:'07:00',break_start:'10:00',break_end:'10:15',
+        end:'13:00',paid_break:true
+      };
+      else delete overrides['6'];
+      return {...old,weekdays:days,
+        day_overrides:Object.keys(overrides).length?overrides:undefined};
+    });
+  };
+  const setSaturday=(key:string,value:any)=>{
+    setConfig((old:any)=>({...old,day_overrides:{
+      ...(old.day_overrides||{}),
+      6:{...saturday,[key]:value}
+    }}));
+  };
 
   const min=(v:string)=>+v.slice(0,2)*60+ +v.slice(3);
   const offset=(v:string)=>
@@ -263,6 +302,18 @@ function ScheduleModal({
   const daily=end-min(config.start)-
     (config.paid_break?0:
       offset(config.break_end)-offset(config.break_start));
+  const calculateShift=(shift:any)=>{
+    const start=min(shift.start);
+    const offsetShift=(v:string)=>min(v)<start?min(v)+1440:min(v);
+    const endShift=min(shift.end)<=start?min(shift.end)+1440:min(shift.end);
+    return endShift-start-(shift.paid_break?0:
+      offsetShift(shift.break_end)-offsetShift(shift.break_start));
+  };
+  const saturdayMinutes=calculateShift(saturday);
+  const weekly=config.weekdays.reduce((sum:number,d:number)=>{
+    const special=config.day_overrides?.[String(d)];
+    return sum+calculateShift(special||config);
+  },0);
 
   return <Modal
     title={initial.sourceId?'Editar jornada':'Nova jornada'}
@@ -327,6 +378,18 @@ function ScheduleModal({
         )}
       </div>
 
+      <div className="schedule-group-shortcuts">
+        <button type="button" className={allWeekdays?'schedule-group-active':''}
+          onClick={selectWeekdays} aria-pressed={allWeekdays}>
+          {allWeekdays?'✓ Segunda a sexta selecionados':'Selecionar segunda a sexta'}
+        </button>
+        <button type="button" className={saturdaySelected?'schedule-group-active':''}
+          onClick={()=>enableSaturday(!saturdaySelected)}
+          aria-pressed={saturdaySelected}>
+          {saturdaySelected?'✓ Sábado separado':'Adicionar sábado separado'}
+        </button>
+      </div>
+
       <Field label="Dias de trabalho">
         <div className="weekday-checkboxes">
           {weekdayNames.map((w,i)=>
@@ -337,18 +400,41 @@ function ScheduleModal({
               <input
                 type="checkbox"
                 checked={config.weekdays.includes(i)}
-                onChange={e=>set(
-                  'weekdays',
-                  e.target.checked
+                onChange={e=>{
+                  if(i===6){enableSaturday(e.target.checked);return;}
+                  set('weekdays',e.target.checked
                     ?[...config.weekdays,i].sort()
-                    :config.weekdays.filter((d:number)=>d!==i)
-                )}
+                    :config.weekdays.filter((d:number)=>d!==i));
+                }}
               />
               {w}
             </label>
           )}
         </div>
       </Field>
+
+      {saturdaySelected&&<section className="schedule-saturday-editor">
+        <h4>Sábado — horário independente</h4>
+        <p>Defina somente o sábado. Os horários de segunda a sexta continuam como acima.</p>
+        <div className="form-grid">
+          {(['start','break_start','break_end','end'] as const).map((key,i)=>
+            <Field key={key} label={['Entrada sábado','Início do intervalo',
+              'Fim do intervalo','Saída sábado'][i]}>
+              <input type="time" value={saturday[key]} required
+                onChange={e=>setSaturday(key,e.target.value)}/>
+            </Field>
+          )}
+        </div>
+        <label className="checkbox-field">
+          <input type="checkbox" checked={saturday.paid_break}
+            onChange={e=>setSaturday('paid_break',e.target.checked)}/>
+          Intervalo do sábado remunerado
+        </label>
+        <p className="form-footnote">
+          Sábado calculado: {saturdayMinutes>0?hm(saturdayMinutes):'—'}.
+          Exemplo: 07:00–13:00 com pausa remunerada de 15 minutos = 06:00.
+        </p>
+      </section>}
 
       <label className="checkbox-field">
         <input
@@ -364,7 +450,8 @@ function ScheduleModal({
           Carga calculada: {daily>0?hm(daily):'—'} h/dia
         </strong>
         <span>
-          {daily>0?hm(daily*config.weekdays.length):'—'} h/semana
+          {weekly>0?hm(weekly):'—'} h/semana
+          {saturdaySelected&&<> · Sábado: {hm(saturdayMinutes)}</>}
         </span>
       </div>
 
