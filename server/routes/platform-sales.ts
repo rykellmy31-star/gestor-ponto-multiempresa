@@ -8,7 +8,8 @@ import { getPlatformSession } from './platform-auth';
 import { defaultSalesPage, salesPageSchema } from '../../shared/sales-page';
 
 type SalesRow = {
-  config_json: string;
+  draft_json: string;
+  published_json: string | null;
   published: number;
   revision: number;
   updated_at: number;
@@ -22,7 +23,7 @@ const saveSchema = z.object({
 
 async function getRow(c: Ctx): Promise<SalesRow | null> {
   return c.get('db').prepare(
-    'SELECT config_json,published,revision,updated_at FROM sales_page_settings WHERE id=1'
+    'SELECT draft_json,published_json,published,revision,updated_at FROM sales_page_settings WHERE id=1'
   ).first<SalesRow>();
 }
 
@@ -34,10 +35,10 @@ salesPublicRoutes.get('/sales-page', async c => {
   const row = await getRow(c);
   c.header('Cache-Control', 'public, max-age=0, must-revalidate');
   c.header('X-Content-Type-Options', 'nosniff');
-  if (!row || !row.published) {
+  if (!row || !row.published || !row.published_json) {
     return c.json({ published: false, config: null });
   }
-  const parsed = salesPageSchema.safeParse(JSON.parse(row.config_json));
+  const parsed = salesPageSchema.safeParse(JSON.parse(row.published_json));
   ensure(parsed.success, 503, 'sales_page_unavailable',
     'Página comercial temporariamente indisponível.');
   return c.json({
@@ -52,7 +53,7 @@ platformSalesRoutes.get('/', async c => {
     'Entre como Superadmin para configurar a página de vendas.');
   const row = await getRow(c);
   const config = row
-    ? salesPageSchema.safeParse(JSON.parse(row.config_json))
+    ? salesPageSchema.safeParse(JSON.parse(row.draft_json))
     : { success: true as const, data: defaultSalesPage };
   ensure(config.success, 503, 'sales_page_invalid',
     'Configuração inválida. Solicite uma revisão antes de publicar.');
@@ -65,8 +66,8 @@ platformSalesRoutes.get('/', async c => {
   });
 });
 
-// Uma unica operacao salva e publica (ou despublica) a nova versao.
-// A revisao esperada previne sobrescrever edicoes feitas em outra aba.
+// Uma unica operacao salva o rascunho e, se solicitado, publica a nova versao.
+// O conteudo publicado permanece intacto ao salvar apenas rascunho.
 platformSalesRoutes.put('/', async c => {
   const session = await getPlatformSession(c);
   ensure(session, 401, 'unauthenticated',
@@ -91,25 +92,32 @@ platformSalesRoutes.put('/', async c => {
   const now = Date.now();
   const result = await c.get('db').prepare([
     'INSERT INTO sales_page_settings (',
-    'id,config_json,published,revision,updated_by,updated_at',
-    ') VALUES (1,?,?,1,?,?)',
+    'id,draft_json,published_json,published,revision,updated_by,updated_at',
+    ') VALUES (1,?,?,?,1,?,?)',
     'ON CONFLICT(id) DO UPDATE SET',
-    'config_json=excluded.config_json,',
-    'published=excluded.published,',
+    'draft_json=excluded.draft_json,',
+    'published_json=CASE WHEN excluded.published=1',
+    'THEN excluded.draft_json ELSE sales_page_settings.published_json END,',
+    'published=CASE WHEN excluded.published=1',
+    'THEN 1 ELSE sales_page_settings.published END,',
     'revision=sales_page_settings.revision+1,',
     'updated_by=excluded.updated_by,updated_at=excluded.updated_at',
     'WHERE sales_page_settings.revision=?'
   ].join(' ')).bind(
-    JSON.stringify(config), published ? 1 : 0, session.id,
-    now, expected_revision
+    JSON.stringify(config),
+    published ? JSON.stringify(config) : null,
+    published ? 1 : 0,
+    session.id, now, expected_revision
   ).run();
 
   ensure(result.meta.changes === 1, 409, 'sales_page_conflict',
     'Outra alteração foi salva. Recarregue a configuração antes de tentar novamente.');
 
+  const current = await getRow(c);
   c.header('Cache-Control', 'no-store');
   return c.json({
-    success: true, published,
-    revision: expected_revision + 1, updated_at: now
+    success: true, published: current?.published === 1,
+    revision: current?.revision || expected_revision + 1,
+    updated_at: now
   });
 });
