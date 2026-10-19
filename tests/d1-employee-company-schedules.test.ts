@@ -57,6 +57,14 @@ describe('CR JORNADA - propriedade empresarial de jornadas no D1 local', () => {
         "INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('asg-b','em-b','sc-a','2026-01-01',1760000000000)", dir
       )).toMatch(/schedule_company_mismatch/);
 
+      expect(reject(
+        "UPDATE schedule_assignments SET employee_id='em-b' WHERE id='asg-a'", dir
+      )).toMatch(/schedule_company_mismatch/);
+
+      expect(query(
+        "SELECT employee_id FROM schedule_assignments WHERE id='asg-a'", dir
+      )).toEqual([{ employee_id: 'em-a' }]);
+
       expect(query(
         "SELECT company_id FROM schedules WHERE id='sc-legacy'", dir
       )).toEqual([{ company_id: null }]);
