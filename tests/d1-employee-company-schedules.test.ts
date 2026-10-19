@@ -80,6 +80,14 @@ describe('CR JORNADA - propriedade empresarial de jornadas no D1 local', () => {
         "SELECT company_id FROM schedules WHERE id='sc-legacy'", dir
       )).toEqual([{ company_id: null }]);
 
+      query("UPDATE companies SET status='inactive' WHERE id='co-b'", dir);
+      expect(reject(
+        "UPDATE schedules SET company_id='co-b' WHERE id='sc-legacy'", dir
+      )).toMatch(/schedule_active_company_required/);
+      expect(query(
+        "SELECT company_id FROM schedules WHERE id='sc-legacy'", dir
+      )).toEqual([{ company_id: null }]);
+
       expect(reject(
         "UPDATE schedules SET company_id='co-b' WHERE id='sc-a'", dir
       )).toMatch(/immutable/);
