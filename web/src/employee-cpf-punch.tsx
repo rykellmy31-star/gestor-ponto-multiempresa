@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clock3, CheckCircle2, RefreshCw, ShieldCheck } from 'lucide-react';
 import './employee-cpf-punch.css';
 
@@ -58,7 +58,7 @@ export function EmployeeCpfPunch({
 
   // Renderiza o modulo mesmo que ainda esteja desligado. A requisicao
   // so acontece depois da autenticacao confirmada do funcionario.
-  useState(()=>{void load();});
+  useEffect(()=>{void load();},[load]);
 
   async function punch(){
     const type=today?.next_type;
