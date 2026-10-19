@@ -39,6 +39,7 @@ export const salesPageSchema = z.object({
   whatsapp_message: z.string().trim().min(5).max(250),
   contact_email: z.union([z.literal(''), z.email().max(254)]),
   lead_form_enabled: z.boolean().optional(),
+  privacy_url: httpsLink.optional(),
   logo_url: httpsLink,
   benefits: z.array(z.string().trim().min(3).max(125)).min(3).max(6),
   features: z.array(salesFeatureSchema).min(3).max(6).optional(),
@@ -72,6 +73,7 @@ export const defaultSalesPage: SalesPageConfig = {
   whatsapp_message: 'Olá! Gostaria de saber mais sobre o CR JORNADA.',
   contact_email: '',
   lead_form_enabled: false,
+  privacy_url: '',
   logo_url: '',
   benefits: [
     'Mais organização para a rotina do RH',
