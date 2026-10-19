@@ -271,3 +271,15 @@ a:hover {
 .platform-header-link{display:inline-flex;align-items:center;min-height:38px;padding:9px 13px;border:1px solid #eadcdd;border-radius:9px;color:#800000!important;background:#fff;text-decoration:none;font-size:12px;font-weight:700}
 .platform-header-link:hover{background:#fcf1f1}
 @media (max-width:700px){.platform-header{flex-wrap:wrap}.platform-header-actions{order:3;width:100%;justify-content:flex-start}.platform-header-link{flex:1;justify-content:center}}
+
+/* Horarios agrupados e sábado independente — cadastro de jornadas */
+.schedule-group-shortcuts{display:flex;flex-wrap:wrap;gap:10px;margin:13px 0 18px}
+.schedule-group-shortcuts button{padding:11px 14px;border:1px solid #dacbcc;border-radius:10px;background:#fff;color:#6d4550;font-size:12px;font-weight:800;cursor:pointer}
+.schedule-group-shortcuts button.schedule-group-active{color:#800000;background:#fff3f4;border-color:#b78388}
+.schedule-group-shortcuts button:focus-visible{outline:3px solid #9b545c;outline-offset:2px}
+.schedule-saturday-editor{border:1px solid #ecd6d9;border-radius:13px;background:#fff9fa;padding:19px;margin:17px 0}
+.schedule-saturday-editor h4{margin:0 0 7px;font-size:16px;color:#5e242f}
+.schedule-saturday-editor>p{font-size:12px;color:#8c7178;line-height:1.7;margin:0 0 16px}
+.schedule-saturday-editor .form-grid{margin:9px 0 16px}
+.schedule-saturday-summary{font-weight:750;font-size:12px;color:#7e3343}
+@media(max-width:580px){.schedule-group-shortcuts{flex-direction:column}.schedule-group-shortcuts button{width:100%}.schedule-saturday-editor{padding:13px}}
