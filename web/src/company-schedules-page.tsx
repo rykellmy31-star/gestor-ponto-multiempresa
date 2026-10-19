@@ -179,7 +179,13 @@ export function CompanySchedulesPage() {
   function updateSaturday(key:keyof ScheduleDay,value:string|boolean){
     setForm(prev=>({...prev,day_overrides:{
       ...(prev.day_overrides||{}),
-      '6':{...(prev.day_overrides?.['6']||saturdayDefault),[key]:value}
+      '6':{
+        ...(prev.day_overrides?.['6']||{
+          start:prev.start,break_start:prev.break_start,
+          break_end:prev.break_end,end:prev.end,paid_break:prev.paid_break
+        }),
+        [key]:value
+      }
     }}));
   }
   function startNew() {
