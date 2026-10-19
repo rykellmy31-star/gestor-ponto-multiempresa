@@ -1,10 +1,19 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SalesPageView } from '../web/src/sales-page';
+import { SalesPageView, isSalesPreviewHost } from '../web/src/sales-page';
 import { defaultSalesPage } from '../shared/sales-page';
 
 describe('CR JORNADA — pre-visualizacao privada da pagina comercial', () => {
+  it('so mostra ofertas ficticias no Pages e no desenvolvimento local', () => {
+    expect(isSalesPreviewHost('cr-jornada-preview.pages.dev')).toBe(true);
+    expect(isSalesPreviewHost('localhost')).toBe(true);
+    expect(isSalesPreviewHost('127.0.0.1')).toBe(true);
+    expect(isSalesPreviewHost('cr-jornada.com.br')).toBe(false);
+    expect(isSalesPreviewHost('cr-jornada.workers.dev')).toBe(false);
+    expect(isSalesPreviewHost('pages.dev.malicioso.tld')).toBe(false);
+  });
+
   it('mostra alteracoes da pagina sem salvar em banco', () => {
     const page = {
       ...defaultSalesPage,
