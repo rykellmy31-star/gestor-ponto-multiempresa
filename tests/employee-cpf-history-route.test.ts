@@ -94,6 +94,7 @@ describe('CR JORNADA - historico de ponto isolado no CPF', () => {
     const sql = t.calls.find(call => call.sql.includes('JOIN work_days d'));
     expect(sql).toBeDefined();
     expect(sql?.sql).toContain('e.company_id = ?');
+    expect(sql?.sql).toContain('d.company_id = e.company_id');
     expect(sql?.sql).toContain('p.employee_id = e.id');
     expect(sql?.sql).toContain("co.status = 'active'");
     expect(sql?.params.slice(3)).toEqual([
