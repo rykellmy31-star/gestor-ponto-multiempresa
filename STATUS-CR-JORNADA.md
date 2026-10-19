@@ -1,23 +1,74 @@
-# CR JORNADA — estado real da entrega
+# CR JORNADA — estado real do desenvolvimento
 
-## Implementado e preservado
-- Painel web de Superadministrador e APIs de login, configuração e cadastro de empresas.
-- Banco D1 exclusivo configurado (`cr-jornada-db`) e migração `0010_cr_jornada_platform.sql`.
-- Rotas legadas e seus arquivos originais preservados para migração futura.
-- Worker configurado para `production`, com verificação de origem e cookies seguros.
+Atualizado em 19/10/2026. Repositório oficial:
+`rykellmy31-star/gestor-ponto-multiempresa`, branch `desenvolvimento-cr-jornada`, PR #1.
 
-## Bloqueio de segurança (intencional)
-As rotas de autenticação, funcionários, jornadas, marcações e relatórios herdadas do sistema de empresa única **não possuem isolamento multiempresa**. Para evitar vazamento de dados entre empresas, este pacote retorna HTTP 503 nessas APIs e redireciona telas legadas para `/superadmin`.
+## Implementado na branch
 
-**Não está pronto para uso de funcionários ou para implantação pública.** O script `npm run deploy` falha intencionalmente em `scripts/preflight.mjs`. Não remova o bloqueio para contornar o problema.
+- Superadmin: autenticação, empresas, administradores empresariais e auditoria.
+- Gestores empresariais: login, sessões com empresa, troca obrigatória de senha,
+  recuperação assistida pelo Superadmin com senha provisória de 24 horas.
+- Concorrência: criação de sessão revalida credenciais e empresa no SQL;
+  migração 0026 permite abortar integralmente conflitos de senha/status de gestor.
+- Funcionários: login CPF, seleção de empresa entre vínculos autorizados,
+  troca de senha, sessões empresariais, histórico mensal e extrato CSV informativo.
+- Jornadas: propriedade por empresa, atribuição auditada e horários por dia
+  (incluindo configuração diferente para sábado).
+- Ponto: novas rotas com sequência, hora do servidor, CSRF e idempotência,
+  preparadas para homologação e desativadas por padrão.
+- Página comercial: edição pelo Superadmin, rascunho, prévia e publicação;
+  captação comercial com consentimento e retenção, condicionada a configuração.
+- Demonstração de Superadmin: dados fictícios apenas em memória.
 
-## Trabalho ainda necessário
-1. Migrar `settings`, `setup_state`, `users`, `employees`, `login_identifiers`, `sessions`, `schedules`, `schedule_history`, `schedule_assignments`, `schedule_assignment_cancellations`, `rule_versions`, `holidays`, `work_days`, `punches`, `adjustments`, `occurrences`, `overtime_decisions`, `monthly_closures`, `closure_snapshots`, `audit_log`, `employee_moods`, `data_revision` e demais tabelas relacionadas para isolamento por empresa.
-2. Revisar índices UNIQUE, relacionamentos, triggers, chaves estrangeiras, autorizações e escopo de login/recuperação de senha.
-3. Vincular administradores e funcionários à empresa e validar `companies.status` em todas as sessões.
-4. Implementar provisionamento de empresa, jornada e administrador inicial de modo transacional e seguro.
-5. Criar testes de isolamento com duas empresas, incluindo tentativas de acessar IDs cruzados e chamadas concorrentes.
-6. Testar migrações em D1 de teste e revisar requisitos legais antes de ativar o ponto.
+## Barreiras que continuam obrigatórias
 
-## Segurança dos ambientes
-Este ZIP foi editado localmente. **Nenhuma migração remota nem deploy foi realizado**. O projeto original Farmácia Pague Pouco não foi modificado.
+**Não está liberado para produção. Não mesclar PR ou remover o preflight.**
+
+As rotas legadas de empresa única continuam bloqueadas. A existência de novas
+rotas isoladas não autoriza abrir as antigas. Os dados legados não são
+reconciliados nem importados automaticamente. Migrações aditivas preservam
+vínculos legados nulos até reconciliação explícita e autorizada.
+
+- `ENABLE_EMPLOYEE_PUNCHES` e política empresarial de ponto: não ativadas.
+- `ENABLE_COMPANY_SCHEDULES`: não ativada na configuração versionada.
+- Coleta comercial real: não ativada; exige política de privacidade, retenção
+  válida, flags e aprovação do conteúdo comercial.
+- `scripts/preflight.mjs` continua bloqueando publicação intencionalmente.
+- `wrangler.jsonc` contém configuração remota: nunca usá-la para publicar testes.
+- Nenhum deploy, migração remota ou alteração da Farmácia Pague Pouco nesta rodada.
+
+## Evidência desta rodada
+
+- `npm run typecheck`: aprovado.
+- `npm run typecheck:tests`: aprovado; agora obrigatório no CI.
+- Testes rápidos: **33 arquivos / 268 testes aprovados**.
+- Dois novos testes reais de D1/Miniflare aprovados: rollback atômico e alterações
+  concorrentes durante login com hash scrypt real.
+- Teste Wrangler de migrações/senhas empresariais aprovado em D1 exclusivamente local.
+- As 26 migrações aplicadas em SQLite temporário: integridade `ok`, sem erros de FK.
+  Esse smoke test complementa os testes D1; não substitui homologação remota.
+- `npm run build:web`: aprovado.
+- GitHub Actions: consultar o SHA mais recente do PR. Não usar aprovação de um
+  commit anterior como evidência do último. Rodadas antigas podem ser canceladas
+  automaticamente por concorrência.
+- Verificação visual por navegador pendente: Chromium não estava disponível e
+  o download do Playwright falhou neste ambiente. Não foi alegada aprovação visual.
+
+## Pendências antes de qualquer liberação
+
+1. Concluir todos os jobs do GitHub Actions no último commit e corrigir falhas.
+2. Homologar em Worker e novo D1 separados, mediante autorização de provisionamento,
+   segredos exclusivos e dados fictícios. Nunca usar o banco da Farmácia.
+3. Revisar matrícula/vínculos e isolamento integral das tabelas e rotas legadas,
+   inclusive regras, feriados, ajustes, ocorrências, fechamento e relatórios.
+4. Homologar recuperação de acesso, entrega segura das senhas provisórias,
+   notificações e recuperação do funcionário. Não existe envio automático de email.
+5. Validar virada de dia/jornadas noturnas, cálculo completo, fechamento,
+   comprovantes e requisitos trabalhistas. CSV é apenas extrato informativo.
+6. Testar backup, restauração e rollback em banco isolado; definir reconciliação
+   explícita dos dados antigos antes de qualquer proposta de migração real.
+7. Executar a verificação visual responsiva e a matriz de homologação descrita em
+   `docs/HOMOLOGACAO-CR-JORNADA.md`.
+
+As decisões comerciais, credenciais e autorizações de produção permanecem como
+pendências; não impedem auditorias e implementação na branch de desenvolvimento.
