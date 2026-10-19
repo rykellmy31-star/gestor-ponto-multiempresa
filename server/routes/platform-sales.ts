@@ -121,3 +121,35 @@ platformSalesRoutes.put('/', async c => {
     updated_at: now
   });
 });
+
+
+// Retirar do ar e acao explicita, independente de salvar um rascunho.
+platformSalesRoutes.post('/unpublish', async c => {
+  const session = await getPlatformSession(c);
+  ensure(session, 401, 'unauthenticated', 'Entre como Superadmin.');
+  ensure(safeEqual(
+    c.req.header('X-CSRF-Token') || '', session.csrf_token
+  ), 403, 'csrf', 'Token de segurança inválido.');
+  await limit(c, 'platform-sales-unpublish:' + session.id, 10, 60 * 60000);
+  const parsed = z.object({
+    expected_revision: z.number().int().min(1)
+  }).strict().safeParse(await c.req.json().catch(() => null));
+  ensure(parsed.success, 400, 'invalid_sales_page', 'Versão inválida.');
+
+  const now = Date.now();
+  const result = await c.get('db').prepare([
+    'UPDATE sales_page_settings',
+    'SET published=0,revision=revision+1,updated_by=?,updated_at=?',
+    'WHERE id=1 AND published=1 AND revision=?'
+  ].join(' ')).bind(
+    session.id, now, parsed.data.expected_revision
+  ).run();
+
+  ensure(result.meta.changes === 1, 409, 'sales_page_conflict',
+    'A página já foi alterada ou retirada do ar. Recarregue antes de continuar.');
+  c.header('Cache-Control', 'no-store');
+  return c.json({
+    success: true, published: false,
+    revision: parsed.data.expected_revision + 1
+  });
+});
