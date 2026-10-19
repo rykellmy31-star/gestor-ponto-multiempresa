@@ -5,7 +5,8 @@ import { employeeCpfHistoryRoutes } from './routes/employee-cpf-history';
 
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { App } from './types';
+import type { App, Env } from './types';
+import { deleteExpiredSalesLeads, parseLeadRetentionDays } from './core/sales-leads-retention';
 import { ApiError } from './core/errors';
 import { auth, originGuard } from './core/security';
 
@@ -484,4 +485,30 @@ app.onError((error, c) => {
   );
 });
 
-export default app;
+// A rotina agendada nao é executada na prévia Pages. O serviço
+// fica inativo até ENABLE_SALES_LEADS e SALES_LEADS_RETENTION_DAYS
+// estarem configurados e a migração 0022 homologada.
+export async function runScheduledLeadRetention(env: Env, now = Date.now()): Promise<number> {
+  if (env.ENABLE_SALES_LEADS !== 'true') return 0;
+  const days = parseLeadRetentionDays(env.SALES_LEADS_RETENTION_DAYS);
+  if (days === null) return 0;
+
+  const db = env.DB.withSession('first-primary');
+  let removed = 0;
+  for (let i = 0; i < 20; i++) {
+    const count = await deleteExpiredSalesLeads(db, days, now, 100);
+    removed += count;
+    if (count < 100) break;
+  }
+  return removed;
+}
+
+export default {
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    return app.fetch(request, env, ctx);
+  },
+  async scheduled(_controller: ScheduledController, env: Env) {
+    await runScheduledLeadRetention(env);
+  }
+};
+
