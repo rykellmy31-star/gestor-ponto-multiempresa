@@ -2,15 +2,10 @@
 name: Verificar CR JORNADA
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
-# Evita executar varias versoes antigas do mesmo PR em paralelo.
+# Execução exclusivamente manual; não dispara em push ou Pull Request.
+# O cancelamento de versões antigas evita duplicações no mesmo ref.
 concurrency:
   group: cr-jornada-verificacao-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
