@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Activity, ArrowLeft, Building2, CheckCircle2, CircleAlert,
   Clock3, Eye, LayoutDashboard, LockKeyhole, Plus,
@@ -25,7 +25,7 @@ const statuses: Record<DemoCompanyStatus, string> = {
 function Button({
   children, onClick, kind = 'primary', type = 'button', disabled = false
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   onClick?: () => void;
   kind?: 'primary' | 'secondary' | 'danger' | 'plain';
   type?: 'button' | 'submit';
