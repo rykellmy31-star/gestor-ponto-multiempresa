@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, ExternalLink, Eye, EyeOff, MessageCircle,
@@ -96,8 +96,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
     }]);
   }
 
-  async function save(event: FormEvent<HTMLFormElement>, makePublic: boolean) {
-    event.preventDefault();
+  async function save(makePublic: boolean) {
     setError(''); setNotice('');
     const validated = salesPageSchema.safeParse(config);
     if (!validated.success) {
@@ -174,7 +173,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
     {notice && <div className="sales-editor-success" role="status">
       <CheckCircle2 size={18}/>{notice}
     </div>}
-    {!loading && <form onSubmit={event => save(event, false)}>
+    {!loading && <form onSubmit={event => { event.preventDefault(); void save(false); }}>
       <section className="sales-editor-section">
         <div className="sales-editor-section-title"><span>01</span><div>
           <h3>Apresentação da página</h3>
@@ -356,7 +355,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
             onClick={event => {
               const form = event.currentTarget.closest('form');
               if (form && !form.reportValidity()) return;
-              void save(event as unknown as FormEvent<HTMLFormElement>, true);
+              void save(true);
             }}><CheckCircle2 size={17}/>{busy?'Publicando…':'Salvar e publicar'}</button>
         </div>
       </section>
