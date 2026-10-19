@@ -91,6 +91,13 @@ platformSalesRoutes.put('/', async c => {
     'Para publicar, ative o formulário de interesse, configure um contato ou adicione um link externo de compra.'
   );
 
+  ensure(
+    !published || !config.lead_form_enabled ||
+      c.env.ENABLE_SALES_LEADS === 'true',
+    422, 'sales_leads_not_ready',
+    'O formulário comercial precisa ser homologado e ativado no servidor antes da publicação.'
+  );
+
   // No primeiro cadastro aceita somente revisao 0. Uma aba antiga
   // nunca pode recriar a pagina ignorando expected_revision.
   const now = Date.now();
