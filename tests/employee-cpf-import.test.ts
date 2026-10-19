@@ -1,8 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { importEmployeeCpfBatch, INSERT_EMPLOYEE_CPF_LINK_SQL } from '../server/core/employee-cpf-import';
+import { importEmployeeCpfBatch as executeCpfImport, INSERT_EMPLOYEE_CPF_LINK_SQL } from '../server/core/employee-cpf-import';
 import type { EmployeeCpfImportBatch } from '../server/core/employee-cpf-backfill-batch';
 
 const key = 'a'.repeat(64);
+const originals = new Map([
+  ['employee-a', 'encrypted-a'],
+  ['employee-b', 'encrypted-b']
+]);
+const importEmployeeCpfBatch = (
+  db: D1DatabaseSession,
+  batch: EmployeeCpfImportBatch,
+  now?: number
+) => executeCpfImport(db, batch, originals, now);
+
 const valid: EmployeeCpfImportBatch = {
   status: 'prepared',
   total: 2,
@@ -35,7 +45,7 @@ describe('CR JORNADA - importacao CPF no D1', () => {
     expect(batch).toHaveBeenCalledTimes(1);
     expect(calls).toHaveLength(2);
     expect(calls[0]).toEqual([
-      'employee-a', 'employee-a', 'company-a', 'company-a',
+      'employee-a', 'employee-a', 'company-a', 'encrypted-a', 'company-a',
       key, 1760000000000, 1760000000000
     ]);
   });
@@ -45,6 +55,7 @@ describe('CR JORNADA - importacao CPF no D1', () => {
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/e\.deleted_at IS NULL/i);
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/e\.status = 'active'/i);
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/c\.status = 'active'/i);
+    expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/e\\.cpf_encrypted = \\?/i);
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).not.toMatch(/OR IGNORE|OR REPLACE/i);
   });
 
