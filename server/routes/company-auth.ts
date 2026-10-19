@@ -263,7 +263,7 @@ companyAuthRoutes.post('/login', async c => {
     )
   );
 
-  await c.get('db').prepare(`
+  const issued = await c.get('db').prepare(`
     INSERT INTO company_admin_sessions (
       token_hash,
       company_id,
@@ -274,19 +274,29 @@ companyAuthRoutes.post('/login', async c => {
       last_seen_at,
       auth_version
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    SELECT ?, a.company_id, a.id, ?, ?, ?, ?, a.auth_version
+    FROM company_admins a JOIN companies co ON co.id=a.company_id
+    WHERE a.id=? AND a.company_id=? AND a.auth_version=?
+      AND a.password_hash=? AND a.active=1 AND co.status='active'
+      AND (a.must_change_password=0 OR a.temporary_password_expires_at IS NULL
+        OR a.temporary_password_expires_at>?)
   `)
     .bind(
       sha256(token),
-      row.company_id,
-      row.id,
       randomToken(),
       now,
       now + hours * 3600000,
       now,
-      row.auth_version
+      row.id,
+      row.company_id,
+      row.auth_version,
+      row.password_hash,
+      now
     )
     .run();
+
+  ensure(issued.meta.changes === 1, 401, 'invalid_credentials',
+    'Empresa, usuário ou senha inválidos.');
 
   setCookie(
     c,

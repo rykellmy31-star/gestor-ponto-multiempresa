@@ -491,12 +491,14 @@ platformCompaniesRoutes.patch('/:id/admins/:adminId/status', async c => {
   }
 
   const now = Date.now();
-  const results = await db.batch([
+  const results = await companyAdminWrite(db, [
     db.prepare([
       'UPDATE company_admins',
       'SET active=?,auth_version=auth_version+1,updated_at=?',
-      'WHERE id=? AND company_id=? AND active=?'
-    ].join(' ')).bind(active, now, adminId, companyId, row.active),
+      'WHERE id=? AND company_id=? AND active=?',
+      "AND EXISTS (SELECT 1 FROM companies WHERE id=company_admins.company_id",
+      "AND status!='archived' AND (?=0 OR status='active'))"
+    ].join(' ')).bind(active, now, adminId, companyId, row.active, active),
     db.prepare([
       'DELETE FROM company_admin_sessions',
       'WHERE admin_id=? AND company_id=?'
@@ -508,7 +510,7 @@ platformCompaniesRoutes.patch('/:id/admins/:adminId/status', async c => {
     ].join(' ')).bind(crypto.randomUUID(), platformAdmin.id, adminId,
       JSON.stringify({ company_id: companyId, previous_active: !!row.active,
         active: !!active }), now)
-  ]);
+  ], 'company_admin_conflict');
   ensure(results[0].meta.changes === 1, 409, 'company_admin_conflict',
     'O administrador foi alterado. Atualize a lista.');
   c.header('Cache-Control', 'private, no-store');

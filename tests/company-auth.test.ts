@@ -21,7 +21,7 @@ vi.mock('../server/core/crypto', () => ({
 
 type Scenario = 'active' | 'suspended';
 
-function makeApp(scenario: Scenario, expiresAt: number | null = null) {
+function makeApp(scenario: Scenario, expiresAt: number | null = null, issued = 1) {
   const statements: string[] = [];
 
   const db = {
@@ -74,7 +74,7 @@ function makeApp(scenario: Scenario, expiresAt: number | null = null) {
 
         async run() {
           statements.push(sql);
-          return { success: true };
+          return { success: true, meta: {changes: issued} };
         }
       };
 
@@ -146,6 +146,18 @@ function makeApp(scenario: Scenario, expiresAt: number | null = null) {
 }
 
 describe('CR JORNADA - autenticacao empresarial', () => {
+  it('não emite cookie se gestor, senha ou empresa mudar durante o login', async () => {
+    const t = makeApp('active', null, 0);
+    const res = await t.postLogin('senha-correta');
+    expect(res.status).toBe(401);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    const sql = t.statements.find(sql => sql.includes('INSERT INTO company_admin_sessions'))!;
+    expect(sql).toContain('a.auth_version=?');
+    expect(sql).toContain('a.password_hash=?');
+    expect(sql).toContain("co.status='active'");
+    expect(sql).toContain('a.temporary_password_expires_at>?');
+  });
+
   it('rejeita senha provisoria vencida e impede criar sessao',async()=>{
     const t=makeApp('active', Date.now()-1000);
     const res=await t.postLogin('senha-correta');
