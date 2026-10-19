@@ -77,7 +77,6 @@ export function SalesPage() {
     };
   }, [status, config]);
 
-  const waLink = status === 'live' ? getWhatsApp(config) : null;
   const publicConfig = status === 'live' || status === 'preview' ? config : null;
 
   if (status === 'loading') return <main className="sales-pending" role="status">
@@ -91,14 +90,27 @@ export function SalesPage() {
   </main>;
 
   if (!publicConfig) return null;
+  return <SalesPageView config={publicConfig} status={status} error={error}/>;
+}
+
+export function SalesPageView({
+  config, status, error = ''
+}: {
+  config: SalesPageConfig;
+  status: 'live' | 'preview' | 'editing';
+  error?: string;
+}) {
+  const waLink = status === 'live' ? getWhatsApp(config) : null;
 
   return <main className="sales-root" style={{
     '--sales-brand': config.primary_color
   } as React.CSSProperties}>
-    {status === 'preview' && <div className="sales-preview-banner" role="status">
+    {status !== 'live' && <div className="sales-preview-banner" role="status">
       <Sparkles size={17}/>
-      PRÉVIA VISUAL — dados de exemplo. A publicação automática exige o backend oficial do CR JORNADA.
-      <span className="sales-preview-reason">({error})</span>
+      {status === 'editing'
+        ? 'PRÉVIA PRIVADA — alterações não publicadas e botões de contratação desativados.'
+        : 'PRÉVIA VISUAL — dados de exemplo. A publicação automática exige o backend oficial do CR JORNADA.'}
+      {status === 'preview' && <span className="sales-preview-reason">({error})</span>}
     </div>}
 
     <header className="sales-header">
@@ -201,7 +213,7 @@ export function SalesPage() {
                   <ArrowRight size={17}/>
                 </a>
               : <span className="sales-plan-unavailable">
-                  {status === 'preview' ? 'Disponível após a publicação' : 'Contato comercial em configuração'}
+                  {status !== 'live' ? 'Disponível após a publicação' : 'Contato comercial em configuração'}
                 </span>}
           </article>;
         })}
