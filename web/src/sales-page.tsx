@@ -9,7 +9,7 @@ import {
 } from '../../shared/sales-page';
 import './sales-page.css';
 
-type PageState = 'loading' | 'live' | 'preview' | 'unpublished';
+type PageState = 'loading' | 'live' | 'preview' | 'unpublished' | 'unavailable';
 type PublicResponse = {
   published: boolean;
   config: SalesPageConfig | null;
@@ -57,8 +57,12 @@ export function SalesPage() {
       if (!active) return;
       // Cloudflare Pages so publica os arquivos estaticos: demonstracao
       // claramente rotulada, sem CTA de compra nem contato ficticio.
+      const previewHost = window.location.hostname.endsWith('.pages.dev') ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
       setError(err instanceof Error ? err.message : 'Prévia sem servidor.');
-      setStatus('preview');
+      // Nao exibir ofertas ficticias quando o backend da loja oficial falhar.
+      setStatus(previewHost ? 'preview' : 'unavailable');
     });
     return () => { active = false; controller.abort(); };
   }, []);
@@ -81,6 +85,12 @@ export function SalesPage() {
 
   if (status === 'loading') return <main className="sales-pending" role="status">
     <Clock3 size={34}/> Preparando a página do CR JORNADA…
+  </main>;
+
+  if (status === 'unavailable') return <main className="sales-pending">
+    <div className="sales-brand"><Clock3 size={26}/> CR JORNADA</div>
+    <h1>Página temporariamente indisponível.</h1>
+    <p>Estamos trabalhando para restabelecer o acesso. Tente novamente mais tarde.</p>
   </main>;
 
   if (status === 'unpublished') return <main className="sales-pending">
