@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowRight, BadgeCheck, Building2, Check, CheckCircle2,
-  Clock3, HelpCircle, Mail, MessageCircle, ShieldCheck, Sparkles
+  Clock3, HelpCircle, Mail, MessageCircle, ShieldCheck, Sparkles,
+  CalendarDays, FileBarChart2, Fingerprint, LockKeyhole, MonitorSmartphone,
+  UsersRound, ClipboardList, CircleDot
 } from 'lucide-react';
 import {
   defaultSalesPage, salesPageSchema, whatsappUrl,
@@ -114,6 +116,17 @@ export function SalesPageView({
   error?: string;
 }) {
   const waLink = status === 'live' ? getWhatsApp(config) : null;
+  const features = config.features ?? defaultSalesPage.features ?? [];
+  const steps = config.steps ?? defaultSalesPage.steps ?? [];
+  const featureIcons = [
+    Fingerprint, CalendarDays, MonitorSmartphone,
+    UsersRound, FileBarChart2, LockKeyhole
+  ];
+  const stages = {
+    planned: 'Planejado',
+    testing: 'Em validação',
+    available: 'Disponível'
+  } as const;
 
   return <main className="sales-root" style={{
     '--sales-brand': config.primary_color
@@ -134,12 +147,13 @@ export function SalesPageView({
         <strong>CR JORNADA</strong>
       </a>
       <nav aria-label="Menu comercial">
-        <a href="#beneficios">Benefícios</a>
+        <a href="#recursos">Recursos</a>
+        <a href="#beneficios">Vantagens</a>
+        <a href="#como-funciona">Como funciona</a>
         <a href="#planos">Planos</a>
-        <a href="#duvidas">Dúvidas</a>
       </nav>
       <a className="sales-header-cta" href={waLink || '#contato'}>
-        {waLink ? 'Falar no WhatsApp' : 'Contato'} <ArrowRight size={15}/>
+        {waLink ? 'Tirar dúvidas' : 'Saiba mais'} <ArrowRight size={15}/>
       </a>
     </header>
 
@@ -151,8 +165,11 @@ export function SalesPageView({
           <h1>{config.headline}</h1>
           <p>{config.subtitle}</p>
           <div className="sales-hero-actions">
-            <a href="#planos" className="sales-button sales-button-primary">
-              Conhecer os planos <ArrowRight size={19}/>
+            <a href="#recursos" className="sales-button sales-button-primary">
+              Conhecer os recursos <ArrowRight size={19}/>
+            </a>
+            <a href="#planos" className="sales-button sales-button-outline">
+              Ver planos e condições <ArrowRight size={18}/>
             </a>
             {waLink && <a className="sales-button sales-button-outline"
               href={waLink} target="_blank" rel="noopener noreferrer">
@@ -160,13 +177,13 @@ export function SalesPageView({
             </a>}
           </div>
           <div className="sales-hero-note">
-            <ShieldCheck size={16}/> Planeje a gestão da jornada com mais organização.
+            <ShieldCheck size={16}/> Recursos em desenvolvimento e validação; disponibilidade informada antes da contratação.
           </div>
         </div>
         <div className="sales-hero-visual" aria-label="Prévia conceitual do painel de jornadas">
           <div className="sales-visual-top">
             <div className="sales-brand-mark"><Clock3 size={20}/></div>
-            <div><strong>Visão da operação</strong><small>Painel ilustrativo</small></div>
+            <div><strong>Sua rotina em perspectiva</strong><small>Representação conceitual</small></div>
             <span className="sales-visual-live">CR JORNADA</span>
           </div>
           <div className="sales-visual-grid">
@@ -185,27 +202,80 @@ export function SalesPageView({
       </div>
     </section>
 
-    <section id="beneficios" className="sales-section sales-benefits">
+    <section id="recursos" className="sales-section sales-resources">
       <div className="sales-section-head">
-        <span className="sales-overline">UM NOVO JEITO DE ORGANIZAR</span>
-        <h2>Mais clareza para quem administra. Mais praticidade para quem trabalha.</h2>
-        <p>Uma experiência projetada para acompanhar a rotina das empresas.</p>
+        <span className="sales-overline">CONHEÇA A PROPOSTA</span>
+        <h2>Entenda o que o CR JORNADA foi pensado para organizar.</h2>
+        <p>Da equipe aos horários, conheça cada módulo com explicações claras e acompanhe o estágio de desenvolvimento.</p>
       </div>
-      <div className="sales-benefit-grid">
-        {config.benefits.map((benefit, i) => <article key={i} className="sales-benefit">
-          <div className="sales-benefit-icon"><CheckCircle2 size={23}/></div>
-          <h3>{benefit}</h3>
-          <p>Conheça como o CR JORNADA pode apoiar essa necessidade.</p>
+      <div className="sales-resource-grid">
+        {features.map((feature, i) => {
+          const Icon = featureIcons[i % featureIcons.length];
+          return <article className="sales-resource-card" key={i}>
+            <div className="sales-resource-top">
+              <span className="sales-resource-icon"><Icon size={23}/></span>
+              <span className={'sales-resource-stage sales-resource-stage-' + feature.stage}>
+                <CircleDot size={12}/>{stages[feature.stage]}
+              </span>
+            </div>
+            <h3>{feature.title}</h3>
+            <p>{feature.description}</p>
+          </article>;
+        })}
+      </div>
+      <p className="sales-resource-disclaimer">
+        <ShieldCheck size={17}/>
+        Os estágios acima descrevem a evolução dos módulos. A ativação de cada função depende da conclusão dos testes e das condições do plano.
+      </p>
+    </section>
+
+    <section id="beneficios" className="sales-benefits-band">
+      <div className="sales-benefits-inner">
+        <div className="sales-benefits-intro">
+          <span className="sales-overline">POR QUE ORGANIZAR A JORNADA?</span>
+          <h2>Uma rotina mais clara para quem gerencia e para quem trabalha.</h2>
+          <p>O CR JORNADA está sendo construído para reunir informações em um só lugar e facilitar o entendimento da rotina de cada empresa.</p>
+          <a href="#como-funciona">Veja as etapas da implantação <ArrowRight size={17}/></a>
+        </div>
+        <div className="sales-benefits-list">
+          {config.benefits.map((benefit, i) => <div key={i}>
+            <span><CheckCircle2 size={21}/></span>
+            <strong>{benefit}</strong>
+          </div>)}
+        </div>
+      </div>
+    </section>
+
+    <section id="como-funciona" className="sales-section sales-how">
+      <div className="sales-section-head">
+        <span className="sales-overline">DO PRIMEIRO CONTATO À ROTINA</span>
+        <h2>Como funciona a jornada de implantação.</h2>
+        <p>Entenda as etapas previstas para preparar o sistema para sua empresa, sem surpresas durante a contratação.</p>
+      </div>
+      <div className="sales-steps-grid">
+        {steps.map((step, i) => <article key={i} className="sales-step">
+          <span className="sales-step-number">{String(i+1).padStart(2, '0')}</span>
+          <div className="sales-step-body">
+            <h3>{step.title}</h3>
+            <p>{step.description}</p>
+          </div>
         </article>)}
+      </div>
+      <div className="sales-how-note">
+        <ClipboardList size={20}/>
+        <p><strong>Implantação responsável:</strong> o início dos registros reais depende da ativação do ambiente, da conferência dos cadastros e da validação da operação.</p>
       </div>
     </section>
 
     <section id="planos" className="sales-section sales-pricing">
       <div className="sales-section-head">
         <span className="sales-overline">ESCOLHA O CAMINHO CERTO</span>
-        <h2>Planos pensados para diferentes necessidades.</h2>
-        <p>Converse conosco para verificar condições e disponibilidade antes de contratar.</p>
+        <h2>Conheça os planos e compare as opções.</h2>
+        <p>Veja o que cada plano propõe. Preços, recursos liberados e condições de contratação serão confirmados antes da assinatura.</p>
       </div>
+      <p className="sales-plan-advice"><BadgeCheck size={17}/>
+        Consulte a disponibilidade efetiva dos módulos descritos em cada plano. A demonstração não representa uma contratação ativa.
+      </p>
       <div className="sales-plan-grid">
         {config.plans.map(plan => {
           const checkout = status === 'live' ? plan.checkout_url : '';
@@ -236,7 +306,7 @@ export function SalesPageView({
     <section id="duvidas" className="sales-section sales-faq">
       <div className="sales-section-head">
         <span className="sales-overline">PERGUNTAS FREQUENTES</span>
-        <h2>Tire suas dúvidas antes de começar.</h2>
+        <h2>Tudo explicado para você decidir com segurança.</h2>
       </div>
       <div className="sales-faq-list">
         {config.faq.map((item,i) => <details key={i}>
