@@ -43,7 +43,7 @@ function setup(directory: string): void {
 // Apenas valores fixos de teste. Nunca interpolar dados de usuarios em SQL real.
 function insertSql(employeeId: string, companyId: string, cpfKey: string): string {
   const values: Array<string | number> = [
-    employeeId, employeeId, companyId, companyId,
+    employeeId, employeeId, companyId, 'encrypted-example', companyId,
     cpfKey, 1760000000000, 1760000000000
   ];
   let offset = 0;
