@@ -55,7 +55,7 @@ describe('CR JORNADA - importacao CPF no D1', () => {
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/e\.deleted_at IS NULL/i);
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/e\.status = 'active'/i);
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/c\.status = 'active'/i);
-    expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toMatch(/e\\.cpf_encrypted = \\?/i);
+    expect(INSERT_EMPLOYEE_CPF_LINK_SQL).toContain('AND e.cpf_encrypted = ?');
     expect(INSERT_EMPLOYEE_CPF_LINK_SQL).not.toMatch(/OR IGNORE|OR REPLACE/i);
   });
 
