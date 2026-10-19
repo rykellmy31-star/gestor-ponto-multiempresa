@@ -134,6 +134,7 @@ export const requireCompanyAdmin = createMiddleware<App>(
       id: session.company_id,
       slug: session.slug
     } as App['Variables']['company']);
+    c.set('companyAdminId', session.id);
 
     await next();
   }
