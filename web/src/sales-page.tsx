@@ -9,6 +9,7 @@ import {
   defaultSalesPage, salesPageSchema, whatsappUrl,
   type SalesPageConfig
 } from '../../shared/sales-page';
+import { SalesLeadForm } from './sales-lead-form';
 import './sales-page.css';
 
 type PageState = 'loading' | 'live' | 'preview' | 'unpublished' | 'unavailable';
@@ -152,7 +153,7 @@ export function SalesPageView({
         <a href="#como-funciona">Como funciona</a>
         <a href="#planos">Planos</a>
       </nav>
-      <a className="sales-header-cta" href={waLink || '#contato'}>
+      <a className="sales-header-cta" href={waLink || (config.lead_form_enabled ? '#interesse' : '#planos')}>
         {waLink ? 'Tirar dúvidas' : 'Saiba mais'} <ArrowRight size={15}/>
       </a>
     </header>
@@ -279,7 +280,8 @@ export function SalesPageView({
       <div className="sales-plan-grid">
         {config.plans.map(plan => {
           const checkout = status === 'live' ? plan.checkout_url : '';
-          const action = checkout || waLink;
+          const action = checkout || waLink ||
+            (status === 'live' && config.lead_form_enabled ? '#interesse' : null);
           return <article key={plan.id} className={'sales-plan '+(plan.featured ? 'sales-plan-featured' : '')}>
             {plan.featured && <span className="sales-plan-badge"><Sparkles size={13}/> EM DESTAQUE</span>}
             <h3>{plan.name}</h3>
@@ -291,8 +293,10 @@ export function SalesPageView({
             </ul>
             {action
               ? <a className={'sales-button '+(plan.featured ? 'sales-button-primary' : 'sales-button-outline')}
-                  href={action} target="_blank" rel="noopener noreferrer">
-                  {checkout ? 'Ver condições de compra' : 'Consultar este plano'}
+                  href={action} target={action.startsWith('#') ? undefined : '_blank'}
+                  rel={action.startsWith('#') ? undefined : 'noopener noreferrer'}>
+                  {checkout ? 'Ver condições de compra' :
+                    action.startsWith('#') ? 'Solicitar informações' : 'Consultar este plano'}
                   <ArrowRight size={17}/>
                 </a>
               : <span className="sales-plan-unavailable">
@@ -316,6 +320,19 @@ export function SalesPageView({
       </div>
     </section>
 
+    {(config.lead_form_enabled || status === 'preview') &&
+      <section id="interesse" className="sales-section sales-lead-section">
+        <div className="sales-section-head">
+          <span className="sales-overline">INFORMAÇÕES E PROPOSTAS</span>
+          <h2>Quer entender se o CR JORNADA atende sua empresa?</h2>
+          <p>Conte um pouco sobre sua necessidade. Não é necessário ter WhatsApp para pedir informações.</p>
+        </div>
+        <div className="sales-lead-container">
+          <SalesLeadForm config={config}
+            enabled={status === 'live' && config.lead_form_enabled === true}/>
+        </div>
+      </section>}
+
     <section id="contato" className="sales-contact-wrap">
       <div className="sales-contact">
         <div>
@@ -333,7 +350,9 @@ export function SalesPageView({
             <Mail size={17}/> {config.contact_email}
           </a>}
           {!waLink && (status !== 'live' || !config.contact_email) &&
-            <p>Os canais de contato serão exibidos quando forem configurados pelo Superadmin.</p>}
+            <p>{config.lead_form_enabled
+              ? 'Você também pode enviar uma solicitação pelo formulário desta página.'
+              : 'Os canais de contato serão exibidos quando forem configurados pelo Superadmin.'}</p>}
         </div>
       </div>
     </section>
