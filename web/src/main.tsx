@@ -18,6 +18,7 @@ import {PlatformDemoPage} from './platform-demo';
 import {EmployeeCpfPage} from './employee-cpf-pages';
 import {DeveloperCredit} from './developer-credit';
 import {SalesPage} from './sales-page';
+import {CompanySchedulesPage} from './company-schedules-page';
 
 class ErrorBoundary extends React.Component<
   {children: React.ReactNode},
@@ -77,6 +78,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/vendas" element={<SalesPage/>}/>
           <Route path="/planos" element={<Navigate to="/vendas" replace/>}/>
           <Route path="/superadmin/vendas" element={<PlatformPage/>}/>
+          <Route path="/empresa" element={<Navigate to="/empresa/jornadas" replace/>}/>
+          <Route path="/empresa/entrar" element={<CompanySchedulesPage/>}/>
+          <Route path="/empresa/jornadas" element={<CompanySchedulesPage/>}/>
           <Route path="/funcionario" element={<EmployeeCpfPage/>}/>
 
           <Route path="/app" element={<ProtectedLayout realm="employee"/>}>
