@@ -79,6 +79,42 @@ describe('CR JORNADA — senha inicial empresarial no banco D1 local',()=>{
         '(id,company_id,admin_id,action,created_at)',
         "VALUES('cross','co-b','adm-a','password_changed',1760000002000)"
       ].join(' '),dir)).toMatch(/company_admin_security_event_mismatch/);
+      // Redefinição com senha provisória expirada em 24 horas,
+      // sem alterar o gestor de outra empresa.
+      expect(query([
+        'SELECT id,temporary_password_expires_at FROM company_admins',
+        'ORDER BY id'
+      ].join(' '),dir)).toEqual([
+        {id:'adm-a',temporary_password_expires_at:null},
+        {id:'adm-b',temporary_password_expires_at:null}
+      ]);
+      query([
+        "UPDATE company_admins SET password_hash='hash-temporario-a',",
+        'must_change_password=1,temporary_password_expires_at=1760086401000,',
+        "auth_version=auth_version+1 WHERE id='adm-a' AND company_id='co-a'"
+      ].join(' '),dir);
+      expect(query([
+        'SELECT id,must_change_password,temporary_password_expires_at',
+        'FROM company_admins ORDER BY id'
+      ].join(' '),dir)).toEqual([
+        {id:'adm-a',must_change_password:1,
+          temporary_password_expires_at:1760086401000},
+        {id:'adm-b',must_change_password:1,temporary_password_expires_at:null}
+      ]);
+      // Após a troca, o campo de expiração é apagado.
+      query([
+        "UPDATE company_admins SET password_hash='hash-definitivo-a',",
+        'must_change_password=0,temporary_password_expires_at=NULL,',
+        "auth_version=auth_version+1 WHERE id='adm-a' AND company_id='co-a'"
+      ].join(' '),dir);
+      expect(query([
+        'SELECT id,must_change_password,temporary_password_expires_at',
+        'FROM company_admins ORDER BY id'
+      ].join(' '),dir)).toEqual([
+        {id:'adm-a',must_change_password:0,temporary_password_expires_at:null},
+        {id:'adm-b',must_change_password:1,temporary_password_expires_at:null}
+      ]);
+
       expect(query('PRAGMA foreign_key_check',dir)).toHaveLength(0);
     }finally{
       rmSync(dir,{recursive:true,force:true});
