@@ -76,6 +76,16 @@ describe('CR JORNADA - dias e marcacoes por empresa no D1', () => {
         "UPDATE work_days SET company_id='co-b' WHERE id='day-a'", dir
       )).toMatch(/work_day_company_immutable/);
 
+      query("UPDATE employees SET status='inactive' WHERE id='em-b'", dir);
+      expect(rejected(
+        "UPDATE work_days SET company_id='co-b' WHERE id='day-legacy'", dir
+      )).toMatch(/work_day_company_mismatch/);
+      expect(query(
+        "SELECT company_id FROM work_days WHERE id='day-legacy'", dir
+      )).toEqual([{ company_id: null }]);
+
+
+
       expect(rejected(
         "INSERT INTO punches(id,work_day_id,employee_id,seq,type,recorded_at,idempotency_key,ip_hash,receipt_hash) VALUES('forged-punch','day-a','em-b',1,'break_start',1791651600000,'forged-key','ip-hash-test','receipt-test')",
         dir
