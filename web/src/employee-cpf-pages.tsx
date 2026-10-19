@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type CSSProperties } from 'react';
 import { Building2, CheckCircle2, Clock3, Eye, EyeOff, LogOut, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { EmployeeCpfPointHistory } from './employee-cpf-history';
+import { EmployeeCpfPunch } from './employee-cpf-punch';
 
 type CompanyChoice = { id: string; name: string };
 type EmployeeSession = {
@@ -271,11 +272,8 @@ export function EmployeeCpfPage() {
                 Sua sessão está vinculada exclusivamente a esta empresa.
               </p>
             </div>
-            <p style={{ fontSize: 13, color: '#777', marginBottom: 22 }}>
-              Autenticação habilitada na versão de desenvolvimento.
-              A marcação de ponto será disponibilizada somente após
-              a validação do isolamento dos registros.
-            </p>
+            <EmployeeCpfPunch companyId={session.company.id}
+              csrfToken={session.csrf_token}/>
             <EmployeeCpfPointHistory timezone={session.company.timezone}/>
             <button type="button" style={primary} onClick={logout} disabled={busy}>
               <LogOut size={18}/>{busy ? 'Saindo…' : 'Encerrar sessão'}
