@@ -364,6 +364,66 @@ employeeCpfAuthRoutes.get('/session', async c => {
   });
 });
 
+
+employeeCpfAuthRoutes.post('/password', async c => {
+  const session = await getSession(c);
+  ensure(session, 401, 'unauthenticated', 'Entre para continuar.');
+  ensure(safeEqual(
+    c.req.header('X-CSRF-Token') || '', session.csrf_token
+  ), 403, 'csrf', 'Token de segurança inválido.');
+
+  const parsed = z.object({
+    current_password: z.string().min(1).max(128),
+    new_password: z.string().min(12).max(128)
+  }).strict().safeParse(await c.req.json().catch(() => null));
+  ensure(parsed.success, 400, 'invalid_password',
+    'Informe a senha atual e uma nova senha com pelo menos 12 caracteres.');
+  ensure(parsed.data.current_password !== parsed.data.new_password,
+    422, 'same_password', 'Escolha uma senha diferente.');
+
+  await limit(c, 'employee-password:' + session.user_id, 8, 15 * 60000);
+  const previous = await c.get('db').prepare(`
+    SELECT password_hash FROM users
+    WHERE id = ? AND employee_id = ? AND role = 'employee' AND active = 1
+  `).bind(session.user_id, session.employee_id)
+    .first<{ password_hash: string }>();
+
+  ensure(previous && await verifyPassword(
+    parsed.data.current_password, previous.password_hash, c.env.AUTH_PEPPER
+  ), 401, 'invalid_password', 'Senha atual incorreta.');
+
+  const updatedHash = await hashPassword(
+    parsed.data.new_password, c.env.AUTH_PEPPER
+  );
+  const updated = await c.get('db').prepare(`
+    UPDATE users
+    SET password_hash = ?, must_change_password = 0, updated_at = ?
+    WHERE id = ? AND employee_id = ? AND active = 1
+      AND password_hash = ?
+      AND auth_version = (
+        SELECT auth_version FROM employee_company_sessions
+        WHERE token_hash = ? AND user_id = ? AND employee_id = ?
+      )
+  `).bind(
+    updatedHash, Date.now(), session.user_id, session.employee_id,
+    previous.password_hash, session.token_hash,
+    session.user_id, session.employee_id
+  ).run();
+
+  ensure(updated.meta.changes === 1, 409, 'concurrent_modification',
+    'Sua conta foi alterada. Entre novamente.');
+
+  // O trigger users_auth_version revoga imediatamente a versao antiga.
+  // Elimina tambem os registros de sessao sem utilizar login legado.
+  await c.get('db').prepare(`
+    DELETE FROM employee_company_sessions
+    WHERE user_id = ? AND employee_id = ?
+  `).bind(session.user_id, session.employee_id).run();
+
+  deleteCookie(c, sessionCookie(c), cookieOptions(c));
+  return c.json({ success: true, reauthentication_required: true });
+});
+
 employeeCpfAuthRoutes.post('/logout', async c => {
   const session = await getSession(c);
   ensure(session, 401, 'unauthenticated', 'Sua sessão expirou.');
