@@ -38,7 +38,8 @@ function setup({
           if (sql.includes('FROM sales_page_settings')) return {
             published: published ? 1 : 0,
             published_json: JSON.stringify({
-              ...defaultSalesPage, lead_form_enabled: form
+              ...defaultSalesPage, lead_form_enabled: form,
+              privacy_url: 'https://example.com/privacidade'
             })
           };
           if (sql.includes('FROM platform_sessions s')) {
@@ -81,7 +82,8 @@ function setup({
     ? c.json({error:{code:e.code}},e.status as any)
     : c.json({error:{code:'internal_error'}},500));
   const env = { ENVIRONMENT:'development',
-    ENABLE_SALES_LEADS:enabled?'true':'false'
+    ENABLE_SALES_LEADS:enabled?'true':'false',
+    SALES_LEADS_RETENTION_DAYS: '90'
   } as any;
   function submit(body: object) {
     return app.request('/api/public/leads',{
