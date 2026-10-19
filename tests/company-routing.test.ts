@@ -256,6 +256,13 @@ describe('CR JORNADA - protecao das rotas', () => {
     expect(response.status).toBe(503);
   });
 
+  it('recuperação nova exige sessão e não abre o cadastro legado', async()=>{
+    const anonymous=makeEnvironment('anonymous');
+    expect((await anonymous.request('/api/company/employees/employee-a/reset-password','POST')).status).toBe(401);
+    const authenticated=makeEnvironment('company-a');
+    expect((await authenticated.request('/api/company/employees/employee-a/reset-password','POST')).status).toBe(403);
+  });
+
   it('nao libera cadastro de funcionarios', async () => {
     const t = makeEnvironment('company-a');
 

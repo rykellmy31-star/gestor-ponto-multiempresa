@@ -147,6 +147,7 @@ export const requireCompanyAdmin = createMiddleware<App>(
       slug: session.slug
     } as App['Variables']['company']);
     c.set('companyAdminId', session.id);
+    c.set('companyAdminTokenHash', session.token_hash);
 
     await next();
   }

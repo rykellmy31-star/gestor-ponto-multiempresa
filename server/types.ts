@@ -12,6 +12,7 @@ export interface Env {
   DATA_KEY: string;
   CPF_LOOKUP_SECRET?: string;
   ENABLE_COMPANY_SCHEDULES?: string;
+  ENABLE_EMPLOYEE_PASSWORD_RECOVERY?: string;
   ENABLE_EMPLOYEE_PUNCHES?: string;
   ENABLE_SALES_LEADS?: string;
   SALES_LEADS_RETENTION_DAYS?: string;
@@ -61,6 +62,7 @@ export type App = {
     // O middleware disponibiliza o ID e o slug da empresa.
     company: Pick<Company, 'id' | 'slug'> | null;
     companyAdminId: string | null;
+    companyAdminTokenHash: string | null;
 
     requestId: string;
   };

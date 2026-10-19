@@ -53,7 +53,7 @@ function makeApp() {
       return st;
     },
     async batch(statements: unknown[]) {
-      expect(statements.length === 2 || statements.length === 4).toBe(true);
+      expect(statements.length === 2 || statements.length === 5).toBe(true);
       return [
         { success: true, meta: { changes: 1 } },
         { success: true, meta: { changes: 1 } }

@@ -98,6 +98,7 @@ const sessionInsertSql = `
     AND u.role = 'employee' AND u.active = 1
     AND e.status = 'active' AND e.deleted_at IS NULL
     AND co.status = 'active'
+    AND (u.employee_temporary_password_expires_at IS NULL OR u.employee_temporary_password_expires_at>?)
 `;
 
 function sessionInsert(
@@ -115,7 +116,7 @@ function sessionInsert(
   ).bind(
     sha256(token), csrf, now, now + hours * 3600000, now,
     choice.user_id, choice.employee_id, choice.company_id,
-    choice.auth_version, ...proofParams
+    choice.auth_version, now, ...proofParams
   );
 }
 
@@ -150,9 +151,10 @@ export async function getEmployeeCpfSession(c: Ctx): Promise<ActiveSession | nul
       AND u.role = 'employee' AND u.active = 1
       AND e.status = 'active' AND e.deleted_at IS NULL
       AND co.status = 'active'
+      AND (u.employee_temporary_password_expires_at IS NULL OR u.employee_temporary_password_expires_at>?)
       AND s.expires_at > ?
       AND s.last_seen_at > ?
-  `).bind(sha256(token), now, now - 60 * 60000)
+  `).bind(sha256(token), now, now, now - 60 * 60000)
     .first<ActiveSession>();
 
   if (row && now - row.last_seen_at > 60000) {
@@ -194,9 +196,10 @@ employeeCpfAuthRoutes.post('/login', async c => {
     JOIN companies co ON co.id = l.company_id
     JOIN users u ON u.employee_id = e.id AND u.role = 'employee'
     WHERE l.cpf_lookup_key = ?
+      AND (u.employee_temporary_password_expires_at IS NULL OR u.employee_temporary_password_expires_at>?)
     ORDER BY co.id
     LIMIT 9
-  `).bind(lookupKey).all<CandidateRow>();
+  `).bind(lookupKey,Date.now()).all<CandidateRow>();
 
   const rows = result.results || [];
   // Limita o custo de scrypt e impede resultados truncados silenciosamente.
@@ -401,7 +404,8 @@ employeeCpfAuthRoutes.post('/password', async c => {
   await atomicIdentityWrite(db, [
     db.prepare(`
       UPDATE users
-      SET password_hash = ?, must_change_password = 0, updated_at = ?
+      SET password_hash = ?, must_change_password = 0, updated_at = ?,
+        employee_temporary_password_expires_at = NULL
       WHERE id = ? AND employee_id = ? AND active = 1 AND role = 'employee'
         AND password_hash = ?
         AND auth_version = (
@@ -413,15 +417,20 @@ employeeCpfAuthRoutes.post('/password', async c => {
             AND s.company_id = ? AND s.expires_at > ? AND s.last_seen_at > ?
             AND e.status='active' AND e.deleted_at IS NULL
         )
+        AND (employee_temporary_password_expires_at IS NULL OR employee_temporary_password_expires_at>?)
     `).bind(
       updatedHash, now, session.user_id, session.employee_id,
       previous.password_hash, session.token_hash,
-      session.user_id, session.employee_id, session.company_id, now, now-3600000
+      session.user_id, session.employee_id, session.company_id, now, now-3600000, now
     ),
     db.prepare(`
       DELETE FROM employee_company_sessions
       WHERE user_id = ? AND employee_id = ? AND company_id = ?
-    `).bind(session.user_id, session.employee_id, session.company_id)
+    `).bind(session.user_id, session.employee_id, session.company_id),
+    db.prepare(`INSERT INTO company_employee_security_events
+      (id,company_id,employee_id,user_id,admin_id,action,created_at)
+      VALUES (?,?,?,?,NULL,'password_changed',?)`)
+      .bind(crypto.randomUUID(),session.company_id,session.employee_id,session.user_id,now)
   ], 'concurrent_modification');
 
   deleteCookie(c, sessionCookie(c), cookieOptions(c));

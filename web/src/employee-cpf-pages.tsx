@@ -334,6 +334,9 @@ export function EmployeeCpfPage() {
             <button type="submit" disabled={busy || staticPreview} style={primary}>
               {staticPreview ? 'Login indisponível na prévia' : busy ? 'Conferindo…' : 'Entrar com segurança'}
             </button>
+            <p style={{fontSize:12,color:'#777',lineHeight:1.6,marginTop:14}}>
+              Esqueceu sua senha? Solicite ajuda ao administrador da sua empresa.
+            </p>
           </form>
         )}
 

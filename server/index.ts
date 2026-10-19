@@ -182,8 +182,9 @@ app.use('/api/*', async (c, next) => {
     path.startsWith('/api/company/auth/');
 
   const isCompanyEmployeesList =
-    path === '/api/company/employees' &&
-    c.req.method === 'GET';
+    (path === '/api/company/employees' && c.req.method === 'GET') ||
+    (/^\/api\/company\/employees\/[^/]+\/reset-password$/.test(path) &&
+      c.req.method === 'POST');
 
   // Autenticacao empresarial obrigatoria; funcao desligada sem flag.
   const isCompanySchedulesRoute =

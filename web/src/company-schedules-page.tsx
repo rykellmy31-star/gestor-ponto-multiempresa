@@ -1,3 +1,4 @@
+import { CompanyEmployeeAccess } from './company-employee-access';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -374,6 +375,9 @@ export function CompanySchedulesPage() {
           <LogOut size={16}/> Sair
         </button>
       </header>
+
+      <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
+        companyId={session.company.id} csrf={session.csrf_token}/>
 
       <section className="company-schedules-card company-schedules-intro">
         <CalendarClock size={25}/>
