@@ -16,6 +16,7 @@ type PageState = 'loading' | 'live' | 'preview' | 'unpublished' | 'unavailable';
 type PublicResponse = {
   published: boolean;
   config: SalesPageConfig | null;
+  leads_available?: boolean;
 };
 
 function setMeta(name: string, content: string, attribute = 'name') {
@@ -43,6 +44,7 @@ export function SalesPage() {
   const [status, setStatus] = useState<PageState>('loading');
   const [config, setConfig] = useState<SalesPageConfig>(defaultSalesPage);
   const [error, setError] = useState('');
+  const [leadsAvailable, setLeadsAvailable] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -60,6 +62,7 @@ export function SalesPage() {
       const parsed = salesPageSchema.safeParse(payload.config);
       if (!parsed.success) throw new Error('Configuração inválida.');
       setConfig(parsed.data);
+      setLeadsAvailable(payload.leads_available === true);
       setStatus('live');
     }).catch(err => {
       if (!active) return;
@@ -106,15 +109,17 @@ export function SalesPage() {
   </main>;
 
   if (!publicConfig) return null;
-  return <SalesPageView config={publicConfig} status={status} error={error}/>;
+  return <SalesPageView config={publicConfig} status={status} error={error}
+    leadsAvailable={leadsAvailable}/>;
 }
 
 export function SalesPageView({
-  config, status, error = ''
+  config, status, error = '', leadsAvailable = false
 }: {
   config: SalesPageConfig;
   status: 'live' | 'preview' | 'editing';
   error?: string;
+  leadsAvailable?: boolean;
 }) {
   const waLink = status === 'live' ? getWhatsApp(config) : null;
   const features = config.features ?? defaultSalesPage.features ?? [];
@@ -329,7 +334,8 @@ export function SalesPageView({
         </div>
         <div className="sales-lead-container">
           <SalesLeadForm config={config}
-            enabled={status === 'live' && config.lead_form_enabled === true}/>
+            enabled={status === 'live' && config.lead_form_enabled === true &&
+              leadsAvailable}/>
         </div>
       </section>}
 
