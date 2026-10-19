@@ -84,9 +84,10 @@ platformSalesRoutes.put('/', async c => {
   const { config, published, expected_revision } = parsed.data;
   ensure(
     !published ||
-    Boolean(config.whatsapp || config.plans.some(plan => plan.checkout_url)),
+    Boolean(config.lead_form_enabled || config.whatsapp ||
+      config.plans.some(plan => plan.checkout_url)),
     422, 'sales_contact_required',
-    'Para publicar, configure seu WhatsApp ou o link de compra de um plano.'
+    'Para publicar, ative o formulário de interesse, configure um contato ou adicione um link externo de compra.'
   );
 
   // No primeiro cadastro aceita somente revisao 0. Uma aba antiga
