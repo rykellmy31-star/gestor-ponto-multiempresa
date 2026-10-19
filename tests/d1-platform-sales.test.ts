@@ -60,6 +60,40 @@ describe('CR JORNADA - vendas e publicacao no D1 local', () => {
         'sales_page.unpublished'
       ]);
       expect(sql('PRAGMA foreign_key_check', dir)).toHaveLength(0);
+
+      // UPSERT usado pela API: insercao inicial so aceita revisao zero,
+      // mas edicoes legitimas da pagina (revisao positiva) devem funcionar.
+      const publishedJson = '{"headline":"Versao C"}';
+      const upsert = (expected: number) => [
+        'INSERT INTO sales_page_settings(',
+        'id,draft_json,published_json,published,revision,updated_by,updated_at',
+        ') SELECT 1,',
+        "'" + publishedJson + "','" + publishedJson + "',1,1,'admin-teste',1760000004000",
+        'WHERE (' + expected + '=0 OR EXISTS(',
+        'SELECT 1 FROM sales_page_settings WHERE id=1))',
+        'ON CONFLICT(id) DO UPDATE SET',
+        'draft_json=excluded.draft_json,',
+        'published_json=excluded.draft_json,',
+        'published=1,revision=sales_page_settings.revision+1,',
+        'updated_by=excluded.updated_by,updated_at=excluded.updated_at',
+        'WHERE sales_page_settings.revision=' + expected
+      ].join(' ');
+
+      sql(upsert(4), dir);
+      expect(sql("SELECT revision,json_extract(published_json,'$.headline') AS title FROM sales_page_settings", dir))
+        .toEqual([{ revision: 5, title: 'Versao C' }]);
+      // Aba desatualizada nao sobrescreve a revisao 5.
+      sql(upsert(4), dir);
+      expect(sql('SELECT revision FROM sales_page_settings', dir))
+        .toEqual([{ revision: 5 }]);
+      sql('DELETE FROM sales_page_settings WHERE id=1', dir);
+      sql(upsert(5), dir);
+      expect(sql('SELECT COUNT(*) AS total FROM sales_page_settings', dir))
+        .toEqual([{ total: 0 }]);
+      sql(upsert(0), dir);
+      expect(sql('SELECT revision FROM sales_page_settings', dir))
+        .toEqual([{ revision: 1 }]);
+
     } finally {
       rmSync(dir, { recursive:true, force:true });
     }
