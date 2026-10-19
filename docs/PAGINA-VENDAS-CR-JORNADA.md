@@ -66,3 +66,23 @@ Em `/superadmin/vendas`, o editor permite mudar textos, status reais, ordem, rem
 Compatibilidade: `features` e `steps` são campos **opcionais** no schema compartilhado. Configurações existentes no D1 continuam válidas; quando ausentes, a página usa descrições sugeridas, que o Superadmin pode personalizar. Nenhuma migração adicional no D1 é necessária para esses campos porque a página comercial já armazena JSON.
 
 Os rótulos não prometem certificação legal, reconhecimento facial, aplicativos nativos, funcionamento offline nem redução estatística de custos. A publicação comercial definitiva exige verificação real dos recursos disponíveis, das condições de contratação e da legislação aplicável.
+
+
+## Solicitações comerciais sem WhatsApp — implementação em desenvolvimento
+A página de vendas pode receber pedidos de informação pelo próprio site. Essa funcionalidade foi adicionada para que um visitante interessado entre em contato **sem precisar de telefone ou checkout de pagamento**.
+
+- Configuração editável: `lead_form_enabled`, **desativada por padrão**; é armazenada no JSON comercial e mantém compatibilidade com configurações antigas.
+- Formulário público: nome, e-mail, empresa opcional, plano opcional e mensagem, com autorização expressa para resposta comercial. Não solicita CPF, documentos, telefone, senha, dados de empregados nem pagamento.
+- Endpoint: `POST /api/public/leads`, acessível somente quando a página **está publicada**, o Superadmin habilitou o formulário e o Worker foi homologado com `ENABLE_SALES_LEADS=true`. Sem ambos, a API nega o envio.
+- O formulário exige validação de dados e consentimento, confirma o recebimento **somente após resposta HTTP bem-sucedida**, usa armadilha anti-bot e limite de cinco solicitações por IP em uma hora. O IP é usado somente em limite protegido por HMAC; não integra a tabela de solicitações.
+- Banco: migração **0022** `sales_leads`, separada dos registros trabalhistas e dos dados de funcionários.
+- Caixa de entrada do Superadmin: `GET /api/platform/leads`; status `PATCH /api/platform/leads/:id`; exclusão `DELETE /api/platform/leads/:id`. Todos os dados e alterações requerem autenticação Superadmin; mudanças exigem CSRF.
+- **Não há envio automático de e-mail**, pagamento ou disparos de WhatsApp. O Superadmin deve consultar a caixa de entrada e responder manualmente pelo endereço informado.
+- O Pages de demonstração exibe apenas o formulário desativado. **Nenhum dado real deve ser enviado pela prévia.**
+
+### Pendências obrigatórias antes da ativação
+1. Publicar aviso/política de privacidade revisados, detalhando controlador, finalidade, segurança, prazo de retenção e canal para solicitações de titulares (LGPD).
+2. Implantar e testar uma rotina de exclusão automática conforme prazo de retenção aprovado, além da exclusão manual já implementada.
+3. Revisar antispam, origem, abuso distribuído e limite de solicitações, incluindo eventual Turnstile e alertas de novas mensagens.
+4. Executar testes de migração **somente D1 local**, e em seguida staging **separado**, com credenciais de teste. Só ativar `ENABLE_SALES_LEADS` após aprovação e autorização.
+5. Nenhum deploy de Worker ou migração remota foi realizado nesta etapa.
