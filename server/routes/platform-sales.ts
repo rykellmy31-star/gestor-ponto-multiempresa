@@ -43,7 +43,8 @@ salesPublicRoutes.get('/sales-page', async c => {
     'Página comercial temporariamente indisponível.');
   return c.json({
     published: true, config: parsed.data, revision: row.revision,
-    updated_at: row.updated_at
+    updated_at: row.updated_at,
+    leads_available: c.env.ENABLE_SALES_LEADS === 'true'
   });
 });
 
