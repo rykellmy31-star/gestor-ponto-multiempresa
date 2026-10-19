@@ -56,6 +56,7 @@ export type App = {
     // Empresa identificada pela sessao autenticada.
     // O middleware disponibiliza o ID e o slug da empresa.
     company: Pick<Company, 'id' | 'slug'> | null;
+    companyAdminId: string | null;
 
     requestId: string;
   };
