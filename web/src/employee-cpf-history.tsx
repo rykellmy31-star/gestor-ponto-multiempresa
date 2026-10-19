@@ -6,6 +6,7 @@ type Punch = {
   seq: number;
   type: 'entry' | 'break_start' | 'break_end' | 'exit';
   recorded_at: number;
+  receipt_hash: string | null;
 };
 type WorkDay = {
   date: string;
@@ -40,9 +41,10 @@ function formatTime(timestamp: number, zone: string) {
 }
 
 export function EmployeeCpfPointHistory({
-  timezone
+  timezone, refreshVersion = 0
 }: {
   timezone?: 'America/Bahia' | 'America/Sao_Paulo';
+  refreshVersion?: number;
 }) {
   const [month, setMonth] = useState(currentMonth);
   const [history, setHistory] = useState<HistoryPayload | null>(null);
@@ -78,7 +80,7 @@ export function EmployeeCpfPointHistory({
     });
 
     return () => ctrl.abort();
-  }, [month, reload]);
+  }, [month, reload, refreshVersion]);
 
   const zone = timezone || 'America/Bahia';
   return <section style={{
@@ -132,7 +134,18 @@ export function EmployeeCpfPointHistory({
             gap: 12, fontSize: 12
           }}>
             <span style={{ color: '#847578' }}>{labels[punch.type]}</span>
-            <strong>{formatTime(punch.recorded_at, zone)}</strong>
+            <div style={{ textAlign: 'right', minWidth: 0 }}>
+              <strong>{formatTime(punch.recorded_at, zone)}</strong>
+              {punch.receipt_hash && <details style={{ marginTop: 5, maxWidth: 250 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 11, color: '#800000' }}>
+                  Identificação do registro
+                </summary>
+                <code style={{ display: 'block', wordBreak: 'break-all', marginTop: 5,
+                  color: '#70646b', fontSize: 10, fontWeight: 400 }}>
+                  {punch.receipt_hash}
+                </code>
+              </details>}
+            </div>
           </div>)}
         </div>}
     </article>)}
