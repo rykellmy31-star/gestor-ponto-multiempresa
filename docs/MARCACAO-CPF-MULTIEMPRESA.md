@@ -38,3 +38,11 @@ Se duas solicitações tiverem a **mesma chave** e o **mesmo tipo**, a resposta 
 3. Jornadas noturnas, ocorrências, ajustes, folgas e períodos fechados revisados por empresa.
 4. Comprovantes, exportações, relatórios, requisitos regulamentares e política de guarda de registros validados.
 5. Aprovação explícita antes de habilitar `ENABLE_EMPLOYEE_PUNCHES` ou realizar qualquer deploy remoto.
+
+
+## Identificação técnica de registro e atualização do histórico
+A interface `Meu ponto de hoje` agora exibe o horário efetivamente devolvido pelo servidor na confirmação bem-sucedida, com data, hora, tipo e `receipt_hash`. Esse código também está disponível no histórico mensal do **próprio funcionário, na própria empresa**. A consulta mensal continua exigindo sessão CPF ativa, senha inicial alterada e filtros de empresa impostos pelo banco, nunca provenientes da URL.
+
+Quando a marcação é confirmada, a tela atualiza automaticamente o histórico do mês; ao trocar a empresa da sessão, o painel anterior é desmontado e a identificação anterior deixa de ser exibida. A API de histórico permanece somente leitura, com `Cache-Control: private, no-store`.
+
+**Importante:** o `receipt_hash` é somente um identificador técnico do registro nesta implementação. Ele **não substitui comprovante eletrônico de registro de ponto**, assinatura eletrônica regulamentada nem atestado de conformidade legal. Os modelos de comprovante, exportação e guarda regulamentares continuam pendentes de revisão e homologação. Na Cloudflare Pages estática não há confirmação verdadeira ou gravação no banco.
