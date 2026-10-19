@@ -86,3 +86,15 @@ A página de vendas pode receber pedidos de informação pelo próprio site. Ess
 3. Revisar antispam, origem, abuso distribuído e limite de solicitações, incluindo eventual Turnstile e alertas de novas mensagens.
 4. Executar testes de migração **somente D1 local**, e em seguida staging **separado**, com credenciais de teste. Só ativar `ENABLE_SALES_LEADS` após aprovação e autorização.
 5. Nenhum deploy de Worker ou migração remota foi realizado nesta etapa.
+
+
+## Retenção de dados e política de privacidade — implementação adicional
+- O editor `/superadmin/vendas` agora recebe a **URL HTTPS de uma política de privacidade** quando o formulário de interesse estiver habilitado. O visitante encontra o link junto ao consentimento.
+- A API se recusa a publicar o formulário sem a URL; nenhuma política fictícia foi criada nem presumida como juridicamente adequada.
+- O Worker precisa ter `ENABLE_SALES_LEADS=true` **e** `SALES_LEADS_RETENTION_DAYS` com um valor inteiro entre **30 e 365 dias**. Ambas as configurações ficam ausentes/desligadas por padrão no repositório. **O período precisa ser definido pelo responsável pela operação após análise da finalidade e das obrigações legais.**
+- `server/core/sales-leads-retention.ts` restringe o descarte à tabela `sales_leads`, filtrando por `created_at` com lotes limitados. Não altera `employees`, `punches`, sessões, escalas ou dados das empresas.
+- `server/index.ts` possui uma rotina `scheduled` que faz a limpeza em lotes de até 100 solicitações, limitado a 20 lotes por execução. Se a flag estiver desligada ou o prazo não for válido, não executa consultas nem exclusões.
+- A configuração `wrangler.jsonc` declara execução diária às **04:00 UTC**. **Nenhum Worker foi implantado e nenhum agendamento foi ativado remotamente** nesta rodada: configuração e código estão somente na branch `desenvolvimento-cr-jornada`. O cron só funcionará depois de uma implantação explicitamente autorizada do Worker com D1 próprio e as flags aprovadas.
+- Os testes verificam o prazo configurado, a impossibilidade de limpar outros dados e a preservação de solicitações recentes no D1 local.
+
+**Pendências antes da ativação real:** revisar e publicar a política adequada à LGPD, estabelecer o prazo de retenção da operação, testar o cron em staging isolado, conferir alertas, backups, exclusões e procedimentos para solicitações de titulares. Não usar dados pessoais verdadeiros na prévia Cloudflare Pages.
