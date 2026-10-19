@@ -5,7 +5,7 @@ import type { App, Ctx, Schedule, Rules } from '../types';
 import { ensure, ApiError } from '../core/errors';
 import { sha256, safeEqual } from '../core/crypto';
 import { limit, ipHash } from '../core/security';
-import { localDate, scheduleMinutes, shiftBounds } from '../core/time';
+import { localDate, scheduleMinutes, shiftBounds, scheduleForDate } from '../core/time';
 import { getEmployeeCpfSession, type ActiveSession } from './employee-cpf-auth';
 
 export const employeeCpfPunchRoutes = new Hono<App>();
@@ -93,7 +93,7 @@ async function loadContext(c:Ctx,s:ActiveSession,now:number) {
     const r=rulesSchema.safeParse(JSON.parse(day.rules_json));
     ensure(parsed.success && r.success,409,'invalid_day_snapshot',
       'O histórico do dia precisa de conferência.');
-    shift=parsed.data as Schedule;
+    shift=scheduleForDate(parsed.data as Schedule,workDate);
     rules=r.data as Rules;
   } else {
     const row=await db.prepare([
@@ -109,7 +109,7 @@ async function loadContext(c:Ctx,s:ActiveSession,now:number) {
     const r=rulesSchema.safeParse(JSON.parse(employee.rules_json));
     ensure(parsed.success && r.success,409,'invalid_company_schedule',
       'A jornada e suas regras precisam ser conferidas.');
-    shift=parsed.data as Schedule;
+    shift=scheduleForDate(parsed.data as Schedule,workDate);
     rules=r.data as Rules;
   }
 
