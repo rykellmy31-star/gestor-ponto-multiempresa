@@ -27,6 +27,11 @@ function setMeta(name: string, content: string, attribute = 'name') {
   meta.setAttribute('content', content);
 }
 
+export function isSalesPreviewHost(hostname: string) {
+  return hostname.endsWith('.pages.dev') ||
+    hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
 function getWhatsApp(config: SalesPageConfig) {
   return whatsappUrl(config.whatsapp, config.whatsapp_message);
 }
@@ -57,9 +62,7 @@ export function SalesPage() {
       if (!active) return;
       // Cloudflare Pages so publica os arquivos estaticos: demonstracao
       // claramente rotulada, sem CTA de compra nem contato ficticio.
-      const previewHost = window.location.hostname.endsWith('.pages.dev') ||
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
+      const previewHost = isSalesPreviewHost(window.location.hostname);
       setError(err instanceof Error ? err.message : 'Prévia sem servidor.');
       // Nao exibir ofertas ficticias quando o backend da loja oficial falhar.
       setStatus(previewHost ? 'preview' : 'unavailable');
