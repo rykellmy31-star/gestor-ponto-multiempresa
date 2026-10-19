@@ -10,6 +10,11 @@ on:
       - main
   workflow_dispatch:
 
+# Evita executar varias versoes antigas do mesmo PR em paralelo.
+concurrency:
+  group: cr-jornada-verificacao-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
