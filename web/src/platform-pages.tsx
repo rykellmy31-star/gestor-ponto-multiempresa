@@ -11,6 +11,7 @@ import {
   useLocation
 } from 'react-router-dom';
 import { SalesPageEditor } from './sales-editor';
+import { PlatformCompanyAdmins } from './platform-company-admins';
 
 import {
   Building2,
@@ -250,6 +251,7 @@ export function PlatformPage() {
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
 
+  const [managingCompany, setManagingCompany] = useState<Company | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] =
     useState<string | null>(null);
@@ -415,6 +417,7 @@ export function PlatformPage() {
       setCompanies([]);
       setPassword('');
       setFormOpen(false);
+      setManagingCompany(null);
     } catch (err) {
       setError(
         err instanceof Error
@@ -1077,6 +1080,16 @@ export function PlatformPage() {
 
                     <button
                       type="button"
+                      className="platform-company-admin-button"
+                      onClick={() => setManagingCompany(company)}
+                      disabled={company.status === 'archived'}
+                      title="Cadastrar e gerenciar administradores desta empresa"
+                    >
+                      <ShieldCheck size={15}/> Administradores
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => void changeStatus(company)}
                       disabled={
                         changingId === company.id ||
@@ -1124,17 +1137,25 @@ export function PlatformPage() {
           </h3>
 
           <p>
-            O cadastro das empresas está integrado à
-            API do Superadmin. A vinculação de
-            administradores, funcionários e registros
-            de ponto por empresa será implementada
-            nas próximas etapas.
+            O cadastro de empresas e de seus administradores está
+            integrado às APIs da plataforma. O acesso real da empresa
+            e o registro de ponto continuam sujeitos à homologação
+            e às verificações de isolamento multiempresa.
           </p>
 
           <span className="platform-pending">
             Integração multiempresa em desenvolvimento
           </span>
         </section>
+
+      {managingCompany && session && (
+        <PlatformCompanyAdmins
+          key={managingCompany.id}
+          company={managingCompany}
+          csrfToken={session.csrf_token}
+          onClose={() => setManagingCompany(null)}
+        />
+      )}
 
       {formOpen && (
         <div
