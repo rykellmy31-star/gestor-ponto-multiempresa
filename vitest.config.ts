@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
 // Processos Wrangler/D1 locais podem bloquear por dezenas de segundos.
-// O pool threads reduz falhas de RPC "onTaskUpdate" observadas no CI
-// com o pool padrao forks (Vitest 3), sem ignorar nenhum teste.
+// Mantemos threads e concorrência limitada para os processos D1 locais.
+// Vitest 5.0.5 substitui a versão 3 após auditoria de dependências.
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],

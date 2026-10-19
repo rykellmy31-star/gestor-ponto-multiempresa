@@ -72,3 +72,15 @@ vínculos legados nulos até reconciliação explícita e autorizada.
 
 As decisões comerciais, credenciais e autorizações de produção permanecem como
 pendências; não impedem auditorias e implementação na branch de desenvolvimento.
+
+## Correções encontradas no acompanhamento do CI
+
+A execução anterior falhava em `d1-employee-company-workdays` porque a fixture
+usava `inactive`, valor inexistente no CHECK de funcionários. A fixture agora
+usa `blocked`, mantendo a expectativa de negar vínculo para funcionário bloqueado.
+
+A auditoria de dependências identificou três alertas na cadeia do Vitest 3.
+A atualização explícita para **Vitest 5.0.5** preservou os 268 testes rápidos e
+removeu os alertas reportados (`npm audit`: zero no momento da verificação).
+O CI passa a auditar todas as dependências com limite de severidade `moderate`.
+Isso não substitui a validação completa dos shards D1 no último commit.
