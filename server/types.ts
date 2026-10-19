@@ -11,6 +11,7 @@ export interface Env {
   AUTH_PEPPER: string;
   DATA_KEY: string;
   CPF_LOOKUP_SECRET?: string;
+  ENABLE_COMPANY_SCHEDULES?: string;
   BOOTSTRAP_TOKEN?: string;
   PLATFORM_BOOTSTRAP_TOKEN?: string;
   SESSION_HOURS?: string;
