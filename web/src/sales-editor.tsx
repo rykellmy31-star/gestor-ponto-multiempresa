@@ -47,7 +47,13 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
       if (!active) return;
       const parsed = salesPageSchema.safeParse(data.config);
       if (!parsed.success) throw new Error('A configuração recebida é inválida.');
-      setConfig(parsed.data);
+      // Configuracoes anteriores a inclusao dos recursos detalhados
+      // continuam editaveis e recebem sugestoes iniciais.
+      setConfig({
+        ...defaultSalesPage, ...parsed.data,
+        features: parsed.data.features ?? defaultSalesPage.features,
+        steps: parsed.data.steps ?? defaultSalesPage.steps
+      });
       setPublished(data.published);
       setRevision(data.revision);
     }).catch(err => {
@@ -78,6 +84,48 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
         i === index ? { ...item, [name]: value } : item)
     }));
   }
+  function updateFeature(index: number,
+    field: keyof NonNullable<SalesPageConfig['features']>[number],
+    value: string
+  ) {
+    setConfig(prev => ({
+      ...prev,
+      features: (prev.features ?? defaultSalesPage.features ?? []).map(
+        (item, i) => i === index ? { ...item, [field]: value } : item
+      )
+    }));
+    setNotice('');
+  }
+  function updateStep(index: number,
+    field: keyof NonNullable<SalesPageConfig['steps']>[number],
+    value: string
+  ) {
+    setConfig(prev => ({
+      ...prev,
+      steps: (prev.steps ?? defaultSalesPage.steps ?? []).map(
+        (item, i) => i === index ? { ...item, [field]: value } : item
+      )
+    }));
+    setNotice('');
+  }
+  function addFeature() {
+    const existing = config.features ?? defaultSalesPage.features ?? [];
+    if (existing.length >= 6) return;
+    update('features', [...existing, {
+      title: 'Novo recurso da plataforma',
+      description: 'Explique aqui a funcionalidade e como ela será útil para a rotina da empresa.',
+      stage: 'planned'
+    }]);
+  }
+  function addStep() {
+    const existing = config.steps ?? defaultSalesPage.steps ?? [];
+    if (existing.length >= 5) return;
+    update('steps', [...existing, {
+      title: 'Nova etapa do processo',
+      description: 'Explique de maneira simples o que acontece nesta etapa da implantação.'
+    }]);
+  }
+
   function addPlan() {
     if (config.plans.length >= 4) return;
     setConfig(prev => ({
@@ -291,6 +339,78 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
 
       <section className="sales-editor-section">
         <div className="sales-editor-section-title"><span>04</span><div>
+          <h3>Recursos explicados</h3>
+          <p>Explique cada funcionalidade, seu benefício e o estágio real de desenvolvimento. São permitidos de 3 a 6 recursos.</p>
+        </div></div>
+        <div className="sales-editor-detail-grid">
+          {(config.features ?? defaultSalesPage.features ?? []).map((feature, index) =>
+            <article className="sales-editor-detail-card" key={index}>
+              <header>
+                <strong>Recurso {index + 1}</strong>
+                {(config.features ?? defaultSalesPage.features ?? []).length > 3 &&
+                  <button type="button" disabled={panelDisabled}
+                    onClick={() => update('features',
+                      (config.features ?? defaultSalesPage.features ?? []).filter((_, i) => i !== index)
+                    )}><Trash2 size={15}/> Remover</button>}
+              </header>
+              <label>Nome da funcionalidade
+                <input value={feature.title} maxLength={85} required disabled={panelDisabled}
+                  onChange={e => updateFeature(index, 'title', e.target.value)}/>
+              </label>
+              <label>Descrição para o cliente
+                <textarea rows={5} value={feature.description} maxLength={360}
+                  required disabled={panelDisabled}
+                  onChange={e => updateFeature(index, 'description', e.target.value)}/>
+              </label>
+              <label>Estágio real do recurso
+                <select value={feature.stage} disabled={panelDisabled}
+                  onChange={e => updateFeature(index, 'stage', e.target.value)}>
+                  <option value="planned">Planejado</option>
+                  <option value="testing">Em validação</option>
+                  <option value="available">Disponível — somente após homologação</option>
+                </select>
+              </label>
+            </article>)}
+        </div>
+        {(config.features ?? defaultSalesPage.features ?? []).length < 6 &&
+          <button type="button" className="sales-editor-add" disabled={panelDisabled}
+            onClick={addFeature}><Plus size={18}/> Adicionar recurso</button>}
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>05</span><div>
+          <h3>Como funciona a implantação</h3>
+          <p>Organize uma explicação em etapas, para o cliente compreender todo o processo. De 3 a 5 etapas.</p>
+        </div></div>
+        <div className="sales-editor-detail-grid">
+          {(config.steps ?? defaultSalesPage.steps ?? []).map((step, index) =>
+            <article className="sales-editor-detail-card" key={index}>
+              <header>
+                <strong>Etapa {index+1}</strong>
+                {(config.steps ?? defaultSalesPage.steps ?? []).length > 3 &&
+                  <button type="button" disabled={panelDisabled}
+                    onClick={() => update('steps',
+                      (config.steps ?? defaultSalesPage.steps ?? []).filter((_, i) => i !== index)
+                    )}><Trash2 size={15}/> Remover</button>}
+              </header>
+              <label>Título da etapa
+                <input value={step.title} maxLength={85} required disabled={panelDisabled}
+                  onChange={e => updateStep(index, 'title', e.target.value)}/>
+              </label>
+              <label>O que acontece nesta etapa?
+                <textarea rows={4} value={step.description} maxLength={300}
+                  required disabled={panelDisabled}
+                  onChange={e => updateStep(index, 'description', e.target.value)}/>
+              </label>
+            </article>)}
+        </div>
+        {(config.steps ?? defaultSalesPage.steps ?? []).length < 5 &&
+          <button type="button" className="sales-editor-add" disabled={panelDisabled}
+            onClick={addStep}><Plus size={18}/> Adicionar etapa</button>}
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>06</span><div>
           <h3>Planos e condições</h3>
           <p>Cadastre até 4 planos. O link de compra é opcional e deve vir de um checkout externo confiável.</p>
         </div></div>
@@ -343,7 +463,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
       </section>
 
       <section className="sales-editor-section">
-        <div className="sales-editor-section-title"><span>05</span><div>
+        <div className="sales-editor-section-title"><span>07</span><div>
           <h3>Perguntas frequentes</h3>
           <p>Ajude o cliente a esclarecer as principais dúvidas antes de entrar em contato.</p>
         </div></div>
