@@ -59,7 +59,12 @@ BEFORE UPDATE OF employee_id ON work_days
 WHEN NEW.company_id IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM employees e
-    WHERE e.id = NEW.employee_id AND e.company_id = NEW.company_id
+    JOIN companies co ON co.id = e.company_id
+    WHERE e.id = NEW.employee_id
+      AND e.company_id = NEW.company_id
+      AND co.status = 'active'
+      AND e.status = 'active'
+      AND e.deleted_at IS NULL
   )
 BEGIN SELECT RAISE(ABORT, 'work_day_company_mismatch'); END;
 
