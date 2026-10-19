@@ -154,6 +154,10 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
       setError('Confira os campos. ' + validated.error.issues[0]?.message);
       return;
     }
+    if (makePublic && config.lead_form_enabled && !config.privacy_url) {
+      setError('Para publicar o formulário, informe a URL HTTPS da política de privacidade.');
+      return;
+    }
     if (makePublic && !config.lead_form_enabled && !config.whatsapp &&
       !config.plans.some(plan => plan.checkout_url)) {
       setError('Para publicar, habilite o formulário de interesse ou configure uma forma de contato/compra.');
@@ -309,6 +313,13 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
               onChange={e => update('lead_form_enabled', e.target.checked)}/>
             Receber solicitações comerciais pelo formulário do próprio site
           </label>
+          {config.lead_form_enabled && <label>Endereço HTTPS da política de privacidade
+            <input type="url" value={config.privacy_url || ''}
+              disabled={panelDisabled} required
+              placeholder="https://seudominio.com.br/privacidade"
+              onChange={e => update('privacy_url', e.target.value)}/>
+            <small>A política deve informar como os dados comerciais serão usados e quando serão excluídos.</small>
+          </label>}
           <p className="sales-editor-form-warning">
             Desativado por padrão. Antes de publicar, valide o atendimento,
             a proteção contra spam e o prazo de retenção dos dados dos interessados.
