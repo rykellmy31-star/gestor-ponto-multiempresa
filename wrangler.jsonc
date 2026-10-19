@@ -21,6 +21,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  "triggers": {
+    "crons": ["0 4 * * *"]
+  },
   "vars": {
     "ENVIRONMENT": "production",
     "APP_ORIGIN": "https://cr-jornada.netssh3-0.workers.dev",
