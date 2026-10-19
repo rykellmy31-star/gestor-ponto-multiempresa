@@ -62,3 +62,31 @@ AND NOT EXISTS (
   WHERE s.id = NEW.schedule_id
 )
 BEGIN SELECT RAISE(ABORT, 'schedule_history_company_required'); END;
+
+-- Eventos empresariais imutaveis do cadastro de jornadas.
+-- A FK composta impede auditoria de um administrador de outra empresa.
+CREATE UNIQUE INDEX company_admin_id_company_reference
+ON company_admins(id, company_id);
+
+CREATE TABLE company_schedule_audit (
+  id TEXT PRIMARY KEY,
+  company_id TEXT NOT NULL REFERENCES companies(id),
+  admin_id TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('created','assigned')),
+  schedule_id TEXT NOT NULL REFERENCES schedules(id),
+  employee_id TEXT REFERENCES employees(id),
+  details_json TEXT NOT NULL CHECK(json_valid(details_json)),
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (admin_id, company_id)
+    REFERENCES company_admins(id, company_id)
+);
+
+CREATE INDEX company_schedule_audit_company
+ON company_schedule_audit(company_id, created_at DESC);
+
+CREATE TRIGGER company_schedule_audit_immutable_update
+BEFORE UPDATE ON company_schedule_audit
+BEGIN SELECT RAISE(ABORT, 'schedule_audit_immutable'); END;
+CREATE TRIGGER company_schedule_audit_immutable_delete
+BEFORE DELETE ON company_schedule_audit
+BEGIN SELECT RAISE(ABORT, 'schedule_audit_immutable'); END;
