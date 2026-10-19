@@ -95,7 +95,8 @@ platformSalesRoutes.put('/', async c => {
   const result = await c.get('db').prepare([
     'INSERT INTO sales_page_settings (',
     'id,draft_json,published_json,published,revision,updated_by,updated_at',
-    ') SELECT 1,?,?,?,1,?,? WHERE ?=0',
+    ') SELECT 1,?,?,?,1,?,? WHERE (?=0 OR EXISTS(',
+    'SELECT 1 FROM sales_page_settings WHERE id=1))',
     'ON CONFLICT(id) DO UPDATE SET',
     'draft_json=excluded.draft_json,',
     'published_json=CASE WHEN excluded.published=1',
