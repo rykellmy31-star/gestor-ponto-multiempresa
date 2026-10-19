@@ -14,6 +14,7 @@ import {
   verifyPassword
 } from '../core/crypto';
 import { ipHash, limit } from '../core/security';
+import { password as passwordSchema } from '../core/validation';
 
 export const companyAuthRoutes = new Hono<App>();
 
@@ -41,6 +42,7 @@ export type CompanyAdminSession = {
   last_seen_at: number;
   token_hash: string;
   slug: string;
+  must_change_password: number;
 };
 
 async function getSession(
@@ -60,6 +62,7 @@ async function getSession(
       a.company_id,
       a.login,
       a.display_name,
+      a.must_change_password,
       s.csrf_token,
       s.expires_at,
       s.last_seen_at,
@@ -129,6 +132,10 @@ export const requireCompanyAdmin = createMiddleware<App>(
         'Token de segurança inválido.'
       );
     }
+
+    ensure(session.must_change_password !== 1, 403,
+      'password_change_required',
+      'Altere sua senha inicial antes de acessar as informações da empresa.');
 
     c.set('company', {
       id: session.company_id,
@@ -310,6 +317,7 @@ companyAuthRoutes.get('/session', async c => {
     },
 
     csrf_token: session.csrf_token,
+    must_change_password: session.must_change_password === 1,
     expires_at: session.expires_at,
     server_now: Date.now()
   });
@@ -353,4 +361,78 @@ companyAuthRoutes.post('/logout', async c => {
   return c.json({
     success: true
   });
+});
+
+
+// A senha inicial deve ser trocada antes do acesso as rotas empresariais.
+// A senha antiga nunca e armazenada nos logs, nem retornada pela API.
+const changePasswordSchema = z.object({
+  current_password: z.string().min(1).max(128),
+  new_password: passwordSchema
+}).strict();
+
+companyAuthRoutes.post('/change-password', async c => {
+  const session = await getSession(c);
+  ensure(session, 401, 'unauthenticated', 'Entre para atualizar sua senha.');
+  ensure(safeEqual(c.req.header('X-CSRF-Token') || '', session.csrf_token),
+    403, 'csrf', 'Token de segurança inválido.');
+
+  await limit(c,
+    'company-password-change:' + session.company_id + ':' + session.id +
+    ':' + ipHash(c), 8, 3600000
+  );
+
+  const parsed = changePasswordSchema.safeParse(await c.req.json().catch(() => null));
+  ensure(parsed.success, 400, 'invalid_password_change',
+    'Informe a senha atual e uma nova senha com pelo menos 12 caracteres.');
+  const {current_password, new_password} = parsed.data;
+  ensure(new_password !== current_password, 400, 'password_reused',
+    'Escolha uma senha diferente da senha inicial.');
+
+  const db = c.get('db');
+  const admin = await db.prepare([
+    'SELECT password_hash, auth_version FROM company_admins',
+    'WHERE id=? AND company_id=? AND active=1'
+  ].join(' ')).bind(session.id, session.company_id)
+    .first<{password_hash:string;auth_version:number}>();
+  ensure(admin, 401, 'unauthenticated', 'Administrador não encontrado.');
+
+  const valid = await verifyPassword(current_password,
+    admin.password_hash, c.env.AUTH_PEPPER);
+  ensure(valid, 401, 'incorrect_current_password',
+    'A senha atual está incorreta.');
+
+  // Igualar um segredo com grafia diferente é rejeitado pelo hash, além
+  // da verificacao por igualdade direta acima.
+  const reused = await verifyPassword(new_password,
+    admin.password_hash, c.env.AUTH_PEPPER);
+  ensure(!reused, 400, 'password_reused',
+    'A nova senha deve ser diferente da anterior.');
+
+  const hashed = await hashPassword(new_password, c.env.AUTH_PEPPER);
+  const now = Date.now();
+  const results = await db.batch([
+    db.prepare([
+      'UPDATE company_admins',
+      'SET password_hash=?,must_change_password=0,',
+      'auth_version=auth_version+1,updated_at=?',
+      'WHERE id=? AND company_id=? AND active=1 AND auth_version=?'
+    ].join(' ')).bind(hashed, now, session.id, session.company_id,
+      admin.auth_version),
+    db.prepare([
+      'DELETE FROM company_admin_sessions',
+      'WHERE admin_id=? AND company_id=?'
+    ].join(' ')).bind(session.id, session.company_id),
+    db.prepare([
+      'INSERT INTO company_admin_security_events',
+      '(id,company_id,admin_id,action,created_at)',
+      "VALUES (?,?,?,'password_changed',?)"
+    ].join(' ')).bind(crypto.randomUUID(), session.company_id, session.id, now)
+  ]);
+  ensure(results[0].meta.changes === 1, 409, 'password_change_conflict',
+    'Sua senha foi alterada em outra sessão. Entre novamente.');
+
+  deleteCookie(c, cookieName(c), cookieOptions(c));
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({success:true, requires_login:true});
 });
