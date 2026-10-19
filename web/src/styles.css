@@ -238,3 +238,30 @@ a:hover {
 .platform-section p{color:#64748b;line-height:1.6;font-size:14px}
 .platform-pending{display:inline-block;margin-top:8px;padding:8px 12px;border-radius:8px;background:#f1f5f9;color:#64748b;font-size:12px;font-weight:650}
 @media(max-width:600px){.platform-card{padding:26px 22px}.platform-header{padding:16px}.platform-brand h1{font-size:17px}.platform-content{padding:26px 16px}.platform-grid{grid-template-columns:1fr;gap:12px}.platform-stat,.platform-section{padding:20px}}
+
+/* Credito permanente de autoria da plataforma CR JORNADA.
+   Aplicado fora do roteador: login, superadmin, demonstracao,
+   funcionario e paginas de erro compartilham o mesmo rodape. */
+.cr-site-frame {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.cr-site-content { flex: 1 0 auto; min-width: 0; }
+.cr-site-credit {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 13px 16px;
+  background: #f8f5f5;
+  border-top: 1px solid #ebdfdf;
+  color: #65595d;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  text-align: center;
+  letter-spacing: .05px;
+}
+.cr-site-credit span { overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .cr-site-credit { padding: 12px; font-size: 10px; }
+}
