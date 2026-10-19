@@ -100,7 +100,7 @@ async function loadContext(c:Ctx,s:ActiveSession,now:number) {
       'SELECT s.config_json FROM schedule_assignments a',
       'JOIN schedules s ON s.id=a.schedule_id AND s.company_id=?',
       'WHERE a.employee_id=? AND a.effective_from<=?',
-      'ORDER BY a.effective_from DESC LIMIT 1'
+      'ORDER BY a.effective_from DESC,a.created_at DESC,a.id DESC LIMIT 1'
     ].join(' ')).bind(s.company_id,s.employee_id,workDate)
       .first<{config_json:string}>();
     ensure(row,409,'no_company_schedule',
