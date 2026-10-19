@@ -1,0 +1,26 @@
+.sales-inbox{background:#fff;border:1px solid #eadedf;border-radius:16px;padding:25px;margin:0 0 22px;color:#423238}
+.sales-inbox-head{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.sales-inbox-head h3{display:flex;align-items:center;gap:10px;font-size:18px;margin-bottom:8px}
+.sales-inbox-head h3 svg{color:#800000}
+.sales-inbox-head p{font-size:12px;color:#887d81;line-height:1.7}
+.sales-inbox-toggle,.sales-inbox-toolbar button{border:1px solid #d9c4c7;border-radius:9px;padding:11px 13px;color:#800000;background:#fff;font-weight:800;font-size:12px;cursor:pointer}
+.sales-inbox-toolbar{margin-top:25px;border-top:1px solid #eee5e6;padding:17px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:#817377}
+.sales-inbox-toolbar button{display:flex;align-items:center;gap:7px;padding:8px 12px}
+.sales-inbox-item{border-top:1px solid #eee5e6;padding:19px 0}
+.sales-inbox-item header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.sales-inbox-item header strong{display:block;font-size:14px}
+.sales-inbox-item header small{display:block;margin-top:7px;font-size:11px;color:#91858a}
+.sales-inbox-status{font-size:10px;font-weight:800;border-radius:22px;padding:6px 10px;color:#655d62;background:#f2eff0;white-space:nowrap}
+.sales-inbox-status-new{color:#8b641d;background:#fff4d9}
+.sales-inbox-status-contacted{color:#236d48;background:#eaf8f0}
+.sales-inbox-email{display:inline-flex;align-items:center;gap:7px;color:#800000;font-size:12px;text-decoration:none;margin:15px 0}
+.sales-inbox-email:hover{text-decoration:underline}
+.sales-inbox-plan{font-size:11px;color:#87767c;margin-bottom:9px}
+.sales-inbox-message{background:#faf7f7;border-radius:9px;padding:13px;font-size:12px;color:#53454b;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+.sales-inbox-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+.sales-inbox-actions button{border:1px solid #e4d4d8;background:#fff;color:#654048;display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer}
+.sales-inbox-actions .sales-inbox-delete{color:#a13d4c}
+.sales-inbox-actions button:disabled{opacity:.6;cursor:not-allowed}
+.sales-inbox-privacy,.sales-inbox-empty{font-size:11px;color:#96868b;margin-top:16px;line-height:1.8}
+.sales-inbox-error{color:#9c283c;background:#fff0f1;border-radius:9px;padding:12px;font-size:12px}
+@media(max-width:540px){.sales-inbox{padding:18px}.sales-inbox-head{align-items:flex-start;flex-direction:column}}
