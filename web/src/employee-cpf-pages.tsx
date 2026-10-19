@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, type CSSProperties } from 'react';
 import { Building2, CheckCircle2, Clock3, Eye, EyeOff, LogOut, LockKeyhole, ShieldCheck } from 'lucide-react';
 
 type CompanyChoice = { id: string; name: string };
@@ -57,17 +57,17 @@ async function requestEmployee<T>(
   return data;
 }
 
-const panel: React.CSSProperties = {
+const panel: CSSProperties = {
   maxWidth: 470, width: '100%', background: '#fff', borderRadius: 20,
   border: '1px solid #eee3e3', padding: 'clamp(22px, 5vw, 38px)',
   boxShadow: '0 20px 80px #3f11110d'
 };
-const field: React.CSSProperties = {
+const field: CSSProperties = {
   width: '100%', minHeight: 46, border: '1px solid #dfd3d3',
   borderRadius: 10, background: '#fff', padding: '12px 13px',
   fontSize: 15, color: '#302222'
 };
-const primary: React.CSSProperties = {
+const primary: CSSProperties = {
   width: '100%', minHeight: 46, border: 0, borderRadius: 10,
   padding: '12px 18px', background: '#800000', color: 'white',
   fontSize: 14, fontWeight: 650, display: 'flex',
