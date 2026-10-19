@@ -54,10 +54,8 @@ describe('CR JORNADA — cadastro comercial isolado no D1 local',()=>{
       // Limpeza agendada deve retirar SOMENTE solicitacoes vencidas.
       query([
         "INSERT INTO sales_leads(id,name,email,company,message,plan_id,consent_at,created_at,updated_at) VALUES",
-        "('lead-antigo','Teste Antigo','antigo@exemplo.com','',
-          'Solicitacao de teste expirada','',1750000000000,1750000000000,1750000000000)",
-        ",('lead-recente','Teste Atual','atual@exemplo.com','',
-          'Solicitacao de teste recente','',1800000000000,1800000000000,1800000000000)"
+        "('lead-antigo','Teste Antigo','antigo@exemplo.com','','Solicitacao de teste expirada','',1750000000000,1750000000000,1750000000000)",
+        ",('lead-recente','Teste Atual','atual@exemplo.com','','Solicitacao de teste recente','',1800000000000,1800000000000,1800000000000)"
       ].join(' ').replace(/\s+/g,' '),dir);
       const cutoff = 1800000000000 - 90 * 86400000;
       query('DELETE FROM sales_leads WHERE id IN (' +
