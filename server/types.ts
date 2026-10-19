@@ -12,6 +12,7 @@ export interface Env {
   DATA_KEY: string;
   CPF_LOOKUP_SECRET?: string;
   ENABLE_COMPANY_SCHEDULES?: string;
+  ENABLE_SALES_LEADS?: string;
   BOOTSTRAP_TOKEN?: string;
   PLATFORM_BOOTSTRAP_TOKEN?: string;
   SESSION_HOURS?: string;
