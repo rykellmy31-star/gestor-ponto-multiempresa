@@ -22,7 +22,7 @@ export const INSERT_EMPLOYEE_CPF_LINK_SQL = `
         AND e.company_id = ?
         AND e.status = 'active'
         AND e.deleted_at IS NULL
-        AND e.cpf_encrypted IS NOT NULL
+        AND e.cpf_encrypted = ?
         AND length(trim(e.cpf_encrypted)) > 0
         AND c.status = 'active'
     ) THEN ? ELSE NULL END,
@@ -76,6 +76,7 @@ function validateBatch(batch: EmployeeCpfImportBatch): EmployeeCpfImportItem[] {
 export async function importEmployeeCpfBatch(
   db: D1DatabaseSession,
   batch: EmployeeCpfImportBatch,
+  expectedEncryptedCpf: ReadonlyMap<string, string>,
   now: number = Date.now()
 ): Promise<{ inserted: number }> {
   const items = validateBatch(batch);
@@ -88,17 +89,24 @@ export async function importEmployeeCpfBatch(
   // A ausencia de vinculo valido causa NOT NULL constraint failed,
   // abortando o batch inteiro, inclusive inserts anteriores.
   // UNIQUE / FOREIGN KEY tambem provocam rollback integral.
-  const statements = items.map(item =>
-    db.prepare(INSERT_EMPLOYEE_CPF_LINK_SQL).bind(
+  const statements = items.map(item => {
+    const expectedCiphertext = expectedEncryptedCpf?.get(item.employee_id);
+    if (typeof expectedCiphertext !== 'string' ||
+        expectedCiphertext.trim().length === 0) {
+      throw new Error('cpf_import_missing_ciphertext');
+    }
+
+    return db.prepare(INSERT_EMPLOYEE_CPF_LINK_SQL).bind(
       item.employee_id,
       item.employee_id,
       item.company_id,
+      expectedCiphertext,
       item.company_id,
       item.cpf_lookup_key,
       now,
       now
-    )
-  );
+    );
+  });
 
   // Nao usar OR IGNORE, REPLACE ou retry parcial.
   await db.batch(statements);
