@@ -151,6 +151,36 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect(t.batches).toHaveLength(0);
   });
 
+  it('salva jornada com seg-sex agrupados e sabado independente', async () => {
+    const t = makeApp();
+    const result = await t.request('', 'POST', {
+      ...schedule,
+      weekdays:[1,2,3,4,5,6],
+      day_overrides:{
+        '6':{
+          start:'07:00',break_start:'10:00',
+          break_end:'10:15',end:'13:00',paid_break:true
+        }
+      }
+    }, {csrf:'csrf-a'});
+    expect(result.status).toBe(201);
+    expect(t.batches).toHaveLength(1);
+  });
+  it('rejeita horario especial de dia nao trabalhado', async () => {
+    const t=makeApp();
+    const response=await t.request('', 'POST', {
+      ...schedule,
+      day_overrides:{
+        '6':{
+          start:'07:00',break_start:'10:00',
+          break_end:'10:15',end:'13:00',paid_break:true
+        }
+      }
+    }, {csrf:'csrf-a'});
+    expect(response.status).toBe(422);
+    expect(t.batches).toHaveLength(0);
+  });
+
   it('atribui jornada somente se funcionario e escala sao da empresa', async () => {
     const t = makeApp();
     const result = await t.request('/schedule-a/assign', 'POST', {
