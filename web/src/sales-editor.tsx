@@ -139,12 +139,39 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
             : 'Não foi possível salvar. Nenhuma alteração foi confirmada.'));
       }
       setRevision(result.revision);
-      setPublished(makePublic);
+      setPublished(result.published === true);
       setNotice(makePublic
         ? 'Página de vendas publicada! O conteúdo foi atualizado no servidor.'
-        : 'Rascunho salvo. O conteúdo público não foi publicado.');
+        : 'Rascunho salvo. A versão já publicada, se houver, permanece no ar.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao salvar.');
+    } finally { setBusy(false); }
+  }
+
+  async function unpublish() {
+    if (!window.confirm(
+      'Deseja retirar a página de vendas do ar? O rascunho será preservado.'
+    )) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const response = await fetch('/api/platform/sales-page/unpublish', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ expected_revision: revision })
+      });
+      const payload = await response.json().catch(() => null) as
+        { success?: boolean; revision?: number; error?: { message?: string } } | null;
+      if (!response.ok || !payload?.success || typeof payload.revision !== 'number') {
+        throw new Error(payload?.error?.message ||
+          'Não foi possível retirar a página do ar.');
+      }
+      setRevision(payload.revision);
+      setPublished(false);
+      setNotice('Página de vendas retirada do ar. Seu rascunho foi preservado.');
+    } catch(err) {
+      setError(err instanceof Error ? err.message : 'Falha ao despublicar.');
     } finally { setBusy(false); }
   }
 
@@ -344,10 +371,14 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
       <section className="sales-editor-publish">
         <div><ShieldCheck size={23}/>
           <div><h3>Revisar e publicar</h3>
-            <p>Ao clicar em <strong>Salvar e publicar</strong>, a página pública buscará a versão nova no D1 automaticamente, sem novo deploy. Para retirar do ar, use <strong>Salvar como rascunho</strong>.</p>
+            <p>Com <strong>Salvar e publicar</strong>, a página pública recebe a versão nova automaticamente, sem novo deploy. Com <strong>Salvar como rascunho</strong>, você preserva a versão que já está pública.</p>
           </div>
         </div>
         <div className="sales-editor-publish-actions">
+          {published && <button disabled={panelDisabled} type="button"
+            className="sales-editor-draft" onClick={() => void unpublish()}>
+            <EyeOff size={17}/> Retirar do ar
+          </button>}
           <button disabled={panelDisabled} type="submit" className="sales-editor-draft">
             <Save size={17}/>{busy?'Salvando…':'Salvar como rascunho'}
           </button>
