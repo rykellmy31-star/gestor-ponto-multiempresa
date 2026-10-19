@@ -131,7 +131,7 @@ export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
         })
       });
       const result = await response.json().catch(() => null) as
-        { success?: boolean; revision?: number; error?: { message?: string } } | null;
+        { success?: boolean; revision?: number; published?: boolean; error?: { message?: string } } | null;
       if (!response.ok || !result?.success || typeof result.revision !== 'number') {
         throw new Error(result?.error?.message ||
           (response.status === 409
