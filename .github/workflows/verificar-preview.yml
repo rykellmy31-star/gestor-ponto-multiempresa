@@ -1,0 +1,38 @@
+name: Validar interface CR JORNADA
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cr-jornada-interface-\${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  interface:
+    name: Interface, TypeScript e demo segura
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Verificar TypeScript
+        run: npm run typecheck
+      - name: Validar dados ficticios da demonstracao
+        run: npx vitest run tests/platform-demo-data.test.ts
+      - name: Compilar interface React para Cloudflare Pages
+        run: npm run build:web
+      - name: Confirmar arquivos estaticos
+        run: test -f public/index.html
