@@ -16,6 +16,19 @@ const salesPlanSchema = z.object({
   checkout_url: httpsLink
 }).strict();
 
+// Campos opcionais preservam configuracoes comerciais antigas no D1.
+// Ao abrir o editor, o Superadmin recebe sugestoes de texto editaveis.
+export const salesFeatureSchema = z.object({
+  title: z.string().trim().min(4).max(85),
+  description: z.string().trim().min(24).max(360),
+  stage: z.enum(['planned', 'testing', 'available'])
+}).strict();
+
+export const salesStepSchema = z.object({
+  title: z.string().trim().min(5).max(85),
+  description: z.string().trim().min(24).max(300)
+}).strict();
+
 export const salesPageSchema = z.object({
   eyebrow: z.string().trim().min(3).max(55),
   headline: z.string().trim().min(8).max(115),
@@ -27,6 +40,8 @@ export const salesPageSchema = z.object({
   contact_email: z.union([z.literal(''), z.email().max(254)]),
   logo_url: httpsLink,
   benefits: z.array(z.string().trim().min(3).max(125)).min(3).max(6),
+  features: z.array(salesFeatureSchema).min(3).max(6).optional(),
+  steps: z.array(salesStepSchema).min(3).max(5).optional(),
   plans: z.array(salesPlanSchema).min(1).max(4),
   faq: z.array(z.object({
     question: z.string().trim().min(6).max(150),
@@ -57,10 +72,60 @@ export const defaultSalesPage: SalesPageConfig = {
   contact_email: '',
   logo_url: '',
   benefits: [
-    'Visão organizada da jornada da equipe',
-    'Gestão de funcionários e escalas por empresa',
-    'Acesso individual e painéis administrativos',
-    'Relatórios e acompanhamento da jornada'
+    'Mais organização para a rotina do RH',
+    'Cada empresa com seus próprios dados e acessos',
+    'Funcionários acompanhando os próprios registros',
+    'Escalas, períodos e acompanhamento em um só lugar'
+  ],
+  features: [
+    {
+      title: 'Registros de entrada, intervalo e saída',
+      description: 'O projeto contempla o registro da jornada por funcionário e a consulta do histórico mensal. O fluxo de marcação efetiva está em testes antes da liberação para empresas.',
+      stage: 'testing'
+    },
+    {
+      title: 'Gestão de escalas e horários',
+      description: 'Planeje os horários de trabalho, organize as escalas e associe cada jornada à empresa correta. A administração de jornadas por empresa está em homologação.',
+      stage: 'testing'
+    },
+    {
+      title: 'Área individual do funcionário',
+      description: 'Cada colaborador terá um acesso próprio para identificar sua empresa, consultar o histórico da jornada e acompanhar seus dados, respeitando as permissões.',
+      stage: 'testing'
+    },
+    {
+      title: 'Painel administrativo da empresa',
+      description: 'Centralize cadastros de funcionários, visualize a equipe e organize as informações da operação em um painel específico para sua empresa.',
+      stage: 'planned'
+    },
+    {
+      title: 'Relatórios e acompanhamento de horas',
+      description: 'A proposta inclui ferramentas para acompanhar jornadas, saldos e ocorrências em períodos definidos, conforme a implantação e a validação dos cálculos.',
+      stage: 'planned'
+    },
+    {
+      title: 'Separação de dados entre empresas',
+      description: 'O CR JORNADA está sendo estruturado para manter funcionários, sessões e registros vinculados à organização correspondente, com controles de acesso testados no banco.',
+      stage: 'testing'
+    }
+  ],
+  steps: [
+    {
+      title: 'Conheça os recursos',
+      description: 'Explore as possibilidades da plataforma e entenda quais funções atendem à rotina da sua equipe.'
+    },
+    {
+      title: 'Planeje a configuração',
+      description: 'Defina com a equipe responsável os cadastros, horários, permissões e necessidades da sua empresa.'
+    },
+    {
+      title: 'Prepare funcionários e escalas',
+      description: 'Na implantação, cadastre a equipe e configure os horários adequados à operação, depois da liberação dos módulos.'
+    },
+    {
+      title: 'Acompanhe a jornada',
+      description: 'Após a ativação e os testes do seu ambiente, gestores e funcionários poderão consultar os registros e acompanhar o trabalho.'
+    }
   ],
   plans: [
     {
