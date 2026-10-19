@@ -68,6 +68,14 @@ export type App = {
 
 export type Ctx = Context<App>;
 
+export interface ScheduleDay {
+  start: string;
+  break_start: string;
+  break_end: string;
+  end: string;
+  paid_break: boolean;
+}
+
 export interface Schedule {
   name?: string;
   start: string;
@@ -76,6 +84,9 @@ export interface Schedule {
   end: string;
   weekdays: number[];
   paid_break: boolean;
+  // Horarios especificos opcionais: 0=domingo ... 6=sabado.
+  // O formato antigo (sem esta propriedade) permanece valido.
+  day_overrides?: Partial<Record<'0'|'1'|'2'|'3'|'4'|'5'|'6', ScheduleDay>>;
 }
 
 export interface Rules {
