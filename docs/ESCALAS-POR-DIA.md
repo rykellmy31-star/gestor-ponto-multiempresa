@@ -33,3 +33,22 @@ O sábado não precisa virar uma segunda escala e não é necessário editar cad
 
 ## Testes
 `tests/calculations.test.ts` verifica o total de 46h, o cálculo exato das 6h do sábado, a compatibilidade com escala antiga e a rejeição de exceções inválidas. `tests/company-schedules.test.ts` cobre a criação empresarial e a recusa de horário especial para dia não selecionado.
+
+
+## Interface empresarial própria (continuação)
+Foi acrescentado o caminho `/empresa/jornadas` no frontend do CR JORNADA e o caminho `/empresa/entrar` para entrar com **identificador da empresa, usuário e senha**.
+
+A página usa **apenas** as APIs empresariais já protegidas do Worker:
+- `GET /api/company/auth/session`, `POST /api/company/auth/login` e `POST /api/company/auth/logout` (sessões da empresa);
+- `GET /api/company/schedules` e `POST /api/company/schedules` (lista e cria horários da própria empresa);
+- `GET /api/company/employees` (funcionários associados à empresa da sessão);
+- `POST /api/company/schedules/:id/assign` (atribui escala a funcionário da mesma empresa, com data definida pelo gestor).
+
+Nessa página, o responsável cadastra os horários agrupados de segunda a sexta, define o sábado separadamente, vê **as horas semanais totais**, e escolhe a escala e o funcionário ao atribuir. Alterações são enviadas com o token CSRF da sessão, sem aceitar um identificador de empresa digitado pelo navegador.
+
+### Histórico e segurança
+A edição de uma escala empresarial previamente criada ainda não altera o próprio registro: o botão **Criar nova versão** preenche o formulário usando os horários existentes, permitindo salvar um novo registro e atribuÍ-lo com a data desejada. Isso evita que uma mudança de sábado reescreva silenciosamente a escala original. O dia de ponto já iniciado mantém snapshot do expediente. O histórico completo de vigência e a gestão de versões ainda precisam ser homologados no Worker/D1.
+
+A página é compatível com celulares, mas a prévia Cloudflare Pages **não tem login nem banco reais**, portanto mostra o formulário de acesso e não libera alteração verdadeira. O backend de cada empresa só funcionará quando o ambiente isolado tiver sido configurado, testado e aprovado. A flag `ENABLE_COMPANY_SCHEDULES` segue desativada, e não houve implantação remota.
+
+`main`, D1 remoto e Farmácia Pague Pouco permanecem intocados.
