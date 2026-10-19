@@ -1,3 +1,4 @@
+import { atomicIdentityWrite } from '../core/atomic-identity-write';
 
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -396,30 +397,32 @@ employeeCpfAuthRoutes.post('/password', async c => {
   const updatedHash = await hashPassword(
     parsed.data.new_password, c.env.AUTH_PEPPER
   );
-  const updated = await c.get('db').prepare(`
-    UPDATE users
-    SET password_hash = ?, must_change_password = 0, updated_at = ?
-    WHERE id = ? AND employee_id = ? AND active = 1
-      AND password_hash = ?
-      AND auth_version = (
-        SELECT auth_version FROM employee_company_sessions
-        WHERE token_hash = ? AND user_id = ? AND employee_id = ?
-      )
-  `).bind(
-    updatedHash, Date.now(), session.user_id, session.employee_id,
-    previous.password_hash, session.token_hash,
-    session.user_id, session.employee_id
-  ).run();
-
-  ensure(updated.meta.changes === 1, 409, 'concurrent_modification',
-    'Sua conta foi alterada. Entre novamente.');
-
-  // O trigger users_auth_version revoga imediatamente a versao antiga.
-  // Elimina tambem os registros de sessao sem utilizar login legado.
-  await c.get('db').prepare(`
-    DELETE FROM employee_company_sessions
-    WHERE user_id = ? AND employee_id = ?
-  `).bind(session.user_id, session.employee_id).run();
+  const db = c.get('db'), now = Date.now();
+  await atomicIdentityWrite(db, [
+    db.prepare(`
+      UPDATE users
+      SET password_hash = ?, must_change_password = 0, updated_at = ?
+      WHERE id = ? AND employee_id = ? AND active = 1 AND role = 'employee'
+        AND password_hash = ?
+        AND auth_version = (
+          SELECT s.auth_version FROM employee_company_sessions s
+          JOIN employees e ON e.id=s.employee_id AND e.company_id=s.company_id
+          JOIN companies co ON co.id=s.company_id AND co.status='active'
+          JOIN employee_cpf_links l ON l.employee_id=e.id AND l.company_id=co.id
+          WHERE s.token_hash = ? AND s.user_id = ? AND s.employee_id = ?
+            AND s.company_id = ? AND s.expires_at > ? AND s.last_seen_at > ?
+            AND e.status='active' AND e.deleted_at IS NULL
+        )
+    `).bind(
+      updatedHash, now, session.user_id, session.employee_id,
+      previous.password_hash, session.token_hash,
+      session.user_id, session.employee_id, session.company_id, now, now-3600000
+    ),
+    db.prepare(`
+      DELETE FROM employee_company_sessions
+      WHERE user_id = ? AND employee_id = ? AND company_id = ?
+    `).bind(session.user_id, session.employee_id, session.company_id)
+  ], 'concurrent_modification');
 
   deleteCookie(c, sessionCookie(c), cookieOptions(c));
   return c.json({ success: true, reauthentication_required: true });
