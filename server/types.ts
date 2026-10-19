@@ -13,6 +13,7 @@ export interface Env {
   CPF_LOOKUP_SECRET?: string;
   ENABLE_COMPANY_SCHEDULES?: string;
   ENABLE_SALES_LEADS?: string;
+  SALES_LEADS_RETENTION_DAYS?: string;
   BOOTSTRAP_TOKEN?: string;
   PLATFORM_BOOTSTRAP_TOKEN?: string;
   SESSION_HOURS?: string;
