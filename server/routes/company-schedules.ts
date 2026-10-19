@@ -5,6 +5,7 @@ import type { App, Schedule } from '../types';
 import { ensure } from '../core/errors';
 import { limit } from '../core/security';
 import { scheduleMinutes } from '../core/time';
+import { scheduleSchema as validatedSchedule, dayOverridesSchema } from '../core/validation';
 import { requireCompanyAdmin } from './company-auth';
 
 export const companySchedulesRoutes = new Hono<App>();
@@ -27,7 +28,8 @@ const scheduleSchema = z.object({
   end: clock,
   weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7)
     .refine(days => new Set(days).size === days.length),
-  paid_break: z.boolean()
+  paid_break: z.boolean(),
+  day_overrides: dayOverridesSchema.optional()
 }).strict();
 
 const assignmentSchema = z.object({
@@ -36,9 +38,9 @@ const assignmentSchema = z.object({
 }).strict();
 
 function validSchedule(config: Schedule): boolean {
+  if (!validatedSchedule.safeParse(config).success) return false;
   const minutes = scheduleMinutes(config);
-  return minutes.pause >= 0 && minutes.pause <= 240 &&
-    minutes.daily >= 60 && minutes.daily <= 1440;
+  return minutes.weekly >= 60 && minutes.weekly <= 7*1440;
 }
 
 companySchedulesRoutes.get('/', async c => {
