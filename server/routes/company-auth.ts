@@ -133,7 +133,7 @@ export const requireCompanyAdmin = createMiddleware<App>(
       );
     }
 
-    ensure(session.must_change_password !== 1, 403,
+    ensure(session.must_change_password === 0, 403,
       'password_change_required',
       'Altere sua senha inicial antes de acessar as informações da empresa.');
 
