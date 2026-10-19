@@ -34,3 +34,12 @@
 .company-admins-success{background:#edf9f0;color:#276b43}
 .company-admins-hint a{color:#800000;font-weight:750}
 @media(max-width:600px){.company-admins-overlay{padding:0}.company-admins-modal{height:100dvh;max-height:100dvh;border-radius:0}.company-admins-header,.company-admins-content{padding:17px}.company-admins-section{padding:16px}.company-admins-form{grid-template-columns:1fr}}
+
+
+.company-admins-temporary{border:1px solid #d6b876;background:#fff8e6;border-radius:13px;padding:17px;display:grid;gap:12px}
+.company-admins-temporary h3{font-size:15px;color:#68471d;margin:0}
+.company-admins-temporary p,.company-admins-temporary small{font-size:12px;line-height:1.65;color:#755733}
+.company-admins-temporary code{display:block;max-width:100%;overflow-wrap:anywhere;user-select:all;background:#fff;border:1px solid #dfce9d;padding:13px;border-radius:8px;color:#3c3428;font-size:15px;font-weight:800;letter-spacing:1px}
+.company-admins-temporary>div{display:flex;gap:10px;flex-wrap:wrap}
+.company-admins-temporary button{padding:10px 14px;border:1px solid #aa7b35;border-radius:9px;color:#78501e;background:#fff;cursor:pointer;font-weight:800}
+.company-admins-temporary button:first-child{background:#800000;color:#fff;border-color:#800000}
