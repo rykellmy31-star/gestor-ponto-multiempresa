@@ -42,6 +42,10 @@ export function PlatformCompanyAdmins({
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [changing,setChanging]=useState('');
+  const [recovering,setRecovering]=useState('');
+  const [temporary,setTemporary]=useState<{
+    name:string; password:string; expires_at:number
+  }|null>(null);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [form,setForm]=useState<Form>(blank);
@@ -88,6 +92,44 @@ export function PlatformCompanyAdmins({
     }finally{setBusy(false);}
   }
 
+  async function resetPassword(manager:Manager){
+    if(!!changing||!!recovering||busy||company.status!=='active'||manager.active!==1)return;
+    if(!window.confirm(
+      'Redefinir a senha de '+manager.display_name+
+      '? O acesso atual será encerrado. Uma senha provisória válida por 24 horas será exibida somente uma vez.'
+    ))return;
+    setRecovering(manager.id);setError('');setNotice('');setTemporary(null);
+    try{
+      const res=await fetch(endpoint+'/'+encodeURIComponent(manager.id)+'/reset-password',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'X-CSRF-Token':csrfToken}
+      });
+      const result=await read<{
+        success:boolean;temporary_password:string;expires_at:number
+      }>(res);
+      if(!result.success||!result.temporary_password){
+        throw new Error('A redefinição não foi confirmada.');
+      }
+      setTemporary({
+        name:manager.display_name,password:result.temporary_password,
+        expires_at:result.expires_at
+      });
+      setNotice('A senha anterior foi revogada. Entregue a nova senha ao responsável por um canal seguro.');
+    }catch(err){
+      setError(err instanceof Error?err.message:'Falha ao redefinir senha.');
+    }finally{setRecovering('');}
+  }
+
+  async function copyTemporary(){
+    if(!temporary)return;
+    try{
+      await navigator.clipboard.writeText(temporary.password);
+      setNotice('Senha provisória copiada. Envie somente ao administrador autorizado.');
+    }catch{
+      setError('Não foi possível copiar automaticamente. Selecione o texto da senha.');
+    }
+  }
+
   async function change(manager:Manager){
     const next=manager.active!==1;
     if(!window.confirm(next
@@ -118,8 +160,9 @@ export function PlatformCompanyAdmins({
           <h2>Administradores da empresa</h2>
           <span>{company.name} · {company.slug}</span>
         </div>
-        <button type="button" onClick={onClose} aria-label="Fechar administradores"
-          disabled={busy||!!changing}><X size={20}/></button>
+        <button type="button" onClick={() => {setTemporary(null);onClose();}}
+          aria-label="Fechar administradores"
+          disabled={busy||!!changing||!!recovering}><X size={20}/></button>
       </header>
       <div className="company-admins-content">
         <div className="company-admins-security">
@@ -128,10 +171,27 @@ export function PlatformCompanyAdmins({
         </div>
         {error&&<p className="company-admins-error" role="alert">{error}</p>}
         {notice&&<p className="company-admins-success" role="status">{notice}</p>}
+        {temporary&&<section className="company-admins-temporary" aria-label="Senha provisória gerada">
+          <h3>Senha provisória de {temporary.name}</h3>
+          <p>Exibida somente nesta confirmação. Ela vence em {
+            new Intl.DateTimeFormat('pt-BR',{
+              day:'2-digit',month:'2-digit',year:'numeric',
+              hour:'2-digit',minute:'2-digit'
+            }).format(new Date(temporary.expires_at))
+          }. O responsável deverá trocá-la após entrar.</p>
+          <code>{temporary.password}</code>
+          <div>
+            <button type="button" onClick={()=>void copyTemporary()}>Copiar senha</button>
+            <button type="button" onClick={()=>setTemporary(null)}>
+              Já guardei — ocultar
+            </button>
+          </div>
+          <small>Não envie esta senha por canais públicos e não a armazene em documentos compartilhados.</small>
+        </section>}
         <section className="company-admins-section">
           <div className="company-admins-section-head">
             <h3>Responsáveis cadastrados</h3>
-            <button type="button" onClick={()=>void load()} disabled={loading||busy||!!changing}>
+            <button type="button" onClick={()=>void load()} disabled={loading||busy||!!changing||!!recovering}>
               <RefreshCw size={15}/> Atualizar
             </button>
           </div>
@@ -147,10 +207,15 @@ export function PlatformCompanyAdmins({
               {manager.active?'Ativo':'Suspenso'}
             </span>
             <button type="button"
-              disabled={busy||!!changing||company.status==='archived'||
+              disabled={busy||!!changing||!!recovering||company.status==='archived'||
                 (company.status!=='active'&&manager.active!==1)}
               onClick={()=>void change(manager)}>
               {changing===manager.id?'Aguarde…':manager.active?'Suspender acesso':'Reativar'}
+            </button>
+            <button type="button" disabled={busy||!!changing||!!recovering||
+              company.status!=='active'||manager.active!==1}
+              onClick={()=>void resetPassword(manager)}>
+              {recovering===manager.id?'Redefinindo…':'Redefinir senha'}
             </button>
           </article>)}
         </section>
