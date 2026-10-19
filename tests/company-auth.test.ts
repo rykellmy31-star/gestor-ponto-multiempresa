@@ -60,6 +60,7 @@ function makeApp(scenario: Scenario) {
                   expires_at: Date.now() + 60000,
                   last_seen_at: Date.now(),
                   token_hash: 'token-hash',
+                  must_change_password: 0,
                   slug: 'empresa-a'
                 }
               : null;
