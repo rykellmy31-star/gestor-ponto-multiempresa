@@ -13,7 +13,7 @@ export const shiftFieldsSchema = z.object({
   start: time, break_start: time, break_end: time, end: time,
   paid_break: z.boolean()
 }).strict();
-export const dayOverridesSchema = z.record(
+export const dayOverridesSchema = z.partialRecord(
   z.enum(['0','1','2','3','4','5','6']),
   shiftFieldsSchema
 );
