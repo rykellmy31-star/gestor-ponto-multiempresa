@@ -45,6 +45,7 @@ import {
 } from './routes/company-employees';
 import { companySchedulesRoutes } from './routes/company-schedules';
 import { salesPublicRoutes, platformSalesRoutes } from './routes/platform-sales';
+import { salesLeadPublicRoutes, salesLeadAdminRoutes } from './routes/sales-leads';
 import { salesPageSchema } from '../shared/sales-page';
 import { renderSalesHead } from './core/sales-seo';
 
@@ -171,7 +172,9 @@ app.use('/api/*', async (c, next) => {
   const isPlatformRoute =
     path.startsWith('/api/platform/');
 
-  const isPublicSalesRoute = path === '/api/public/sales-page' && c.req.method === 'GET';
+  const isPublicSalesRoute =
+    (path === '/api/public/sales-page' && c.req.method === 'GET') ||
+    (path === '/api/public/leads' && c.req.method === 'POST');
 
   const isCompanyAuthRoute =
     path.startsWith('/api/company/auth/');
@@ -239,6 +242,8 @@ app.route(
 );
 
 app.route('/api/public', salesPublicRoutes);
+app.route('/api/public', salesLeadPublicRoutes);
+app.route('/api/platform/leads', salesLeadAdminRoutes);
 app.route('/api/platform/sales-page', platformSalesRoutes);
 
 // CR JORNADA - Autenticacao empresarial
