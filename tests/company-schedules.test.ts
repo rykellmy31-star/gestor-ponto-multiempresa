@@ -192,6 +192,25 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect(t.batches[0]).toHaveLength(2);
   });
 
+  it('rejeita data inexistente antes de gravar atribuicao', async () => {
+    const t = makeApp();
+    const result = await t.request('/schedule-a/assign', 'POST', {
+      employee_id: 'employee-a', effective_from: '2026-02-30'
+    }, { csrf: 'csrf-a' });
+    expect(result.status).toBe(400);
+    expect(t.batches).toHaveLength(0);
+  });
+
+  it('rejeita campos extras na atribuicao para impedir troca de empresa pelo cliente', async () => {
+    const t = makeApp();
+    const result = await t.request('/schedule-a/assign', 'POST', {
+      employee_id: 'employee-a', effective_from: '2026-11-02',
+      company_id: 'company-b'
+    }, { csrf: 'csrf-a' });
+    expect(result.status).toBe(400);
+    expect(t.batches).toHaveLength(0);
+  });
+
   it('rejeita atribuicao sem vinculo empresarial', async () => {
     const t = makeApp('invalid-target');
     const result = await t.request('/schedule-a/assign', 'POST', {
