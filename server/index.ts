@@ -1,6 +1,7 @@
 
 // CR JORNADA - Login isolado por CPF e selecao de empresa
 import { employeeCpfAuthRoutes } from './routes/employee-cpf-auth';
+import { employeeCpfHistoryRoutes } from './routes/employee-cpf-history';
 
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -180,11 +181,17 @@ app.use('/api/*', async (c, next) => {
   const isEmployeeCpfAuthRoute =
     path.startsWith('/api/employee/cpf-auth/');
 
+  // Apenas leitura mensal de ponto, vinculada a sessao CPF verificada.
+  const isEmployeeCpfHistoryRoute =
+    path === '/api/employee/cpf-work/history' &&
+    c.req.method === 'GET';
+
   if (
     !isPlatformRoute &&
     !isCompanyAuthRoute &&
     !isCompanyEmployeesList &&
     !isEmployeeCpfAuthRoute &&
+    !isEmployeeCpfHistoryRoute &&
     !isHealthRoute
   ) {
     return c.json(
@@ -228,6 +235,7 @@ app.route(
 );
 
 app.route('/api/employee/cpf-auth', employeeCpfAuthRoutes);
+app.route('/api/employee/cpf-work', employeeCpfHistoryRoutes);
 
 // Rotas antigas de funcionarios:
 // permanecem bloqueadas.
