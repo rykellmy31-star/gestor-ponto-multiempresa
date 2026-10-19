@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import type { App } from '../server/types';
@@ -85,7 +86,7 @@ describe('CR JORNADA - historico de ponto isolado no CPF', () => {
     const response = await t.request('/history?month=2026-10&company_id=company-b&employee_id=employee-b');
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toContain('no-store');
-    const data = await response.json();
+    const data = await jsonBody(response);
     expect(data.company_id).toBe('company-a');
     expect(data.employee_id).toBe('employee-a');
     expect(data.days).toHaveLength(2);
@@ -123,7 +124,7 @@ describe('CR JORNADA - historico de ponto isolado no CPF', () => {
     const t = createApp('must-change');
     const response = await t.request();
     expect(response.status).toBe(403);
-    expect((await response.json()).error.code).toBe('password_change_required');
+    expect((await jsonBody(response)).error.code).toBe('password_change_required');
     expect(t.calls.some(call => call.sql.includes('JOIN work_days d'))).toBe(false);
   });
 

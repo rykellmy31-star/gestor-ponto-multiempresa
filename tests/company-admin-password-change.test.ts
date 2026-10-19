@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { App } from '../server/types';
@@ -106,7 +107,7 @@ describe('CR JORNADA — troca obrigatoria de senha do gestor da empresa',()=>{
     const t=setup();
     const res=await t.request('/api/company/auth/session');
     expect(res.status).toBe(200);
-    const data=await res.json();
+    const data=await jsonBody(res);
     expect(data.must_change_password).toBe(true);
     expect(JSON.stringify(data)).not.toContain('password_hash');
     expect(JSON.stringify(data)).not.toContain('token_hash');
@@ -116,7 +117,7 @@ describe('CR JORNADA — troca obrigatoria de senha do gestor da empresa',()=>{
     const t=setup();
     const res=await t.request('/api/company/schedules');
     expect(res.status).toBe(403);
-    expect((await res.json()).error.code).toBe('password_change_required');
+    expect((await jsonBody(res)).error.code).toBe('password_change_required');
     expect(t.queries.some(q=>q.sql.includes('FROM schedules'))).toBe(false);
   });
 
@@ -160,7 +161,7 @@ describe('CR JORNADA — troca obrigatoria de senha do gestor da empresa',()=>{
       current_password:old,new_password:fresh
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({success:true,requires_login:true});
+    expect(await jsonBody(res)).toEqual({success:true,requires_login:true});
     expect(res.headers.get('set-cookie')).toContain('cr_jornada_company_dev=');
     expect(t.batches).toHaveLength(1);
     const [update,...tail]=t.batches[0];

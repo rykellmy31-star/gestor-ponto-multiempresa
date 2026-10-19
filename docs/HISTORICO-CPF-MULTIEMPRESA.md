@@ -34,3 +34,17 @@ O portal `/funcionario` mostra a seção **Meu histórico de ponto** depois que 
 ## Próximas etapas
 
 Implementar o registro de marcações com transações, idempotência, sequência, proteção por horário/escala e autenticação CPF vinculada à empresa; só desbloquear após testes funcionais e de isolamento completos.
+
+## Extrato CSV pessoal (desenvolvimento)
+
+O botão **Baixar extrato CSV** exporta somente as marcações já recebidas da API
+para o mês selecionado e a sessão empresarial atual. Fica desabilitado durante
+carregamento, erro ou ausência de marcações. Não cria endpoint nem libera escrita.
+
+O arquivo contém IDs de empresa/funcionário, dia de trabalho, sequência, tipo,
+horário no fuso da empresa, instante UTC e identificação técnica da marcação.
+Não contém CPF, IP, segredo de sessão ou chave de idempotência. Usa UTF-8 com BOM,
+separador ponto e vírgula, escape de aspas e proteção contra fórmulas de planilha.
+É um extrato informativo, sem cálculo de jornada, fechamento ou certificação.
+
+Testes: `tests/employee-history-csv.test.ts`.

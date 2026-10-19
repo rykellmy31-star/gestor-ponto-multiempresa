@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -162,7 +163,7 @@ describe('CR JORNADA - autenticacao empresarial', () => {
     const t=makeApp('active', Date.now()-1000);
     const res=await t.postLogin('senha-correta');
     expect(res.status).toBe(401);
-    expect((await res.json()).error.code).toBe('invalid_credentials');
+    expect((await jsonBody(res)).error.code).toBe('invalid_credentials');
     expect(t.statements.some(x=>x.includes('INSERT INTO company_admin_sessions')))
       .toBe(false);
   });
@@ -173,7 +174,7 @@ describe('CR JORNADA - autenticacao empresarial', () => {
       headers: { cookie: 'cr_jornada_company_dev=' + 'a'.repeat(64) }
     }, t.env as any);
     expect(session.status).toBe(401);
-    expect((await session.json()).error.code).toBe('unauthenticated');
+    expect((await jsonBody(session)).error.code).toBe('unauthenticated');
   });
 
   it('recusa senha provisoria expirada exatamente no instante limite', async () => {
@@ -198,7 +199,7 @@ describe('CR JORNADA - autenticacao empresarial', () => {
       headers:{cookie:'cr_jornada_company_dev='+'a'.repeat(64)}
     },t.env as any);
     expect(session.status).toBe(200);
-    expect((await session.json()).must_change_password).toBe(true);
+    expect((await jsonBody(session)).must_change_password).toBe(true);
   });
 
   it(
@@ -210,7 +211,7 @@ describe('CR JORNADA - autenticacao empresarial', () => {
 
       expect(res.status).toBe(200);
 
-      expect((await res.json()).success).toBe(true);
+      expect((await jsonBody(res)).success).toBe(true);
 
       expect(res.headers.get('set-cookie'))
         .toContain('cr_jornada_company_dev=');
@@ -232,7 +233,7 @@ describe('CR JORNADA - autenticacao empresarial', () => {
 
       expect(res.status).toBe(401);
 
-      expect((await res.json()).error.code)
+      expect((await jsonBody(res)).error.code)
         .toBe('invalid_credentials');
 
       expect(
@@ -252,7 +253,7 @@ describe('CR JORNADA - autenticacao empresarial', () => {
 
       expect(res.status).toBe(401);
 
-      expect((await res.json()).error.code)
+      expect((await jsonBody(res)).error.code)
         .toBe('invalid_credentials');
 
       expect(

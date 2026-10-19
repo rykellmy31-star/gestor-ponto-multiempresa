@@ -1,3 +1,4 @@
+import { employeeHistoryCsv } from '../../shared/employee-history-csv';
 import { useEffect, useState } from 'react';
 import { CalendarDays, FileClock, RefreshCw } from 'lucide-react';
 
@@ -83,6 +84,21 @@ export function EmployeeCpfPointHistory({
   }, [month, reload, refreshVersion]);
 
   const zone = timezone || 'America/Bahia';
+  const canExport = !loading && !error && history?.month === month &&
+    history.days.some(day => day.punches.length > 0);
+  function exportCsv() {
+    if (!canExport || !history) return;
+    const url = URL.createObjectURL(new Blob([
+      employeeHistoryCsv(history, zone)
+    ], {type: 'text/csv;charset=utf-8'}));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'cr-jornada-meu-ponto-' + history.month + '.csv';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
   return <section style={{
     border: '1px solid #eee0e0', borderRadius: 12,
     background: '#fff', padding: 18, marginBottom: 20
@@ -93,7 +109,7 @@ export function EmployeeCpfPointHistory({
     </div>
     <p style={{ color: '#7c7274', fontSize: 12, lineHeight: 1.6, marginBottom: 15 }}>
       Consulte suas marcações registradas nesta empresa.
-      A consulta não permite editar os horários.
+      A consulta não permite editar os horários. O CSV é um extrato informativo das marcações, sem apuração de horas ou valor de comprovante trabalhista oficial.
     </p>
     <div style={{ display: 'flex', gap: 9, alignItems: 'end', flexWrap: 'wrap', marginBottom: 17 }}>
       <label style={{ display: 'grid', gap: 6, fontSize: 12 }}>
@@ -112,6 +128,12 @@ export function EmployeeCpfPointHistory({
           borderRadius: 8, background: '#faf7f7', color: '#800000',
           display: 'flex', alignItems: 'center', gap: 6
         }}><RefreshCw size={16}/> Atualizar</button>
+      <button type="button" disabled={!canExport} onClick={exportCsv}
+        style={{ minHeight: 38, padding: '9px 12px', borderRadius: 8,
+          border: '1px solid #e8dbdb', background: '#faf7f7', color: '#800000',
+          opacity: canExport ? 1 : 0.5 }}>
+        Baixar extrato CSV
+      </button>
     </div>
 
     {loading && <p role="status" style={{ fontSize: 12 }}>Carregando histórico…</p>}

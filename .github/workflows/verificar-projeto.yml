@@ -39,6 +39,9 @@ jobs:
       - name: Verificar TypeScript
         run: npm run typecheck
 
+      - name: Verificar TypeScript dos testes
+        run: npm run typecheck:tests
+
       - name: Testes de logica, rotas e autorizacao
         run: npx vitest run --exclude 'tests/d1-*.test.ts' --no-file-parallelism --maxWorkers=2
 

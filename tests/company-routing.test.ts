@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -188,7 +189,7 @@ describe('CR JORNADA - protecao das rotas', () => {
 
     expect(response.status).toBe(200);
 
-    const data = await response.json();
+    const data = await jsonBody(response);
 
     expect(data.company_id).toBe('company-a');
     expect(data.employees).toHaveLength(1);
@@ -204,7 +205,7 @@ describe('CR JORNADA - protecao das rotas', () => {
 
     expect(response.status).toBe(200);
 
-    const data = await response.json();
+    const data = await jsonBody(response);
 
     expect(data.company_id).toBe('company-b');
     expect(data.employees).toHaveLength(1);
@@ -239,7 +240,7 @@ describe('CR JORNADA - protecao das rotas', () => {
 
     expect(response.status).toBe(503);
 
-    const data = await response.json();
+    const data = await jsonBody(response);
 
     expect(data.error.code)
       .toBe('tenant_isolation_pending');

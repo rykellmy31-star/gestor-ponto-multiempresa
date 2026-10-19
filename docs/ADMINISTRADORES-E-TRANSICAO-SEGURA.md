@@ -67,3 +67,21 @@ O fluxo de homologação é:
 Não se pode redefinir senha de gestor suspenso ou de empresa inativa. Nenhuma operação aceita `company_id` de uma sessão empresarial na rota Superadmin: os alvos `companyId` e `adminId` são verificados juntos no D1. A recuperação assistida não permite visualizar a senha antiga.
 
 **Limitações para produção:** validar entrega segura do segredo ao destinatário correto, política de contas e privilégios, histórico de auditoria, alertas sobre redefinição e testes de ponta a ponta no Worker e D1 de homologação. A prévia estática Pages não oferece login real. Nenhum deploy remoto ou migração em produção foi feito.
+
+## Concorrência de credenciais e sessões (auditoria adicional)
+
+A migração **0026_company_admin_atomic_writes.sql** adiciona uma tabela de guarda
+sem dados pessoais. Troca de senha, recuperação assistida e mudança de situação
+de gestor verificam `changes()` imediatamente após a alteração otimista, dentro
+do mesmo batch D1. Conflitos abortam tudo antes de revogação e auditoria; falhas
+posteriores também revertem a senha. A guarda é removida no batch bem-sucedido.
+
+O login cria sessões com `INSERT ... SELECT`, revalidando empresa ativa, gestor
+ativo, versão das credenciais, hash verificado e validade de senha provisória.
+Se esses dados mudarem durante a verificação da senha, não emite cookie.
+
+Testes de integração locais com Miniflare/D1 e senha scrypt real:
+`tests/d1-company-admin-atomic-write.test.ts` e
+`tests/d1-company-login-race.test.ts`. Nenhuma instância remota é usada.
+Não aplicar migração 0026, fazer deploy ou habilitar recursos sem homologação
+isolada e autorização explícita do proprietário.

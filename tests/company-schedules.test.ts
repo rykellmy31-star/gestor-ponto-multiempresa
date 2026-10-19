@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { App } from '../server/types';
@@ -119,7 +120,7 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const t = makeApp();
     const result = await t.request('');
     expect(result.status).toBe(200);
-    const data = await result.json();
+    const data = await jsonBody(result);
     expect(data.company_id).toBe('company-a');
     expect(data.schedules[0].id).toBe('schedule-a');
     const query = t.sqls.find(x => x.sql.includes('FROM schedules s'));
@@ -138,7 +139,7 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const t = makeApp();
     const result = await t.request('', 'POST', schedule, { csrf: 'csrf-a' });
     expect(result.status).toBe(201);
-    expect((await result.json()).company_id).toBe('company-a');
+    expect((await jsonBody(result)).company_id).toBe('company-a');
     expect(t.batches).toHaveLength(1);
     expect(t.batches[0]).toHaveLength(2);
   });

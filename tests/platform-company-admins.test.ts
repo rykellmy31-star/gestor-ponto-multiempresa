@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { App } from '../server/types';
@@ -105,7 +106,7 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     const t=makeApp();
     const r=await t.call('/company-a/admins');
     expect(r.status).toBe(200);
-    const data=await r.json();
+    const data=await jsonBody(r);
     expect(data.admins).toHaveLength(1);
     expect(data.admins[0].company_id).toBe('company-a');
     expect(JSON.stringify(data)).not.toContain('password_hash');
@@ -129,7 +130,7 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
       password:'senha-de-teste-1234'};
     const r=await t.call('/company-a/admins','POST',body);
     expect(r.status).toBe(201);
-    const data=await r.json();
+    const data=await jsonBody(r);
     expect(data.admin.company_id).toBe('company-a');
     expect(JSON.stringify(data)).not.toContain('password');
     expect(t.batches).toHaveLength(1);
@@ -153,7 +154,7 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     const r=await t.call('/company-a/admins/manager-a/status','PATCH',
       {active:false});
     expect(r.status).toBe(200);
-    expect((await r.json()).active).toBe(false);
+    expect((await jsonBody(r)).active).toBe(false);
     expect(t.batches).toHaveLength(1);
     const [update,...tail]=t.batches[0];
     const [revoke,audit]=tail.slice(-2);
@@ -208,7 +209,7 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     const res=await t.call('/company-a/admins/manager-a/reset-password','POST');
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toContain('no-store');
-    const result=await res.json();
+    const result=await jsonBody(res);
     expect(result.success).toBe(true);
     expect(result.must_change_password).toBe(true);
     expect(result.temporary_password).toBe('c'.repeat(24));

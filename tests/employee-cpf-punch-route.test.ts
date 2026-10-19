@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { App } from '../server/types';
@@ -163,7 +164,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
     const t=setup();
     const result=await t.request('/today?company_id=company-b&employee_id=employee-b');
     expect(result.status).toBe(200);
-    const json=await result.json();
+    const json=await jsonBody(result);
     expect(json.company_id).toBe('company-a');
     expect(json.employee_id).toBe('employee-a');
     expect(json.next_type).toBe('entry');
@@ -202,7 +203,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
     const t=setup({nextSeq:2});
     const r=await t.request('/today');
     expect(r.status).toBe(200);
-    expect((await r.json()).next_type).toBe('break_end');
+    expect((await jsonBody(r)).next_type).toBe('break_end');
   });
 
   it('evita batida fora de sequencia e ao fim do dia',async()=>{
@@ -228,7 +229,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
       type:'entry',idempotency_key:uuid
     });
     expect(valid.status).toBe(201);
-    const data=await valid.json();
+    const data=await jsonBody(valid);
     expect(data.replayed).toBe(false);
     expect(data.punch.work_date).toBe('2026-10-19');
     expect(t.batched).toHaveLength(2);
@@ -245,7 +246,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
       type:'entry',idempotency_key:uuid
     });
     expect(r.status).toBe(200);
-    expect((await r.json()).replayed).toBe(true);
+    expect((await jsonBody(r)).replayed).toBe(true);
     expect(t.batched).toHaveLength(0);
   });
 
@@ -255,7 +256,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
       type:'exit',idempotency_key:uuid
     });
     expect(r.status).toBe(409);
-    expect((await r.json()).error.code).toBe('idempotency_conflict');
+    expect((await jsonBody(r)).error.code).toBe('idempotency_conflict');
   });
 
   it('nao confirma falso sucesso quando D1 rejeita operacao concorrente',async()=>{
@@ -264,6 +265,6 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
       type:'entry',idempotency_key:uuid
     });
     expect(r.status).toBe(409);
-    expect((await r.json()).error.code).toBe('punch_conflict');
+    expect((await jsonBody(r)).error.code).toBe('punch_conflict');
   });
 });

@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { App } from '../server/types';
@@ -131,14 +132,14 @@ describe('CR JORNADA - pagina de vendas', () => {
     const t = makeApp({ revision: 3, published: false });
     const r = await t.get('/api/public/sales-page', false);
     expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ published: false, config: null });
+    expect(await jsonBody(r)).toEqual({ published: false, config: null });
   });
 
   it('mostra somente os dados publicados', async () => {
     const t = makeApp({ revision: 4, published: true });
     const r = await t.get('/api/public/sales-page', false);
     expect(r.status).toBe(200);
-    const data = await r.json();
+    const data = await jsonBody(r);
     expect(data.published).toBe(true);
     expect(data.config.whatsapp).toBe('5573999999999');
     expect(data.revision).toBe(4);
@@ -156,7 +157,7 @@ describe('CR JORNADA - pagina de vendas', () => {
     const t = makeApp();
     const r = await t.get('/api/platform/sales-page');
     expect(r.status).toBe(200);
-    const data = await r.json();
+    const data = await jsonBody(r);
     expect(data.published).toBe(false);
     expect(data.revision).toBe(0);
     expect(data.config.headline).toBe(defaultSalesPage.headline);
@@ -186,7 +187,7 @@ describe('CR JORNADA - pagina de vendas', () => {
       published: true, expected_revision: 0
     });
     expect(blocked.status).toBe(422);
-    expect((await blocked.json()).error.code).toBe('sales_leads_not_ready');
+    expect((await jsonBody(blocked)).error.code).toBe('sales_leads_not_ready');
 
     const active = makeApp({ leadsEnabled: true });
     const published = await active.save({
@@ -194,7 +195,7 @@ describe('CR JORNADA - pagina de vendas', () => {
       published: true, expected_revision: 0
     });
     expect(published.status).toBe(200);
-    expect((await published.json()).published).toBe(true);
+    expect((await jsonBody(published)).published).toBe(true);
   });
 
   it('recusa publicar um formulario sem politica de privacidade', async () => {
@@ -204,7 +205,7 @@ describe('CR JORNADA - pagina de vendas', () => {
       published: true, expected_revision: 0
     });
     expect(r.status).toBe(422);
-    expect((await r.json()).error.code).toBe('sales_privacy_required');
+    expect((await jsonBody(r)).error.code).toBe('sales_privacy_required');
   });
 
   it('grava e publica usando versao esperada e ID fixo', async () => {
@@ -213,7 +214,7 @@ describe('CR JORNADA - pagina de vendas', () => {
       config: t.config, published: true, expected_revision: 3
     });
     expect(r.status).toBe(200);
-    const data = await r.json();
+    const data = await jsonBody(r);
     expect(data.revision).toBe(4);
     expect(data.published).toBe(true);
     const update = t.calls.find(x=>x.sql.includes('INSERT INTO sales_page_settings'));
@@ -228,7 +229,7 @@ describe('CR JORNADA - pagina de vendas', () => {
       config: t.config, published: true, expected_revision: 4
     });
     expect(r.status).toBe(409);
-    expect((await r.json()).error.code).toBe('sales_page_conflict');
+    expect((await jsonBody(r)).error.code).toBe('sales_page_conflict');
   });
 
   it('salva rascunho preservando conteudo publicado', async () => {
@@ -237,7 +238,7 @@ describe('CR JORNADA - pagina de vendas', () => {
       config: t.config, published: false, expected_revision: 2
     });
     expect(r.status).toBe(200);
-    expect((await r.json()).published).toBe(true);
+    expect((await jsonBody(r)).published).toBe(true);
     const update = t.calls.find(x=>x.sql.includes('INSERT INTO sales_page_settings'));
     expect(update?.sql).toContain('ELSE sales_page_settings.published_json END');
     expect(update?.args[1]).toBe(null);
@@ -249,7 +250,7 @@ describe('CR JORNADA - pagina de vendas', () => {
     expect(denied.status).toBe(403);
     const allowed = await t.unpublish(3);
     expect(allowed.status).toBe(200);
-    expect((await allowed.json()).published).toBe(false);
+    expect((await jsonBody(allowed)).published).toBe(false);
   });
 
   it('rejeita codigo HTML malicioso em URL e planos duplicados', () => {

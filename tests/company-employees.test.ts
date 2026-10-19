@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -200,7 +201,7 @@ describe('CR JORNADA - isolamento de funcionarios', () => {
 
     expect(res.status).toBe(200);
 
-    const data = await res.json();
+    const data = await jsonBody(res);
 
     expect(data.success).toBe(true);
     expect(data.company_id).toBe('company-a');
@@ -222,7 +223,7 @@ describe('CR JORNADA - isolamento de funcionarios', () => {
 
     expect(res.status).toBe(200);
 
-    const data = await res.json();
+    const data = await jsonBody(res);
 
     expect(data.success).toBe(true);
     expect(data.company_id).toBe('company-b');

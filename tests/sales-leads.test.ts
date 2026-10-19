@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import type { App } from '../server/types';
@@ -125,7 +126,7 @@ describe('CR JORNADA — pedidos de contato comerciais seguros',()=>{
     const t=setup();
     const r=await t.submit(validInput);
     expect(r.status).toBe(201);
-    expect(await r.json()).toEqual({success:true});
+    expect(await jsonBody(r)).toEqual({success:true});
     expect(r.headers.get('cache-control')).toContain('no-store');
     const inserted=t.calls.find(x=>x.sql.includes('INSERT INTO sales_leads'));
     expect(inserted).toBeDefined();
@@ -157,7 +158,7 @@ describe('CR JORNADA — pedidos de contato comerciais seguros',()=>{
     const a=setup();
     const r=await a.adminRequest();
     expect(r.status).toBe(200);
-    expect((await r.json()).leads).toHaveLength(1);
+    expect((await jsonBody(r)).leads).toHaveLength(1);
   });
   it('exige CSRF para marcar atendido e para excluir',async()=>{
     const id='aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
