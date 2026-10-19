@@ -155,6 +155,15 @@ describe('CR JORNADA - autenticacao empresarial', () => {
       .toBe(false);
   });
 
+  it('bloqueia sessao existente quando a senha provisoria expira', async () => {
+    const t = makeApp('active', Date.now() - 1000);
+    const session = await t.app.request('/api/company/auth/session', {
+      headers: { cookie: 'cr_jornada_company_dev=' + 'a'.repeat(64) }
+    }, t.env as any);
+    expect(session.status).toBe(401);
+    expect((await session.json()).error.code).toBe('unauthenticated');
+  });
+
   it('permite autenticar senha provisoria nao vencida apenas para troca',async()=>{
     const t=makeApp('active',Date.now()+3600000);
     const login=await t.postLogin('senha-correta');
