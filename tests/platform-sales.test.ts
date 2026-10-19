@@ -81,7 +81,8 @@ function makeApp(options: {
     : c.json({ error: { code: 'internal_error' } }, 500));
   const env = {
     ENVIRONMENT: 'development',
-    ENABLE_SALES_LEADS: options.leadsEnabled ? 'true' : 'false'
+    ENABLE_SALES_LEADS: options.leadsEnabled ? 'true' : 'false',
+    SALES_LEADS_RETENTION_DAYS: '90'
   } as any;
   function get(path: string, cookie = true) {
     return app.request(path, { headers: cookie
@@ -181,7 +182,7 @@ describe('CR JORNADA - pagina de vendas', () => {
   it('só permite publicar formulário de interesse após habilitação do servidor', async () => {
     const inactive = makeApp();
     const blocked = await inactive.save({
-      config: { ...defaultSalesPage, lead_form_enabled: true },
+      config: { ...defaultSalesPage, lead_form_enabled: true, privacy_url: 'https://example.com/privacidade' },
       published: true, expected_revision: 0
     });
     expect(blocked.status).toBe(422);
@@ -189,11 +190,21 @@ describe('CR JORNADA - pagina de vendas', () => {
 
     const active = makeApp({ leadsEnabled: true });
     const published = await active.save({
-      config: { ...defaultSalesPage, lead_form_enabled: true },
+      config: { ...defaultSalesPage, lead_form_enabled: true, privacy_url: 'https://example.com/privacidade' },
       published: true, expected_revision: 0
     });
     expect(published.status).toBe(200);
     expect((await published.json()).published).toBe(true);
+  });
+
+  it('recusa publicar um formulario sem politica de privacidade', async () => {
+    const t = makeApp({ leadsEnabled: true });
+    const r = await t.save({
+      config: { ...defaultSalesPage, lead_form_enabled: true },
+      published: true, expected_revision: 0
+    });
+    expect(r.status).toBe(422);
+    expect((await r.json()).error.code).toBe('sales_privacy_required');
   });
 
   it('grava e publica usando versao esperada e ID fixo', async () => {
