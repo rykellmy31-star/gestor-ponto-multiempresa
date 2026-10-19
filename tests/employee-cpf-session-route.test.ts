@@ -26,6 +26,9 @@ function makeApp() {
       const st = {
         bind(..._args: unknown[]) { return st; },
         async first() {
+          if (sql.includes('SELECT password_hash FROM users')) {
+            return { password_hash: 'senha-atual' };
+          }
           if (sql.includes('FROM employee_login_challenges')) {
             return {
               choices_json: JSON.stringify([
@@ -135,4 +138,43 @@ describe('CR JORNADA - sessao e selecao CPF', () => {
     expect(t.calls.some(sql => sql.includes('DELETE FROM employee_company_sessions')))
       .toBe(true);
   });
+
+  it('bloqueia troca de senha sem token CSRF', async () => {
+    const t = makeApp();
+    const cookie = 'cr_jornada_employee_dev=' + 'a'.repeat(64);
+    const response = await t.request('/password', 'POST', {
+      current_password: 'senha-atual', new_password: 'nova-senha-muito-forte'
+    }, cookie);
+    expect(response.status).toBe(403);
+    expect(t.calls.some(sql => sql.includes('UPDATE users'))).toBe(false);
+  });
+
+  it('bloqueia senha atual incorreta', async () => {
+    const t = makeApp();
+    const cookie = 'cr_jornada_employee_dev=' + 'a'.repeat(64);
+    const response = await t.request('/password', 'POST', {
+      current_password: 'senha-errada', new_password: 'nova-senha-muito-forte'
+    }, cookie, 'csrf');
+    expect(response.status).toBe(401);
+    expect(t.calls.some(sql => sql.includes('UPDATE users'))).toBe(false);
+  });
+
+  it('altera senha na empresa autenticada e revoga suas sessoes', async () => {
+    const t = makeApp();
+    const cookie = 'cr_jornada_employee_dev=' + 'a'.repeat(64);
+    const response = await t.request('/password', 'POST', {
+      current_password: 'senha-atual', new_password: 'nova-senha-muito-forte'
+    }, cookie, 'csrf');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true, reauthentication_required: true
+    });
+    expect(t.calls.some(sql =>
+      sql.includes('UPDATE users') && sql.includes('auth_version')
+    )).toBe(true);
+    expect(t.calls.some(sql =>
+      sql.includes('DELETE FROM employee_company_sessions')
+    )).toBe(true);
+  });
+
 });
