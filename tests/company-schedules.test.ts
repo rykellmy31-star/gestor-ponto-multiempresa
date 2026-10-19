@@ -41,6 +41,7 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
             csrf_token: 'csrf-a',
             expires_at: Date.now() + 60000,
             last_seen_at: Date.now(),
+            must_change_password: 0,
             token_hash: 'b'.repeat(64)
           };
         },
