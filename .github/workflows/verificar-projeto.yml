@@ -39,11 +39,32 @@ jobs:
       - name: Verificar TypeScript
         run: npm run typecheck
 
-      - name: Executar testes automatizados
-        run: npm test
+      - name: Testes de logica, rotas e autorizacao
+        run: npx vitest run --exclude 'tests/d1-*.test.ts' --no-file-parallelism --maxWorkers=2
 
       - name: Compilar interface React
         run: npm run build:web
 
       - name: Verificar Cloudflare Worker
         run: npx wrangler deploy --dry-run --outdir .worker-bundle
+
+  d1-local:
+    name: Integracao D1 local (parte ${{ matrix.shard }} de 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Testar banco D1 exclusivamente local
+        run: npx vitest run tests/d1- --shard=${{ matrix.shard }}/3 --no-file-parallelism --maxWorkers=1
