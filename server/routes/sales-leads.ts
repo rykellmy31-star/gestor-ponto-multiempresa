@@ -6,6 +6,7 @@ import { safeEqual } from '../core/crypto';
 import { ipHash, limit } from '../core/security';
 import { getPlatformSession } from './platform-auth';
 import { salesPageSchema } from '../../shared/sales-page';
+import { parseLeadRetentionDays } from '../core/sales-leads-retention';
 
 export const salesLeadPublicRoutes = new Hono<App>();
 export const salesLeadAdminRoutes = new Hono<App>();
@@ -34,6 +35,9 @@ async function authorizedAdmin(c: Ctx, csrf = false) {
 salesLeadPublicRoutes.post('/leads', async c => {
   ensure(c.env.ENABLE_SALES_LEADS === 'true', 503,
     'sales_leads_disabled', 'Canal de contato ainda não disponível.');
+  ensure(parseLeadRetentionDays(c.env.SALES_LEADS_RETENTION_DAYS) !== null,
+    503, 'sales_leads_retention_missing',
+    'O período de armazenamento das solicitações ainda não foi configurado.');
   // Limite de requisicoes por IP com HMAC: IP nao e armazenado no cadastro.
   await limit(c, 'public-sales-leads:' + ipHash(c), 5, 60 * 60000);
   const parsed = salesLeadInputSchema.safeParse(await c.req.json().catch(() => null));
@@ -51,7 +55,8 @@ salesLeadPublicRoutes.post('/leads', async c => {
   ensure(row?.published === 1 && row.published_json,
     404, 'lead_form_unavailable', 'Solicitações comerciais indisponíveis.');
   const config = salesPageSchema.safeParse(JSON.parse(row.published_json));
-  ensure(config.success && config.data.lead_form_enabled === true,
+  ensure(config.success && config.data.lead_form_enabled === true &&
+    Boolean(config.data.privacy_url),
     404, 'lead_form_unavailable', 'Solicitações comerciais indisponíveis.');
 
   const id = parsed.data.plan_id;
