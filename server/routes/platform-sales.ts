@@ -6,6 +6,7 @@ import { safeEqual } from '../core/crypto';
 import { limit } from '../core/security';
 import { getPlatformSession } from './platform-auth';
 import { defaultSalesPage, salesPageSchema } from '../../shared/sales-page';
+import { parseLeadRetentionDays } from '../core/sales-leads-retention';
 
 type SalesRow = {
   draft_json: string;
@@ -93,9 +94,16 @@ platformSalesRoutes.put('/', async c => {
 
   ensure(
     !published || !config.lead_form_enabled ||
-      c.env.ENABLE_SALES_LEADS === 'true',
+      Boolean(config.privacy_url),
+    422, 'sales_privacy_required',
+    'Informe o link HTTPS da política de privacidade antes de publicar o formulário.'
+  );
+  ensure(
+    !published || !config.lead_form_enabled ||
+      (c.env.ENABLE_SALES_LEADS === 'true' &&
+        parseLeadRetentionDays(c.env.SALES_LEADS_RETENTION_DAYS) !== null),
     422, 'sales_leads_not_ready',
-    'O formulário comercial precisa ser homologado e ativado no servidor antes da publicação.'
+    'O formulário comercial exige ativação e prazo de retenção válido no servidor.'
   );
 
   // No primeiro cadastro aceita somente revisao 0. Uma aba antiga
