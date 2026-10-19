@@ -1,0 +1,22 @@
+.sales-lead-form{background:#fff;border:1px solid #ebdddd;border-radius:20px;box-shadow:0 15px 55px #2e0e1211;padding:clamp(20px,3vw,32px);color:#362a30;width:100%}
+.sales-lead-heading>span{font-size:10px;letter-spacing:1.6px;color:var(--sales-brand,#800000);font-weight:850}
+.sales-lead-heading h3{font-size:24px;letter-spacing:-.5px;margin:8px 0}
+.sales-lead-heading p{font-size:12px;line-height:1.7;color:#7f7177;margin-bottom:24px}
+.sales-lead-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.sales-lead-form label{display:grid;gap:7px;font-size:12px;color:#5c5156;font-weight:700;min-width:0}
+.sales-lead-form input:not([type=checkbox]),.sales-lead-form textarea,.sales-lead-form select{width:100%;border:1px solid #dfd2d5;border-radius:9px;background:#fff;min-height:44px;padding:11px;color:#42343a;font:inherit;font-size:13px;outline:none}
+.sales-lead-form :is(input,select,textarea):focus-visible{border-color:var(--sales-brand,#800000);box-shadow:0 0 0 3px #80000015}
+.sales-lead-form :is(input,select,textarea):disabled{opacity:.55;cursor:not-allowed}
+.sales-lead-form textarea{resize:vertical}
+.sales-lead-full{grid-column:1/-1}
+.sales-lead-bot-field{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.sales-lead-consent{display:flex!important;align-items:flex-start;gap:10px!important;margin:21px 0 15px;font-weight:450!important;line-height:1.7!important;color:#71656a!important}
+.sales-lead-consent input{width:16px;height:16px;flex-shrink:0;accent-color:var(--sales-brand,#800000);margin-top:2px}
+.sales-lead-disabled{padding:11px 13px;background:#fff3df;color:#7e581b;font-size:12px;border-radius:9px;margin-bottom:17px;line-height:1.6}
+.sales-lead-error{color:#9c283c;background:#fff0f1;border-radius:9px;padding:10px;font-size:12px}
+.sales-lead-submit{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;border-radius:10px;padding:15px 22px;font-size:13px;font-weight:800;color:#fff;background:var(--sales-brand,#800000);cursor:pointer;min-height:50px}
+.sales-lead-submit:disabled{background:#a9a0a4;cursor:not-allowed}
+.sales-lead-footnote{font-size:10px;color:#95898e;margin:12px 0 0}
+.sales-lead-success{display:grid;place-items:center;text-align:center;gap:12px;padding:40px 20px;background:#fff;border-radius:17px;color:#226f4c}
+.sales-lead-success h3{font-size:20px}.sales-lead-success p{color:#70656b;font-size:13px;line-height:1.7;max-width:410px}
+@media(max-width:600px){.sales-lead-fields{grid-template-columns:1fr}.sales-lead-submit{width:100%}}
