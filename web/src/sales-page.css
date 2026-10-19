@@ -102,3 +102,46 @@
 .sales-pending p{max-width:490px;line-height:1.8}
 @media(max-width:920px){.sales-header nav{gap:13px}.sales-hero-inner{grid-template-columns:1fr;max-width:760px;padding-top:65px;padding-bottom:70px}.sales-hero-visual{max-width:540px;width:100%;margin:auto;transform:none}.sales-contact{flex-direction:column;align-items:stretch}}
 @media(max-width:590px){.sales-header{height:70px;gap:10px}.sales-header nav{display:none}.sales-header-cta{padding:10px;font-size:10px}.sales-brand{font-size:15px;gap:8px}.sales-brand-mark{width:34px;height:34px}.sales-hero h1{letter-spacing:-1.3px}.sales-hero-inner{padding:45px 20px 60px}.sales-hero-visual{padding:15px}.sales-visual-grid>div{padding:12px 8px}.sales-visual-live{display:none}.sales-section{padding:70px 20px}.sales-benefit-grid{grid-template-columns:1fr;gap:12px}.sales-benefit{padding:22px}.sales-contact-wrap{padding:0 15px 65px}.sales-contact{padding:32px 22px}.sales-footer{padding:25px 20px;gap:14px;flex-direction:column;align-items:flex-start}}
+
+/* Landing explicativa CR JORNADA — identidade própria.
+   Cards com textos claros e status de disponibilidade verificáveis. */
+.sales-resources{max-width:1370px}
+.sales-resources .sales-section-head{max-width:850px}
+.sales-resource-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.sales-resource-card{border:1px solid #ecdfdf;background:#fff;border-radius:18px;padding:26px;box-shadow:0 10px 34px #3c17210c;display:flex;flex-direction:column;gap:13px;min-height:267px;transition:transform .2s ease,box-shadow .2s ease}
+.sales-resource-card:hover{transform:translateY(-3px);box-shadow:0 16px 40px #3c172114}
+.sales-resource-top{display:flex;align-items:center;justify-content:space-between;gap:9px;margin-bottom:4px}
+.sales-resource-icon{width:49px;height:49px;flex-shrink:0;border-radius:14px;background:#f9eded;color:var(--sales-brand);display:grid;place-items:center}
+.sales-resource-stage{display:inline-flex;align-items:center;gap:5px;padding:7px 9px;border-radius:30px;background:#f7f2e8;color:#7e5a28;font-size:10px;font-weight:750;white-space:nowrap}
+.sales-resource-stage-planned{background:#f2f0f1;color:#77676c}
+.sales-resource-stage-testing{background:#fff4e6;color:#93602c}
+.sales-resource-stage-available{background:#eaf6ef;color:#20744a}
+.sales-resource-card h3{font-size:17px;line-height:1.35;letter-spacing:-.3px;margin:0}
+.sales-resource-card p{color:#7c7276;font-size:12px;line-height:1.85;margin:0}
+.sales-resource-disclaimer{display:flex;align-items:flex-start;justify-content:center;gap:9px;color:#806f73;font-size:11px;line-height:1.7;max-width:850px;margin:25px auto 0;text-align:left}
+.sales-resource-disclaimer svg{flex-shrink:0;color:#9c6873;margin-top:1px}
+.sales-benefits-band{background:linear-gradient(125deg,#351721 0%,#5a2431 55%,#692c3b 100%);padding:85px clamp(22px,5vw,70px);color:#fff}
+.sales-benefits-inner{max-width:1260px;margin:auto;display:grid;grid-template-columns:minmax(0,1.04fr) minmax(0,.96fr);align-items:center;gap:clamp(25px,6vw,100px)}
+.sales-benefits-intro .sales-overline{color:#efbdc6}
+.sales-benefits-intro h2{font-size:clamp(27px,3.3vw,43px);line-height:1.19;letter-spacing:-1.5px;margin:15px 0 19px}
+.sales-benefits-intro p{font-size:13px;color:#e6cdd2;line-height:1.85;max-width:520px}
+.sales-benefits-intro>a{display:inline-flex;align-items:center;gap:9px;color:#fff;font-size:12px;font-weight:850;padding-bottom:5px;border-bottom:1px solid #fff6;margin-top:23px}
+.sales-benefits-list{display:grid;gap:13px}
+.sales-benefits-list>div{background:#ffffff10;border:1px solid #ffffff2b;border-radius:13px;display:flex;align-items:flex-start;gap:14px;padding:19px 20px}
+.sales-benefits-list>div>span{display:grid;place-items:center;background:#fff2;border-radius:9px;color:#f7ced6;width:35px;height:35px;flex-shrink:0}
+.sales-benefits-list strong{font-size:14px;font-weight:650;line-height:1.5;margin-top:5px}
+.sales-how{max-width:1370px}
+.sales-steps-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.sales-step{position:relative;border:1px solid #eee1e1;border-radius:16px;padding:25px;background:linear-gradient(160deg,#fff,#fffcfc)}
+.sales-step-number{display:grid;place-items:center;height:50px;width:50px;border-radius:14px;background:#f8e9ec;color:var(--sales-brand);font-weight:850;font-size:18px;margin-bottom:21px}
+.sales-step-body h3{font-size:17px;line-height:1.35;min-height:45px;margin:0 0 10px}
+.sales-step-body p{font-size:12px;line-height:1.85;color:#817479;margin:0}
+.sales-how-note{max-width:900px;margin:27px auto 0;padding:17px 21px;display:flex;align-items:flex-start;gap:12px;background:#fbf3ef;border:1px solid #ecdcd6;border-radius:12px;color:#745f5f}
+.sales-how-note svg{color:#a45b63;flex-shrink:0}
+.sales-how-note p{font-size:12px;line-height:1.7}
+.sales-plan-advice{display:flex;align-items:flex-start;gap:10px;margin:0 auto 35px;max-width:855px;color:#85747a;font-size:12px;line-height:1.6;justify-content:center}
+.sales-plan-advice svg{flex-shrink:0;color:var(--sales-brand)}
+.sales-hero-actions .sales-button{max-width:100%}
+@media(max-width:1050px){.sales-resource-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sales-steps-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.sales-header nav{gap:13px}.sales-header nav a{font-size:11px}}
+@media(max-width:720px){.sales-benefits-inner{grid-template-columns:1fr}.sales-benefits-band{padding:65px 20px}.sales-resource-grid{grid-template-columns:1fr}.sales-resource-card{min-height:0}.sales-step-body h3{min-height:0}.sales-resource-stage{font-size:10px}}
+@media(max-width:530px){.sales-steps-grid{grid-template-columns:1fr}.sales-step{padding:20px}.sales-step-number{margin-bottom:13px}.sales-benefits-list>div{padding:14px}.sales-hero-actions .sales-button{width:100%}.sales-how-note{padding:14px}.sales-resource-card{padding:20px}}
