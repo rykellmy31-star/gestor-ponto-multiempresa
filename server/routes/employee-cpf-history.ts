@@ -12,6 +12,7 @@ type PointHistoryRow = {
   seq: number | null;
   type: 'entry' | 'break_start' | 'break_end' | 'exit' | null;
   recorded_at: number | null;
+  receipt_hash: string | null;
 };
 
 function periodBounds(value: string | undefined): [string, string] | null {
@@ -39,7 +40,7 @@ employeeCpfHistoryRoutes.get('/history', async c => {
   const result = await c.get('db').prepare(`
     SELECT
       d.work_date, d.next_seq,
-      p.id AS punch_id, p.seq, p.type, p.recorded_at
+      p.id AS punch_id, p.seq, p.type, p.recorded_at, p.receipt_hash
     FROM employee_company_sessions s
     JOIN users u ON u.id = s.user_id
       AND u.employee_id = s.employee_id
@@ -71,7 +72,7 @@ employeeCpfHistoryRoutes.get('/history', async c => {
   const days = new Map<string, {
     date: string;
     next_seq: number;
-    punches: Array<{ id: string; seq: number; type: string; recorded_at: number }>;
+    punches: Array<{ id: string; seq: number; type: string; recorded_at: number; receipt_hash: string | null }>;
   }>();
   for (const row of result.results || []) {
     let day = days.get(row.work_date);
@@ -87,7 +88,8 @@ employeeCpfHistoryRoutes.get('/history', async c => {
         id: row.punch_id,
         seq: row.seq,
         type: row.type,
-        recorded_at: row.recorded_at
+        recorded_at: row.recorded_at,
+        receipt_hash: row.receipt_hash ?? null
       });
     }
   }
