@@ -175,6 +175,18 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
     expect(assigned?.args.slice(0,2)).toEqual(['company-a','employee-a']);
   });
 
+  it('seleciona a ultima atribuicao vigente com desempate estavel',async()=>{
+    const t=setup();
+    const response=await t.request('/today');
+    expect(response.status).toBe(200);
+    const selected=t.statements.find(x=>x.sql.includes('FROM schedule_assignments a'));
+    expect(selected?.sql).toContain(
+      'ORDER BY a.effective_from DESC,a.created_at DESC,a.id DESC LIMIT 1'
+    );
+    expect(selected?.sql).toContain('a.effective_from<=?');
+    expect(selected?.args).toEqual(['company-a','employee-a','2026-10-19']);
+  });
+
   it('rejeita empresa sem politica propria ativa ou jornada propria',async()=>{
     expect((await setup({policy:false}).request('/today')).status).toBe(409);
     expect((await setup({validSchedule:false}).request('/today')).status).toBe(409);
