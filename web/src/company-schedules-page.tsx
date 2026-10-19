@@ -272,7 +272,10 @@ export function CompanySchedulesPage() {
     </div>
   </main>;
 
-  const saturday=form.day_overrides?.['6']||saturdayDefault;
+  const saturday=form.day_overrides?.['6']||{
+    start:form.start,break_start:form.break_start,
+    break_end:form.break_end,end:form.end,paid_break:form.paid_break
+  };
   const total=weekly(form);
   return <main className="company-schedules-page">
     <div className="company-schedules-shell">
