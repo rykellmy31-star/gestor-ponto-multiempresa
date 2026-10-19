@@ -265,9 +265,12 @@ function ScheduleModal({
     set('weekdays',allWeekdays?others:[...others,...weekdaysGroup].sort());
   };
   const saturdaySelected=config.weekdays.includes(6);
+  // Escalas antigas que ja incluam sabado mantem seu horario original
+  // ate o gestor escolher uma alteracao explicita.
   const saturday={
-    start:'07:00',break_start:'10:00',break_end:'10:15',
-    end:'13:00',paid_break:true,
+    start:config.start,break_start:config.break_start,
+    break_end:config.break_end,end:config.end,
+    paid_break:config.paid_break,
     ...(config.day_overrides?.['6']||{})
   };
   const enableSaturday=(enabled:boolean)=>{
