@@ -1,4 +1,7 @@
 
+// CR JORNADA - Login isolado por CPF e selecao de empresa
+import { employeeCpfAuthRoutes } from './routes/employee-cpf-auth';
+
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { App } from './types';
@@ -173,10 +176,15 @@ app.use('/api/*', async (c, next) => {
   const isHealthRoute =
     path === '/api/health';
 
+  // Somente o novo acesso por CPF; demais rotas antigas ficam bloqueadas.
+  const isEmployeeCpfAuthRoute =
+    path.startsWith('/api/employee/cpf-auth/');
+
   if (
     !isPlatformRoute &&
     !isCompanyAuthRoute &&
     !isCompanyEmployeesList &&
+    !isEmployeeCpfAuthRoute &&
     !isHealthRoute
   ) {
     return c.json(
@@ -218,6 +226,8 @@ app.route(
   '/api/company/employees',
   companyEmployeesRoutes
 );
+
+app.route('/api/employee/cpf-auth', employeeCpfAuthRoutes);
 
 // Rotas antigas de funcionarios:
 // permanecem bloqueadas.
