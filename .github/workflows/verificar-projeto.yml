@@ -2,9 +2,15 @@
 name: Verificar CR JORNADA
 
 on:
+  push:
+    branches:
+      - desenvolvimento-cr-jornada
+    paths-ignore:
+      - '**/*.md'
   workflow_dispatch:
 
-# Execução exclusivamente manual; não dispara em push ou Pull Request.
+# Verificações automáticas restritas à branch de desenvolvimento.
+# Nenhum deploy, operação remota D1 ou gravação em produção.
 # O cancelamento de versões antigas evita duplicações no mesmo ref.
 concurrency:
   group: cr-jornada-verificacao-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
