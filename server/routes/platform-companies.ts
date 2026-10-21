@@ -78,6 +78,21 @@ async function requirePlatformAdmin(
     );
   }
 
+  // O Superadmin pode ficar usando a lista e o cadastro de empresas
+  // sem consultar /auth/session. Essas ações autenticadas também
+  // contam como atividade para o limite de 30 minutos de inatividade.
+  // Requisições de escrita com CSRF inválido não renovam a sessão.
+  const now = Date.now();
+  if (now - session.last_seen_at > 60000) {
+    await c.get('db').prepare(`
+      UPDATE platform_sessions
+      SET last_seen_at = ?
+      WHERE token_hash = ?
+        AND expires_at > ?
+        AND last_seen_at > ?
+    `).bind(now, session.tokenHash, now, now - 30 * 60000).run();
+  }
+
   return session;
 }
 

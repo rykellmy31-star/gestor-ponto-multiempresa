@@ -73,6 +73,28 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       const session=await superSession.json() as any;
       expect(session.user.role).toBe('superadmin');
       const csrf=session.csrf_token as string;
+
+      // Um Superadmin que trabalha no painel por quase 30 minutos não
+      // deve perder a sessão só porque não abriu /auth/session.
+      const idleAt=Date.now()-29*60000;
+      await db.prepare('UPDATE platform_sessions SET last_seen_at=? WHERE admin_id=?')
+        .bind(idleAt,'super-a').run();
+      const badCsrfActivity=await call('/api/platform/companies','POST',
+        undefined,superCookie,'csrf-incorreto');
+      expect(badCsrfActivity.status).toBe(403);
+      const afterRejected=await db.prepare(
+        'SELECT last_seen_at FROM platform_sessions WHERE admin_id=?'
+      ).bind('super-a').first<{last_seen_at:number}>();
+      expect(afterRejected?.last_seen_at).toBe(idleAt);
+      const activePanel=await call('/api/platform/companies','GET',
+        undefined,superCookie);
+      expect(activePanel.status).toBe(200);
+      const afterActivity=await db.prepare(
+        'SELECT last_seen_at FROM platform_sessions WHERE admin_id=?'
+      ).bind('super-a').first<{last_seen_at:number}>();
+      expect(afterActivity?.last_seen_at).toBeGreaterThan(idleAt);
+      expect(afterActivity?.last_seen_at).toBeGreaterThan(Date.now()-60000);
+
       const create=(slug:string,name:string)=>
         call('/api/platform/companies','POST',{
           name,document:'',slug,primary_color:'#0F766E',
