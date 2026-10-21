@@ -53,8 +53,16 @@ def prepare_plan(sql):
     try:
         for statement in groups[0]:
             schema.execute(statement)
+        # Work only in this private in-memory copy. Nullable references such
+        # as employees.deleted_by -> users do not create a data dependency
+        # when every restored value is NULL; users.employee_id still does.
+        for statement in groups[1]:
+            schema.execute(statement)
         names = [row[0] for row in schema.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
-        remaining = {name: {row[2] for row in schema.execute('PRAGMA foreign_key_list("' + name.replace('"', '""') + '")') if row[2] != name} for name in names}
+        quote = lambda name: '"' + name.replace('"', '""') + '"'
+        remaining = {name: {row[2] for row in schema.execute('PRAGMA foreign_key_list(' + quote(name) + ')')
+                           if row[2] != name and schema.execute('SELECT 1 FROM ' + quote(name) + ' WHERE ' + quote(row[3]) + ' IS NOT NULL LIMIT 1').fetchone()}
+                     for name in names}
         order = []
         while remaining:
             ready = sorted(name for name, parents in remaining.items() if not parents.intersection(remaining))

@@ -58,6 +58,21 @@ INSERT INTO parent VALUES('parent');
         self.assertEqual(restored.execute('SELECT * FROM child').fetchall(), [('child','parent')])
         self.assertEqual(restored.execute('PRAGMA foreign_key_check').fetchall(), [])
 
+    def test_nullable_cycle_without_values_does_not_block_real_employee_data(self):
+        tables,data,objects = prepare_plan("""
+CREATE TABLE employees(id TEXT PRIMARY KEY,deleted_by TEXT REFERENCES users(id));
+CREATE TABLE users(id TEXT PRIMARY KEY,employee_id TEXT REFERENCES employees(id));
+INSERT INTO users VALUES('user','employee');
+INSERT INTO employees VALUES('employee',NULL);
+""")
+        restored=sqlite3.connect(':memory:')
+        self.addCleanup(restored.close)
+        restored.execute('PRAGMA foreign_keys=ON')
+        for statement in tables+data+objects:
+            restored.execute(statement)
+            restored.commit()
+        self.assertEqual(restored.execute('PRAGMA foreign_key_check').fetchall(), [])
+
 
 if __name__ == '__main__':
     unittest.main()
