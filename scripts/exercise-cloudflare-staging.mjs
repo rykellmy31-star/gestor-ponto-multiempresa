@@ -351,6 +351,13 @@ try {
       try {
         const page=await context.newPage();
         await page.goto(STAGING_ORIGIN+'/funcionario');
+        await page.getByRole('link',{name:'Acessar área da empresa',exact:true}).click();
+        await page.getByRole('heading',{name:'Área administrativa da empresa',exact:true}).waitFor();
+        await page.getByLabel('Identificador da empresa',{exact:true}).waitFor();
+        await page.getByLabel('Usuário administrador',{exact:true}).waitFor();
+        verify(new URL(page.url()).pathname==='/empresa/entrar',
+          'link da tela do funcionario abre o login da empresa no mesmo sistema');
+        await page.goto(STAGING_ORIGIN+'/funcionario');
         await page.getByLabel('CPF',{exact:true}).fill(cpf);
         await page.getByLabel('Senha',{exact:true}).fill(employeePassword);
         await page.getByRole('button',{name:'Entrar com segurança',exact:true}).click();
