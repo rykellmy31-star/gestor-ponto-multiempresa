@@ -537,7 +537,7 @@ export function PlatformPage() {
 
     const confirmed = window.confirm(
       nextStatus === 'suspended'
-        ? `Deseja suspender a empresa "${company.name}"?\n\nA suspensão será registrada, mas o bloqueio dos usuários depende da integração multiempresa.`
+        ? `Deseja suspender a empresa "${company.name}"?\n\nAs sessões de gestores e funcionários desta empresa serão encerradas. Após reativar, será necessário entrar novamente.`
         : `Deseja ativar a empresa "${company.name}"?`
     );
 
@@ -575,7 +575,7 @@ export function PlatformPage() {
       setNotice(
         nextStatus === 'active'
           ? 'Empresa ativada com sucesso.'
-          : 'Empresa suspensa no cadastro.'
+          : 'Empresa suspensa. Sessões de gestores e funcionários revogadas.'
       );
 
       await loadCompanies();
