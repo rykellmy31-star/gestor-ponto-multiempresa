@@ -95,6 +95,31 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(list.status).toBe(200);
       expect((await list.json() as any).companies.map((c:any)=>c.slug).sort())
         .toEqual(['empresa-ficticia-a','empresa-ficticia-b']);
+      // O Superadmin edita só a empresa A; B mantém identidade e visual.
+      const edit=await call('/api/platform/companies/'+companyA.id,'PUT',{
+        name:'Empresa Fictícia A Atualizada',document:'',
+        slug:'empresa-ficticia-a',logo_url:null,
+        primary_color:'#17424A',timezone:'America/Bahia'
+      },superCookie,csrf);
+      expect(edit.status).toBe(200);
+      expect(edit.headers.get('cache-control')).toContain('no-store');
+      expect((await edit.json() as any).success).toBe(true);
+      const updatedA=await call('/api/platform/companies/'+companyA.id,'GET',
+        undefined,superCookie);
+      expect((await updatedA.json() as any).company).toMatchObject({
+        name:'Empresa Fictícia A Atualizada',primary_color:'#17424A',status:'active'
+      });
+      const untouchedB=await call('/api/platform/companies/'+companyB.id,'GET',
+        undefined,superCookie);
+      expect((await untouchedB.json() as any).company).toMatchObject({
+        name:'Empresa Fictícia B',primary_color:'#0F766E',status:'active'
+      });
+      expect((await call('/api/platform/companies/'+companyA.id,'PUT',{
+        name:'Duplicar endereço',document:'',slug:companyB.slug
+      },superCookie,csrf)).status).toBe(409);
+      expect((await call('/api/platform/companies/'+companyA.id,'PUT',{
+        name:'Sem CSRF',document:'',slug:companyA.slug
+      },superCookie,'invalido')).status).toBe(403);
       const newManager=async(companyId:string,login:string)=>
         call('/api/platform/companies/'+companyId+'/admins','POST',{
           name:'Gestor '+login,login,email:'',password:managerPass
@@ -193,11 +218,28 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         undefined,superCookie)).status).toBe(200);
       expect((await call('/api/platform/companies/'+companyB.id+'/admins','GET',
         undefined,superCookie)).status).toBe(200);
+      // Empresas legadas arquivadas não podem ser editadas nem reativadas.
+      // Rejeitar sem acrescentar eventos de auditoria nem mudar outros tenants.
+      await db.prepare("UPDATE companies SET status='archived' WHERE id=?")
+        .bind(companyB.id).run();
+      const archiveEdit=await call('/api/platform/companies/'+companyB.id,'PUT',{
+        name:'Tentativa em arquivada',document:'',slug:companyB.slug
+      },superCookie,csrf);
+      expect(archiveEdit.status).toBe(409);
+      expect((await archiveEdit.json() as any).error.code).toBe('company_archived');
+      expect((await call('/api/platform/companies/'+companyB.id+'/status',
+        'PATCH',{status:'active'},superCookie,csrf)).status).toBe(409);
+      const preservedB=await call('/api/platform/companies/'+companyB.id,'GET',
+        undefined,superCookie);
+      expect((await preservedB.json() as any).company).toMatchObject({
+        name:'Empresa Fictícia B',status:'archived'
+      });
       const events=await db.prepare(
         'SELECT action,entity_type,entity_id,details_json FROM platform_audit_log ORDER BY created_at,id'
       ).all<any>();
       const actions=events.results?.map(x=>x.action);
       expect(actions?.filter(x=>x==='company.created')).toHaveLength(2);
+      expect(actions?.filter(x=>x==='company.updated')).toHaveLength(1);
       expect(actions?.filter(x=>x==='company_admin.created')).toHaveLength(2);
       expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(2);
       expect(JSON.stringify(events.results)).not.toContain(managerPass);

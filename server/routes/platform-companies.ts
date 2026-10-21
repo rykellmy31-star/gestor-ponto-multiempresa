@@ -256,8 +256,10 @@ platformCompaniesRoutes.put('/:id', async c => {
   const db = c.get('db');
 
   const existing = await db.prepare(`
-    SELECT id FROM companies WHERE id = ?
-  `).bind(id).first();
+    SELECT id, status, updated_at FROM companies WHERE id = ?
+  `).bind(id).first<{
+    id: string; status: string; updated_at: number
+  }>();
 
   ensure(
     existing,
@@ -265,6 +267,8 @@ platformCompaniesRoutes.put('/:id', async c => {
     'company_not_found',
     'Empresa não encontrada.'
   );
+  ensure(existing.status !== 'archived', 409, 'company_archived',
+    'Uma empresa arquivada não pode ser alterada.');
 
   const duplicate = await db.prepare(`
     SELECT id FROM companies
@@ -281,7 +285,10 @@ platformCompaniesRoutes.put('/:id', async c => {
 
   const now = Date.now();
 
-  await db.batch([
+  // A guarda SQL torna a edicao e a auditoria atomicas. Se outra
+  // requisicao suspendeu/arquivou/alterou a empresa depois do SELECT,
+  // nenhum dado nem evento de auditoria parcial deve ser gravado.
+  await companyAdminWrite(db, [
     db.prepare(`
       UPDATE companies
       SET
@@ -292,7 +299,8 @@ platformCompaniesRoutes.put('/:id', async c => {
         primary_color = ?,
         timezone = ?,
         updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status = ? AND updated_at = ?
+        AND status != 'archived'
     `).bind(
       data.name,
       data.document,
@@ -301,7 +309,7 @@ platformCompaniesRoutes.put('/:id', async c => {
       data.primary_color,
       data.timezone,
       now,
-      id
+      id, existing.status, existing.updated_at
     ),
     db.prepare(`
       INSERT INTO platform_audit_log (
@@ -319,8 +327,9 @@ platformCompaniesRoutes.put('/:id', async c => {
       }),
       now
     )
-  ]);
+  ], 'company_edit_conflict');
 
+  c.header('Cache-Control','private, no-store');
   return c.json({ success: true });
 });
 
