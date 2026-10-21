@@ -34,6 +34,11 @@ test('backup D1 local cifra, restaura e rejeita fraude ou senha incorreta', () =
       original.exec([
         'CREATE TABLE punches (id TEXT PRIMARY KEY, recorded_at INTEGER NOT NULL)',
         'CREATE TABLE employees (id TEXT PRIMARY KEY, name TEXT NOT NULL, note TEXT)',
+        'CREATE TABLE employee_keys(company TEXT,employee TEXT)',
+        'CREATE UNIQUE INDEX employee_keys_unique ON employee_keys(company,employee)',
+        'CREATE TABLE scoped_records(company TEXT,employee TEXT,FOREIGN KEY(company,employee) REFERENCES employee_keys(company,employee))',
+        "INSERT INTO employee_keys VALUES('company-qa','employee-01')",
+        "INSERT INTO scoped_records VALUES('company-qa','employee-01')",
         "INSERT INTO punches VALUES ('punch-01',1761050000000)",
         "INSERT INTO employees VALUES ('employee-01','Funcionario Ficticio', 'Texto com aspas: ''teste''')"
       ].join(';') + ';');
@@ -66,6 +71,7 @@ test('backup D1 local cifra, restaura e rejeita fraude ou senha incorreta', () =
 
     const restored = new DatabaseSync(':memory:');
     try {
+      restored.exec('PRAGMA foreign_keys=ON');
       restored.exec(readFileSync(plainSql, 'utf8'));
       assert.deepEqual({ ...restored.prepare('SELECT id, name, note FROM employees').get() }, {
         id: 'employee-01',
@@ -73,6 +79,8 @@ test('backup D1 local cifra, restaura e rejeita fraude ou senha incorreta', () =
         note: "Texto com aspas: 'teste'"
       });
       assert.equal(restored.prepare('SELECT COUNT(*) AS total FROM punches').get().total, 1);
+      assert.equal(restored.prepare('SELECT COUNT(*) AS total FROM scoped_records').get().total, 1);
+      assert.deepEqual(restored.prepare('PRAGMA foreign_key_check').all(), []);
     } finally {
       restored.close();
     }

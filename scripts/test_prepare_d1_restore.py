@@ -73,6 +73,23 @@ INSERT INTO employees VALUES('employee',NULL);
             restored.commit()
         self.assertEqual(restored.execute('PRAGMA foreign_key_check').fetchall(), [])
 
+    def test_composite_fk_unique_index_exists_before_child_data(self):
+        groups=prepare_plan("""
+CREATE TABLE parent(company TEXT,employee TEXT);
+CREATE TABLE child(company TEXT,employee TEXT,FOREIGN KEY(company,employee) REFERENCES parent(company,employee));
+INSERT INTO parent VALUES('company','employee');
+INSERT INTO child VALUES('company','employee');
+CREATE UNIQUE INDEX parent_key ON parent(company,employee);
+""")
+        restored=sqlite3.connect(':memory:')
+        self.addCleanup(restored.close)
+        restored.execute('PRAGMA foreign_keys=ON')
+        for group in groups:
+            for statement in group:
+                restored.execute(statement)
+                restored.commit()
+        self.assertEqual(restored.execute('PRAGMA foreign_key_check').fetchall(), [])
+
     def test_autoincrement_metadata_is_preserved_without_recreating_internal_table(self):
         tables,data,objects=prepare_plan("""
 CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT,value TEXT);

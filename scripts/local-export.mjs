@@ -24,13 +24,15 @@ export function localExport(persist,output){
     const objects=db.prepare("SELECT name,type,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 1 WHEN 'index' THEN 2 ELSE 3 END,name").all();
     fd=openSync(output,'wx',0o600);const line=s=>writeSync(fd,s+'\n');line('PRAGMA defer_foreign_keys=TRUE;');
     for(const object of objects.filter(o=>o.type==='table'))line(object.sql+';');
+    // FKs compostas podem depender de indices UNIQUE externos a CREATE TABLE.
+    for(const object of objects.filter(o=>o.type==='index'||o.type==='view'))line(object.sql+';');
     for(const table of objects.filter(o=>o.type==='table')){
       const columns=db.prepare(`PRAGMA table_info(${identifier(table.name)})`).all().map(c=>c.name);
       const statement=db.prepare(`SELECT ${columns.map(identifier).join(',')} FROM ${identifier(table.name)}`);statement.setReadBigInts(true);
       for(const row of statement.iterate())line(`INSERT INTO ${identifier(table.name)} (${columns.map(identifier).join(',')}) VALUES (${columns.map(c=>literal(row[c])).join(',')});`);
     }
     // Só depois dos dados: triggers de imutabilidade e de revisão não interferem na restauração.
-    for(const object of objects.filter(o=>o.type!=='table'))line(object.sql+';');
+    for(const object of objects.filter(o=>o.type==='trigger'))line(object.sql+';');
     db.exec('COMMIT');
   }finally{if(fd!==undefined)closeSync(fd);db.close();}
 }

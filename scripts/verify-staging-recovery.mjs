@@ -140,7 +140,7 @@ try {
       batch.push({ sql: statement }); bytes += Buffer.byteLength(statement);
     }
     if (statements.length) await execute(batch);
-    console.log('Fase de recuperacao aprovada: ' + ['tabelas','dados','indices e triggers'][index]);
+    console.log('Fase de recuperacao aprovada: ' + ['tabelas e indices','dados','triggers'][index]);
   }
   const restoredSchema = await query(database.uuid, schemaSql);
   assert.equal(digest(restoredSchema), digest(sourceSchema), 'Schema restaurado identico');

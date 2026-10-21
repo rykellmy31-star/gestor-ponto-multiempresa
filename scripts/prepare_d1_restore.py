@@ -47,6 +47,11 @@ def prepare_plan(sql):
             raise ValueError('Exportacao contem instrucao fora do formato permitido.')
     if not groups[0]:
         raise ValueError('Exportacao nao contem tabelas.')
+    # Composite foreign keys may depend on separately created UNIQUE indexes.
+    early_objects = [statement for statement in groups[2] if re.match(
+        r'^CREATE\s+(?:(?:UNIQUE\s+)?INDEX|VIEW)\b', without_leading_comments(statement), re.I)]
+    groups[0].extend(early_objects)
+    groups[2] = [statement for statement in groups[2] if statement not in early_objects]
     sequence_pattern = re.compile(r'^INSERT\s+INTO\s+["`\[]?sqlite_sequence\b', re.I)
     sequence_data = [statement for statement in groups[1] if sequence_pattern.match(without_leading_comments(statement))]
     groups[1] = [statement for statement in groups[1] if not sequence_pattern.match(without_leading_comments(statement))]
