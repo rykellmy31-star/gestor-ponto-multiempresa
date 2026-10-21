@@ -39,7 +39,7 @@ jobs:
       - name: Testar as proteções do integrador
         run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scripts -p 'test_crj_integrate_v68.py' -v
 
-      - name: Integrar pacote auditado em checkout isolado
+      - name: Integrar v65 e v67 corrigindo escopo legado auditado
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
