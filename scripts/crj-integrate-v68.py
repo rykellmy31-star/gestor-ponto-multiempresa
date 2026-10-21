@@ -24,7 +24,7 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = 'bf8c2162e908883bc3c60ab2bb6afa1a59a61d03'
+EXPECTED_PARENT = 'dc144de49f0ee358c5a3fe025194ea328b855c7d'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
                          'scripts/crj-integrate-v68.py'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
@@ -191,6 +191,38 @@ def check_and_transfer(source: Path, dest: Path, paths: set[str]) -> list[str]:
     return staged
 
 
+def stage_historical_schedule_regression_tests(source: Path, dest: Path) -> None:
+    """Update only 2 fixture assertions for the pinned historical SQL bindings."""
+    relative = 'tests/employee-cpf-punch-route.test.ts'
+    candidate_route = source / 'server/routes/employee-cpf-punch.ts'
+    route = candidate_route.read_text(encoding='utf-8')
+    if 'CURRENT_ASSIGNMENT_CONFIG_SQL' not in route or 'CURRENT_ACTIVE_ASSIGNMENT_ID_SQL' not in route:
+        raise RuntimeError('Expected historical schedule selectors are missing')
+    target = dest / relative
+    baseline = subprocess.check_output(['git','show',f'{BASE_SHA}:{relative}'],cwd=dest)
+    if not target.is_file() or target.is_symlink() or target.read_bytes() != baseline:
+        raise RuntimeError('Existing CPF route tests differ from pinned baseline')
+    old = target.read_text(encoding='utf-8')
+    corrections = (
+        ("expect(assigned?.args.slice(0,2)).toEqual(['company-a','employee-a']);",
+         "expect(assigned?.args).toEqual(['company-a','2026-10-19','employee-a','2026-10-19']);"),
+        ("expect(selected?.args).toEqual(['company-a','employee-a','2026-10-19']);",
+         "expect(selected?.args).toEqual(['company-a','2026-10-19','employee-a','2026-10-19']);"),
+    )
+    new = old
+    for before, after in corrections:
+        if new.count(before) != 1:
+            raise RuntimeError('Unexpected CPF SQL fixture assertion')
+        new = new.replace(before, after)
+    if new == old:
+        raise RuntimeError('No regression assertions revised')
+    target.write_text(new, encoding='utf-8')
+    run('git','add','--',relative,cwd=dest)
+    paths = set(filter(None,run('git','diff','--cached','--name-only',cwd=dest).splitlines()))
+    if len(paths) != 19 or relative not in paths:
+        raise RuntimeError('Unapproved staged test inventory')
+
+
 def main() -> None:
     repo = Path(os.environ.get('GITHUB_WORKSPACE', '.')).resolve()
     if not (repo / '.git').exists():
@@ -248,6 +280,7 @@ def main() -> None:
             raise RuntimeError('Migration 0038 differs from pinned bytes')
         print('INTEGRATION: 20 approved paths reconstructed from exact pinned sources',flush=True)
         written = check_and_transfer(source, repo, changed)
+        stage_historical_schedule_regression_tests(source, repo)
         print(f'INTEGRATION: {len(written)} candidate paths staged safely; no deploy',flush=True)
     # The workflow runs all required checks and may commit/push only after they pass.
 
