@@ -1,0 +1,61 @@
+"""Reorder a D1 export without rewriting values or SQL object definitions.
+
+SQLite complete_statement handles quoted semicolons and CREATE TRIGGER bodies.
+The destination must independently be verified as a new, empty staging database.
+"""
+import re
+import sqlite3
+from pathlib import Path
+import sys
+
+
+def without_leading_comments(statement):
+    previous = None
+    while previous != statement:
+        previous = statement
+        statement = re.sub(r'^\s*(?:--[^\n]*(?:\n|$)|/\*[\s\S]*?\*/)', '', statement)
+    return statement.lstrip()
+
+
+def prepare(sql):
+    statements = []
+    pending = ''
+    for character in sql:
+        pending += character
+        if character == ';' and sqlite3.complete_statement(pending):
+            statements.append(pending)
+            pending = ''
+    if without_leading_comments(pending).strip():
+        raise ValueError('Exportacao contem instrucao SQL incompleta.')
+    groups = [[], [], []]
+    for statement in statements:
+        source = without_leading_comments(statement)
+        if re.match(r'^CREATE\s+TABLE\b', source, re.I):
+            groups[0].append(statement)
+        elif re.match(r'^INSERT\s+INTO\b', source, re.I):
+            groups[1].append(statement)
+        elif re.match(r'^CREATE\s+(?:(?:UNIQUE\s+)?INDEX|VIEW|TRIGGER)\b', source, re.I):
+            groups[2].append(statement)
+        elif re.fullmatch(r'(?:BEGIN(?:\s+TRANSACTION)?|COMMIT|END(?:\s+TRANSACTION)?|PRAGMA\s+[^;]+)\s*;\s*', source, re.I):
+            # D1's importer owns the transaction. foreign_keys=OFF cannot be
+            # relied upon in D1; use its supported deferred-FK mode instead.
+            continue
+        elif re.match(r'^(?:DELETE\s+FROM|INSERT\s+INTO)\s+["`\[]?sqlite_sequence\b', source, re.I):
+            continue
+        else:
+            raise ValueError('Exportacao contem instrucao fora do formato permitido.')
+    if not groups[0]:
+        raise ValueError('Exportacao nao contem tabelas.')
+    return 'PRAGMA defer_foreign_keys=TRUE;\n' + '\n'.join(sum(groups, [])) + '\n'
+
+
+if __name__ == '__main__':
+    try:
+        input_path, output_path = map(Path, sys.argv[1:])
+        with output_path.open('x', encoding='utf-8') as output:
+            output.write(prepare(input_path.read_text(encoding='utf-8')))
+        output_path.chmod(0o600)
+    except Exception:
+        # Never echo SQL or values in public CI logs.
+        print('Preparacao do SQL de recuperacao recusada.', file=sys.stderr)
+        sys.exit(1)

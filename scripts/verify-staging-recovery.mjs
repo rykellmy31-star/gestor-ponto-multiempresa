@@ -79,6 +79,10 @@ try {
   assert.equal(manifest.sha256, createHash('sha256').update(bytes).digest('hex'), 'Integridade SHA256 do backup');
   const restoredSql = join(folder, 'restore.sql');
   run('scripts/decrypt-backup.mjs', [encrypted, restoredSql]);
+  const importSql = join(folder, 'import.sql');
+  const prepared = spawnSync('python3', ['-B', 'scripts/prepare_d1_restore.py', restoredSql, importSql],
+    { encoding: 'utf8', timeout: 60000 });
+  assert.equal(prepared.status, 0, 'Preparacao das dependencias SQL da restauracao');
   const corrupted = Buffer.from(bytes); corrupted[corrupted.length-1] ^= 1;
   const damaged = join(folder, 'damaged.jdb'); writeFileSync(damaged, corrupted, { mode: 0o600 });
   const rejected = spawnSync(process.execPath, ['scripts/decrypt-backup.mjs', damaged, join(folder, 'invalid.sql')], { env, encoding: 'utf8', timeout: 60000 });
@@ -90,11 +94,12 @@ try {
   assert.equal(detail.name, restoreName);
   const empty = await query(database.uuid, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'");
   assert.equal(empty.length, 0, 'Restauracao apenas em novo banco vazio');
+  console.log('Destino novo de recuperacao confirmado: ' + restoreName + ' (' + database.uuid + ').');
   const restoreConfig = join(folder, 'wrangler.restore.json');
   writeFileSync(restoreConfig, JSON.stringify({ name: 'cr-jornada-staging-restore',
     compatibility_date: staging.compatibility_date,
     d1_databases: [{ binding: 'RESTORE', database_name: restoreName, database_id: database.uuid }] }), { mode: 0o600 });
-  run('node_modules/wrangler/bin/wrangler.js', ['d1', 'execute', 'RESTORE', '--remote', '--config', restoreConfig, '--file', restoredSql, '--yes']);
+  run('node_modules/wrangler/bin/wrangler.js', ['d1', 'execute', 'RESTORE', '--remote', '--config', restoreConfig, '--file', importSql, '--yes']);
   const restoredSchema = await query(database.uuid, schemaSql);
   assert.equal(digest(restoredSchema), digest(sourceSchema), 'Schema restaurado identico');
   for (const table of tables) {

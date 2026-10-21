@@ -9,6 +9,8 @@ on:
       - 'scripts/test_provision_cloudflare_staging.mjs'
       - 'scripts/exercise-cloudflare-staging.mjs'
       - 'scripts/verify-staging-recovery.mjs'
+      - 'scripts/prepare_d1_restore.py'
+      - 'scripts/test_prepare_d1_restore.py'
       - 'server/routes/company-schedules.ts'
       - 'server/index.ts'
   workflow_dispatch:
@@ -35,6 +37,7 @@ jobs:
       - name: Validar guardas e migrations antes de acesso remoto
         run: |
           python3 -B scripts/verify_repository_guards.py
+          python3 -B -m unittest discover -s scripts -p 'test_prepare_d1_restore.py' -v
           node --test scripts/test_staging_guard.mjs scripts/test_prepare_cloudflare_staging.mjs scripts/test_provision_cloudflare_staging.mjs
       - name: Instalar dependencias
         run: npm ci

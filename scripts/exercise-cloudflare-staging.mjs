@@ -82,6 +82,24 @@ try {
   await root.call('/api/platform/auth/login', { method: 'POST', body: { login: 'qa-staging', password: qaPassword } });
   await root.call('/api/platform/auth/session');
   const anonymous = new Client();
+  // Conteudo ficticio publicado apenas no dominio staging; nenhum link de
+  // compra externo e acionado e nenhum e-mail ou mensagem e enviado.
+  const sales = await root.call('/api/platform/sales-page');
+  const salesConfig = { ...sales.config, headline: 'CR JORNADA: pagina ficticia de homologacao',
+    lead_form_enabled: false, whatsapp: '',
+    plans: sales.config.plans.map(plan => ({ ...plan, checkout_url: STAGING_ORIGIN + '/funcionario' })) };
+  const draft = await root.call('/api/platform/sales-page', { method: 'PUT',
+    body: { config: salesConfig, published: false, expected_revision: sales.revision } });
+  const visibleDraft = await anonymous.call('/api/public/sales-page');
+  verify(!visibleDraft.published || visibleDraft.config?.headline !== salesConfig.headline, 'rascunho comercial nao vaza');
+  const published = await root.call('/api/platform/sales-page', { method: 'PUT',
+    body: { config: salesConfig, published: true, expected_revision: draft.revision } });
+  const visible = await anonymous.call('/api/public/sales-page');
+  verify(visible.published && visible.config.headline === salesConfig.headline, 'pagina comercial publicada no staging');
+  const page = await fetch(STAGING_ORIGIN + '/vendas', { redirect: 'error', signal: AbortSignal.timeout(20000) });
+  verify(page.ok && (await page.text()).includes(salesConfig.headline), 'HTML comercial renderiza conteudo publicado');
+  await root.call('/api/platform/sales-page/unpublish', { method: 'POST', body: { expected_revision: published.revision } });
+  verify(!(await anonymous.call('/api/public/sales-page')).published, 'retirada da pagina comercial confirmada');
   await anonymous.call('/api/platform/companies', { expected: 401 });
   await root.call('/api/platform/companies', { method: 'POST', body: {}, csrf: 'invalid', expected: 403 });
   await root.call('/api/platform/companies', { method: 'POST', body: {}, origin: 'https://example.invalid', expected: 403 });
