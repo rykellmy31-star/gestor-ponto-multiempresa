@@ -145,8 +145,11 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         call('/api/platform/companies/'+companyId+'/admins','POST',{
           name:'Gestor '+login,login,email,password:managerPass
         },superCookie,csrf);
-      expect((await uniqueEmail(companyA.id,'terceiro','gestor@example.test')).status)
-        .toBe(201);
+      const thirdCreated=await uniqueEmail(
+        companyA.id,'terceiro','gestor@example.test'
+      );
+      expect(thirdCreated.status).toBe(201);
+      const thirdId=(await thirdCreated.json() as any).admin.id as string;
       const duplicateEmail=await uniqueEmail(
         companyA.id,'quarto','GESTOR@example.test'
       );
@@ -307,6 +310,84 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         undefined,finalCookie)).status).toBe(200);
       expect((await call('/api/company/auth/session','GET',
         undefined,cookieB)).status).toBe(200);
+
+      // Suspender apenas um gestor da empresa A. Outro gestor de A
+      // e o gestor da empresa B mantêm os acessos já autenticados.
+      const thirdLogin=await call('/api/company/auth/login','POST',{
+        company:companyA.slug,login:'terceiro',password:managerPass
+      });
+      expect(thirdLogin.status).toBe(200);
+      const thirdCookie=thirdLogin.headers.get('set-cookie')?.split(';')[0]||'';
+      expect((await call('/api/company/auth/session','GET',
+        undefined,thirdCookie)).status).toBe(200);
+      const foreignStatus=await call(
+        '/api/platform/companies/'+companyB.id+'/admins/'+thirdId+'/status',
+        'PATCH',{active:false},superCookie,csrf
+      );
+      expect(foreignStatus.status).toBe(404);
+      expect((await foreignStatus.json() as any).error.code)
+        .toBe('company_admin_not_found');
+      expect((await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+thirdId+'/status',
+        'PATCH',{active:false},superCookie,'token-invalido'
+      )).status).toBe(403);
+      const disableThird=await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+thirdId+'/status',
+        'PATCH',{active:false},superCookie,csrf
+      );
+      expect(disableThird.status).toBe(200);
+      expect((await disableThird.json() as any).active).toBe(false);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,thirdCookie)).status).toBe(401);
+      expect((await call('/api/company/auth/login','POST',{
+        company:companyA.slug,login:'terceiro',password:managerPass
+      })).status).toBe(401);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,finalCookie)).status).toBe(200);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,cookieB)).status).toBe(200);
+      const disabledReset=await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+thirdId+'/reset-password',
+        'POST',undefined,superCookie,csrf
+      );
+      expect(disabledReset.status).toBe(409);
+      expect((await disabledReset.json() as any).error.code)
+        .toBe('company_admin_inactive');
+      const unchangedDisabled=await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+thirdId+'/status',
+        'PATCH',{active:false},superCookie,csrf
+      );
+      expect(unchangedDisabled.status).toBe(200);
+      expect((await unchangedDisabled.json() as any).unchanged).toBe(true);
+      const enableThird=await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+thirdId+'/status',
+        'PATCH',{active:true},superCookie,csrf
+      );
+      expect(enableThird.status).toBe(200);
+      expect((await enableThird.json() as any).active).toBe(true);
+      // Reativar não torna os cookies revogados válidos novamente.
+      expect((await call('/api/company/auth/session','GET',
+        undefined,thirdCookie)).status).toBe(401);
+      const newThirdLogin=await call('/api/company/auth/login','POST',{
+        company:companyA.slug,login:'terceiro',password:managerPass
+      });
+      expect(newThirdLogin.status).toBe(200);
+      const newThirdCookie=newThirdLogin.headers.get('set-cookie')?.split(';')[0]||'';
+      expect((await call('/api/company/auth/session','GET',
+        undefined,newThirdCookie)).status).toBe(200);
+      const unchangedEnabled=await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+thirdId+'/status',
+        'PATCH',{active:true},superCookie,csrf
+      );
+      expect((await unchangedEnabled.json() as any).unchanged).toBe(true);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,finalCookie)).status).toBe(200);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,cookieB)).status).toBe(200);
+      const securityGuards=await db.prepare(
+        'SELECT COUNT(*) AS total FROM company_admin_write_guards'
+      ).first<{total:number}>();
+      expect(securityGuards?.total).toBe(0);
       expect((await call('/api/platform/companies/'+companyA.id+'/admins','GET',
         undefined,superCookie)).status).toBe(200);
       expect((await call('/api/platform/companies/'+companyB.id+'/admins','GET',
@@ -335,6 +416,13 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(actions?.filter(x=>x==='company.updated')).toHaveLength(1);
       expect(actions?.filter(x=>x==='company_admin.created')).toHaveLength(4);
       expect(actions?.filter(x=>x==='company_admin.password_reset')).toHaveLength(1);
+      expect(actions?.filter(x=>x==='company_admin.status_changed')).toHaveLength(2);
+      const accessEvents=events.results!.filter(
+        x=>x.action==='company_admin.status_changed'
+      );
+      expect(accessEvents.every(x=>x.entity_id===thirdId)).toBe(true);
+      expect(accessEvents.every(x=>JSON.parse(x.details_json).company_id===companyA.id))
+        .toBe(true);
       expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(2);
       expect(JSON.stringify(events.results)).not.toContain(managerPass);
       expect(JSON.stringify(events.results)).not.toContain(managerNew);
