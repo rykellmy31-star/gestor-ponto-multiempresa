@@ -174,7 +174,13 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
       };
       const afternoon={
         ...morning,name:'Jornada Tarde',start:'13:00',
-        break_start:'16:00',break_end:'17:00',end:'22:00'
+        break_start:'16:00',break_end:'17:00',end:'22:00',
+        // Mesmo modelo: terça é à tarde, quarta tem horário especial
+        // das 7h. Quinta volta à jornada padrão de 13h.
+        day_overrides:{
+          '3':{start:'07:00',break_start:'11:00',
+            break_end:'12:00',end:'16:00',paid_break:false}
+        }
       };
       const schedulePost=(token:string,csrf:string,path:string,data:object)=>
         app.request('/api/company/schedules'+(path==='/'?'':path),{
@@ -190,6 +196,17 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
       const morningA=await schedulePost(tokenA,'csrf-a','/',morning);
       expect(morningA.status).toBe(201);
       const scheduleA=(await morningA.json() as any).id as string;
+      // Horário especial em dia não selecionado precisa ser rejeitado
+      // antes de criar jornada ou gravar auditoria.
+      const invalidOverride=await schedulePost(tokenA,'csrf-a','/',{
+        ...morning,day_overrides:{
+          '0':{start:'08:00',break_start:'12:00',
+            break_end:'13:00',end:'17:00',paid_break:false}
+        }
+      });
+      expect(invalidOverride.status).toBe(422);
+      expect((await invalidOverride.json() as any).error.code)
+        .toBe('invalid_schedule');
       const afternoonA=await schedulePost(tokenA,'csrf-a','/',afternoon);
       expect(afternoonA.status).toBe(201);
       const scheduleAfternoon=(await afternoonA.json() as any).id as string;
@@ -241,9 +258,14 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
       const mariaDays=(await mariaWeek.json() as any).days;
       expect(joaoDays[0].shift.start).toBe('07:00');
       expect(joaoDays[1].shift.start).toBe('13:00');
+      expect(joaoDays[2].shift.start).toBe('07:00');
+      expect(joaoDays[2].shift.end).toBe('16:00');
+      expect(joaoDays[3].shift.start).toBe('13:00');
       expect(anaDays[0].shift.start).toBe('07:00');
       expect(anaDays[1].shift.start).toBe('07:00');
+      expect(anaDays[2].shift.start).toBe('07:00');
       expect(mariaDays[1].shift.start).toBe('07:00');
+      expect(mariaDays[2].shift.start).toBe('07:00');
       expect((await scheduleGet(tokenB,
         '/employee/'+a.employee.id+'/week?from=2026-10-26')).status)
         .toBe(404);
@@ -561,6 +583,89 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
       expect(allPunches.results).not.toEqual(expect.arrayContaining([
         expect.objectContaining({employee_id:b.employee.id})
       ]));
+
+      // O mesmo João registra quarta às 07h, conforme a exceção diária
+      // do modelo da tarde (sem criar outra atribuição). Os snapshots de
+      // segunda/terça continuam imutáveis, assim como os pontos de Ana.
+      const wednesday=(hour:number)=>at(hour)+2*86400000;
+      const wednesdayMarks=[wednesday(7),wednesday(11),
+        wednesday(12),wednesday(16)];
+      const wednesdayKeys=[
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+      ];
+      for(let i=0;i<types.length;i++){
+        vi.mocked(Date.now).mockReturnValue(wednesdayMarks[i]);
+        let preview=await employeeRequest(
+          '/api/employee/cpf-work/today',undefined,joaoCookie
+        );
+        if(preview.status===401){
+          joaoLogin=await loginJoao(joaoPassword);
+          expect(joaoLogin.response.status).toBe(200);
+          joaoCookie=joaoLogin.cookie;
+          const renewed=await employeeRequest(
+            '/api/employee/cpf-auth/session',undefined,joaoCookie
+          );
+          expect(renewed.status).toBe(200);
+          joaoCsrf=(await renewed.json() as any).csrf_token;
+          preview=await employeeRequest(
+            '/api/employee/cpf-work/today',undefined,joaoCookie
+          );
+        }
+        expect(preview.status).toBe(200);
+        expect(await preview.json()).toMatchObject({
+          company_id:'co-a',employee_id:a.employee.id,
+          work_date:'2026-10-28',next_seq:i,next_type:types[i]
+        });
+        const stamp=await employeeRequest('/api/employee/cpf-work/punch',{
+          type:types[i],idempotency_key:wednesdayKeys[i]
+        },joaoCookie,joaoCsrf);
+        const result=await stamp.json() as any;
+        expect(stamp.status,JSON.stringify(result)).toBe(201);
+        expect(result.punch.recorded_at).toBe(wednesdayMarks[i]);
+        expect(result.punch.work_date).toBe('2026-10-28');
+        const retry=await employeeRequest('/api/employee/cpf-work/punch',{
+          type:types[i],idempotency_key:wednesdayKeys[i]
+        },joaoCookie,joaoCsrf);
+        expect(retry.status).toBe(200);
+        expect((await retry.json() as any).replayed).toBe(true);
+      }
+      const completedDays=await db.prepare(
+        'SELECT employee_id,work_date,next_seq,schedule_json FROM work_days'
+      ).all<any>();
+      expect(completedDays.results).toHaveLength(3);
+      const wednesdayDay=completedDays.results!.find(
+        x=>x.employee_id===a.employee.id&&x.work_date==='2026-10-28'
+      );
+      expect(wednesdayDay?.next_seq).toBe(4);
+      expect(JSON.parse(wednesdayDay.schedule_json).start).toBe('07:00');
+      expect(JSON.parse(wednesdayDay.schedule_json).end).toBe('16:00');
+      expect((completedDays.results!.find(x=>
+        x.employee_id===a.employee.id&&x.work_date==='2026-10-27'
+      )?.next_seq)).toBe(4);
+      expect((completedDays.results!.find(x=>
+        x.employee_id===ana.employee.id&&x.work_date==='2026-10-26'
+      )?.next_seq)).toBe(4);
+      expect((await db.prepare('SELECT COUNT(*) AS n FROM punches')
+        .first<{n:number}>())?.n).toBe(12);
+      const wednesdayHistory=await employeeRequest(
+        '/api/employee/cpf-work/history?month=2026-10',
+        undefined,joaoCookie
+      );
+      expect(wednesdayHistory.status).toBe(200);
+      expect(await wednesdayHistory.json()).toMatchObject({
+        company_id:'co-a',employee_id:a.employee.id,
+        days:[
+          {date:'2026-10-27',next_seq:4,punches:expect.any(Array)},
+          {date:'2026-10-28',next_seq:4,punches:expect.any(Array)}
+        ]
+      });
+      const totalAssignments=await db.prepare(
+        'SELECT COUNT(*) AS n FROM schedule_assignments'
+      ).first<{n:number}>();
+      expect(totalAssignments?.n).toBe(4);
       expect((await db.prepare('SELECT COUNT(*) AS total FROM company_admin_write_guards')
         .first<{total:number}>())?.total).toBe(0);
       const guards=await db.prepare('SELECT COUNT(*) AS total FROM company_employee_write_guards').first<{total:number}>();
