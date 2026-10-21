@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
 import { readFileSync, appendFileSync } from 'node:fs';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createClient, validateStagingDatabase, provisionStaging } from './provision-cloudflare-staging.mjs';
@@ -18,7 +19,7 @@ const verify = (condition, label) => { assert.ok(condition, label); checks++; co
 class Client {
   cookies = new Map();
   csrf = '';
-  async call(path, { method = 'GET', body, expected = 200, csrf = this.csrf, origin = STAGING_ORIGIN, headers = {} } = {}) {
+  async call(path, { method = 'GET', body, expected = 200, csrf = this.csrf, origin = STAGING_ORIGIN, headers = {}, text = false } = {}) {
     const response = await fetch(STAGING_ORIGIN + path, {
       method, redirect: 'error', signal: AbortSignal.timeout(30000),
       headers: { Origin: origin, 'Content-Type': 'application/json',
@@ -31,7 +32,7 @@ class Client {
       this.cookies.set(pair.slice(0,i), mask(pair.slice(i+1)));
       if (pair.slice(i+1)) verify(/HttpOnly/i.test(cookie) && /Secure/i.test(cookie) && /SameSite=Strict/i.test(cookie), 'cookie seguro');
     }
-    const data = await response.json().catch(() => ({}));
+    const data = text ? await response.text() : await response.json().catch(() => ({}));
     mask(data.csrf_token); mask(data.temporary_password);
     assert.equal(response.status, expected, method + ' ' + path + ' (' + (data.error?.code || 'sem codigo') + ')');
     checks++;
@@ -205,7 +206,53 @@ try {
       [company.id, company.employee.id]);
     verify(saved[0].total === 4, 'D1 confirma quatro batidas por empresa');
   }
+  for (const [index, company] of companies.entries()) {
+    const other = companies[1-index];
+    const path = '/api/company/reports/attendance?employee_id=' + company.employee.id + '&month=' + today.slice(0,7);
+    const report = await company.client.call(path);
+    verify(report.company_id === company.id && report.employee.id === company.employee.id &&
+      report.rows.length === 4 && report.rows.every(row => row.receipt_hash && row.punch_id),
+      'relatorio mensal confirma quatro comprovantes da propria empresa');
+    await company.client.call('/api/company/reports/attendance?employee_id=' + other.employee.id + '&month=' + today.slice(0,7), {expected:404});
+    await company.client.call(path + '&company_id=' + other.id, {expected:400});
+    const csv = await company.client.call(path + '&format=csv', {text:true});
+    verify(csv.includes('Comprovante') && report.rows.every(row => csv.includes(row.receipt_hash)),
+      'CSV real preserva os quatro comprovantes');
+  }
+  // Real browser against the deployed staging UI. Session cookies originate
+  // from the authenticated HTTP flow above; no passwords enter browser logs.
+  const browser = await chromium.launch({headless:true});
+  try {
+    for (const company of companies) {
+      const context = await browser.newContext({acceptDownloads:true});
+      try {
+        await context.addCookies([...company.client.cookies].map(([name,value]) => ({
+          name,value,url:STAGING_ORIGIN,secure:true,httpOnly:true,sameSite:'Strict'
+        })));
+        const page = await context.newPage();
+        await page.goto(STAGING_ORIGIN + '/empresa/jornadas');
+        const panel = page.locator('section').filter({has:page.getByRole('heading',{
+          name:'Relatório mensal de marcações',exact:true
+        })});
+        await panel.getByLabel('Funcionário', {exact:true}).selectOption(company.employee.id);
+        await panel.getByLabel('Mês', {exact:true}).fill(today.slice(0,7));
+        await panel.getByRole('button',{name:'Consultar marcações',exact:true}).click();
+        await panel.getByRole('link',{name:'Exportar CSV',exact:true}).waitFor();
+        verify(await panel.locator('tbody tr').count() === 4,
+          'painel real apresenta quatro marcacoes da empresa autenticada');
+        const downloaded = page.waitForEvent('download');
+        await panel.getByRole('link',{name:'Exportar CSV',exact:true}).click();
+        const download = await downloaded;
+        verify(await download.failure() === null && download.suggestedFilename() ===
+          'marcacoes-' + today.slice(0,7) + '.csv', 'painel real exporta CSV autenticado');
+        const contents = readFileSync(await download.path(),'utf8');
+        verify(contents.includes('Comprovante') && contents.split('\r\n').length === 6,
+          'CSV baixado pelo navegador contem cabecalho e quatro registros');
+      } finally {await context.close();}
+    }
+  } finally {await browser.close();}
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
+  await a.client.call('/api/company/reports/attendance?employee_id=' + a.employee.id + '&month=' + today.slice(0,7), {expected:401});
   await a.client.call('/api/company/auth/session', { expected: 401 });
   await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
   await b.client.call('/api/company/auth/session');
@@ -217,7 +264,7 @@ try {
   verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
   const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
   verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto e suspensao. Politicas de ponto preparadas como fixtures D1, sem homologar a configuracao pelo painel.\n';
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios e suspensao. Politicas de ponto preparadas como fixtures D1, sem homologar a configuracao pelo painel.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {

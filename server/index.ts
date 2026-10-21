@@ -45,6 +45,7 @@ import {
 import {
   companyEmployeesRoutes
 } from './routes/company-employees';
+import { companyAttendanceRoutes } from './routes/company-attendance';
 import { companySchedulesRoutes } from './routes/company-schedules';
 import { salesPublicRoutes, platformSalesRoutes } from './routes/platform-sales';
 import { salesLeadPublicRoutes, salesLeadAdminRoutes } from './routes/sales-leads';
@@ -197,6 +198,9 @@ app.use('/api/*', async (c, next) => {
     path.startsWith('/api/company/schedules/') ||
     path === '/api/company/schedules';
 
+  const isCompanyAttendanceRoute =
+    path === '/api/company/reports/attendance' && c.req.method === 'GET';
+
   const isHealthRoute =
     path === '/api/health';
 
@@ -221,6 +225,7 @@ app.use('/api/*', async (c, next) => {
     !isCompanyEmployeesList &&
     !isCompanyEmployeeRegistration &&
     !isCompanySchedulesRoute &&
+    !isCompanyAttendanceRoute &&
     !isEmployeeCpfAuthRoute &&
     !isEmployeeCpfHistoryRoute &&
     !isEmployeeCpfPunchRoute &&
@@ -264,6 +269,7 @@ app.route('/api/platform/sales-page', platformSalesRoutes);
 
 // CR JORNADA - Autenticacao empresarial
 app.route('/api/company/auth', companyAuthRoutes);
+app.route('/api/company/reports', companyAttendanceRoutes);
 
 // CR JORNADA - Listagem de funcionarios da empresa
 app.route(
