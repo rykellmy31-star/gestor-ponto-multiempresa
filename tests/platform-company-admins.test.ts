@@ -136,6 +136,8 @@ describe('CR JORNADA — Superadmin gerencia gestores de empresas',()=>{
     expect(t.batches).toHaveLength(1);
     const query=t.batches[0][0];
     expect(query.sql).toContain('INSERT INTO company_admins');
+    expect(query.sql).toContain("co.status='active'");
+    expect(t.batches[0][1].sql).toContain('company_admin_write_guards');
     expect(query.args).toContain('company-a');
     expect(query.args).toContain('safe-hash-test');
     expect(query.args).not.toContain(body.password);

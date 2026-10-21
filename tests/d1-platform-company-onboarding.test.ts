@@ -31,7 +31,8 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         db.prepare('CREATE TABLE platform_admins(id TEXT PRIMARY KEY,login TEXT UNIQUE COLLATE NOCASE,email TEXT,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,created_at INTEGER,updated_at INTEGER)'),
         db.prepare('CREATE TABLE platform_sessions(token_hash TEXT PRIMARY KEY,admin_id TEXT,csrf_token TEXT,created_at INTEGER,expires_at INTEGER,last_seen_at INTEGER,reauth_at INTEGER,auth_version INTEGER)'),
         db.prepare('CREATE TABLE platform_audit_log(id TEXT PRIMARY KEY,actor_id TEXT,action TEXT,entity_type TEXT,entity_id TEXT,details_json TEXT,created_at INTEGER)'),
-        db.prepare('CREATE TABLE company_admins(id TEXT PRIMARY KEY,company_id TEXT,login TEXT COLLATE NOCASE,email TEXT,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,must_change_password INTEGER NOT NULL DEFAULT 1,temporary_password_expires_at INTEGER,created_at INTEGER,updated_at INTEGER,UNIQUE(company_id,login))'),
+        db.prepare('CREATE TABLE company_admins(id TEXT PRIMARY KEY,company_id TEXT,login TEXT COLLATE NOCASE,email TEXT COLLATE NOCASE,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,must_change_password INTEGER NOT NULL DEFAULT 1,temporary_password_expires_at INTEGER,created_at INTEGER,updated_at INTEGER,UNIQUE(company_id,login))'),
+        db.prepare('CREATE UNIQUE INDEX company_admins_company_email ON company_admins(company_id,email) WHERE email IS NOT NULL'),
         db.prepare('CREATE TABLE company_admin_sessions(token_hash TEXT PRIMARY KEY,company_id TEXT,admin_id TEXT,csrf_token TEXT,created_at INTEGER,expires_at INTEGER,last_seen_at INTEGER,auth_version INTEGER)'),
         db.prepare('CREATE TABLE employee_company_sessions(token_hash TEXT PRIMARY KEY,company_id TEXT NOT NULL)'),
         db.prepare('CREATE TABLE company_admin_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CONSTRAINT company_admin_write_conflict CHECK(affected_rows=1))'),
@@ -134,10 +135,32 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(dataB.company_id).toBe(companyB.id);
       expect(dataA.id).not.toBe(dataB.id);
       expect(JSON.stringify(dataA)).not.toContain('password_hash');
+      // O mesmo login em duas empresas e legitimo. Duplicar o login
+      // somente dentro da mesma empresa deve devolver 409 sem auditoria.
+      const duplicateLogin=await newManager(companyA.id,'GERENTE');
+      expect(duplicateLogin.status).toBe(409);
+      expect((await duplicateLogin.json() as any).error.code)
+        .toBe('company_admin_already_exists');
+      const uniqueEmail=async(companyId:string,login:string,email:string)=>
+        call('/api/platform/companies/'+companyId+'/admins','POST',{
+          name:'Gestor '+login,login,email,password:managerPass
+        },superCookie,csrf);
+      expect((await uniqueEmail(companyA.id,'terceiro','gestor@example.test')).status)
+        .toBe(201);
+      const duplicateEmail=await uniqueEmail(
+        companyA.id,'quarto','GESTOR@example.test'
+      );
+      expect(duplicateEmail.status).toBe(409);
+      expect((await duplicateEmail.json() as any).error.code)
+        .toBe('company_admin_already_exists');
+      expect((await uniqueEmail(companyB.id,'quinto','gestor@example.test')).status)
+        .toBe(201);
+      expect((await db.prepare('SELECT COUNT(*) AS total FROM company_admins')
+        .first<{total:number}>())?.total).toBe(4);
       const saved=await db.prepare(
         'SELECT company_id,password_hash,must_change_password FROM company_admins ORDER BY company_id'
       ).all<any>();
-      expect(saved.results).toHaveLength(2);
+      expect(saved.results).toHaveLength(4);
       expect(await verifyPassword(managerPass,saved.results![0].password_hash,pepper)).toBe(true);
       expect(saved.results!.every(a=>a.must_change_password===1)).toBe(true);
       const loginManager=(slug:string,password:string)=>call(
@@ -185,6 +208,12 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       const suspend=await call('/api/platform/companies/'+companyA.id+'/status',
         'PATCH',{status:'suspended'},superCookie,csrf);
       expect(suspend.status).toBe(200);
+      const createInSuspended=await uniqueEmail(
+        companyA.id,'naoautorizado','suspenso@example.test'
+      );
+      expect(createInSuspended.status).toBe(409);
+      expect((await createInSuspended.json() as any).error.code)
+        .toBe('company_inactive');
       expect((await loginManager(companyA.slug,managerNew)).status).toBe(401);
       expect((await call('/api/company/auth/session','GET',undefined,changedCookie)).status)
         .toBe(401);
@@ -240,7 +269,7 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       const actions=events.results?.map(x=>x.action);
       expect(actions?.filter(x=>x==='company.created')).toHaveLength(2);
       expect(actions?.filter(x=>x==='company.updated')).toHaveLength(1);
-      expect(actions?.filter(x=>x==='company_admin.created')).toHaveLength(2);
+      expect(actions?.filter(x=>x==='company_admin.created')).toHaveLength(4);
       expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(2);
       expect(JSON.stringify(events.results)).not.toContain(managerPass);
       expect(JSON.stringify(events.results)).not.toContain(managerNew);

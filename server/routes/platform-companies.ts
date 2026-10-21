@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { App, Ctx } from '../types';
-import { ensure } from '../core/errors';
+import { ensure, ApiError } from '../core/errors';
 import { hashPassword, randomToken, safeEqual } from '../core/crypto';
 import { login as loginSchema, password as passwordSchema } from '../core/validation';
 import { ipHash, limit } from '../core/security';
@@ -458,16 +458,35 @@ platformCompaniesRoutes.post('/:id/admins', async c => {
   const id = crypto.randomUUID();
   const now = Date.now();
   const passwordHash = await hashPassword(data.password, c.env.AUTH_PEPPER);
-  await db.batch([
-    db.prepare(`INSERT INTO company_admins
-      (id, company_id, login, email, display_name, password_hash, active, auth_version, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`)
-      .bind(id, companyId, data.login, data.email.toLowerCase() || null, data.name, passwordHash, now, now),
-    db.prepare(`INSERT INTO platform_audit_log
-      (id, actor_id, action, entity_type, entity_id, details_json, created_at)
-      VALUES (?, ?, 'company_admin.created', 'company_admin', ?, ?, ?)`)
-      .bind(crypto.randomUUID(), admin.id, id, JSON.stringify({ company_id: companyId, login: data.login }), now)
-  ]);
+  // SELECT do estado ativo dentro da gravacao fecha a janela entre a
+  // verificacao anterior e o INSERT. A guarda changes() aborta o batch
+  // inteiro (inclusive auditoria) se a empresa for suspensa no meio.
+  try {
+    await companyAdminWrite(db, [
+      db.prepare(`INSERT INTO company_admins
+        (id, company_id, login, email, display_name, password_hash,
+         active, auth_version, created_at, updated_at)
+        SELECT ?, co.id, ?, ?, ?, ?, 1, 0, ?, ?
+        FROM companies co WHERE co.id=? AND co.status='active'`)
+        .bind(id, data.login, data.email.toLowerCase() || null,
+          data.name, passwordHash, now, now, companyId),
+      db.prepare(`INSERT INTO platform_audit_log
+        (id, actor_id, action, entity_type, entity_id, details_json, created_at)
+        VALUES (?, ?, 'company_admin.created', 'company_admin', ?, ?, ?)`)
+        .bind(crypto.randomUUID(), admin.id, id,
+          JSON.stringify({ company_id: companyId, login: data.login }), now)
+    ], 'company_admin_create_conflict');
+  } catch (error) {
+    // Identificadores unicos sao por EMPRESA. Uma disputa concorrente de
+    // cadastro deve devolver 409 e nunca expor SQL, hash ou senha.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/UNIQUE constraint failed: company_admins\./i.test(message)) {
+      throw new ApiError(409, 'company_admin_already_exists',
+        'Este usuário ou e-mail já está cadastrado nesta empresa.');
+    }
+    throw error;
+  }
+  c.header('Cache-Control', 'private, no-store');
   return c.json({ success: true, admin: {
     id, company_id: companyId, login: data.login,
     email: data.email.toLowerCase() || null,
