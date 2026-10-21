@@ -14,6 +14,7 @@ on:
       - 'server/core/company-calculations.ts'
       - 'shared/company-calculation-status.ts'
       - 'web/src/company-calculations.tsx'
+      - 'web/src/employee-cpf-pages.tsx'
       - 'server/routes/company-punch-policy.ts'
       - 'web/src/company-punch-policy.tsx'
       - 'migrations/0039_company_punch_policy_audit.sql'

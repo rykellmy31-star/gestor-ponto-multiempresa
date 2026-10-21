@@ -129,7 +129,7 @@ try {
   const [a,b] = companies;
   const cpfBase = Array.from(randomBytes(9), n => n % 10);
   for (const length of [9,10]) { const sum = cpfBase.reduce((s,n,i) => s+n*(length+1-i),0); cpfBase.push((sum*10)%11%10); }
-  const cpf = cpfBase.join('');
+  const cpf = mask(cpfBase.join(''));
   const employeePassword = mask('QaFuncionario!' + randomBytes(20).toString('hex'));
   for (const company of companies) {
     const payload = { full_name: 'Funcionario Ficticio QA', registration: 'QA001', cpf, job_title: 'Teste', admission_date: '2026-01-01' };
@@ -333,6 +333,45 @@ try {
       } finally {await context.close();}
     }
   } finally {await browser.close();}
+  const profilesBrowser=await chromium.launch({headless:true});
+  try {
+    const platformContext=await profilesBrowser.newContext();
+    try {
+      const page=await platformContext.newPage();
+      await page.goto(STAGING_ORIGIN+'/superadmin');
+      await page.getByLabel('Usuário',{exact:true}).fill('qa-staging');
+      await page.getByLabel('Senha',{exact:true}).fill(qaPassword);
+      await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      await page.getByRole('link',{name:'Página de vendas',exact:true}).waitFor();
+      for(const company of companies)await page.getByText('Código: '+company.slug,{exact:true}).waitFor();
+      verify(true,'Superadmin autentica pelo formulario e visualiza as duas empresas reais de QA');
+    } finally {await platformContext.close();}
+    for(const company of companies) {
+      const context=await profilesBrowser.newContext({acceptDownloads:true});
+      try {
+        const page=await context.newPage();
+        await page.goto(STAGING_ORIGIN+'/funcionario');
+        await page.getByLabel('CPF',{exact:true}).fill(cpf);
+        await page.getByLabel('Senha',{exact:true}).fill(employeePassword);
+        await page.getByRole('button',{name:'Entrar com segurança',exact:true}).click();
+        await page.getByRole('heading',{name:'Escolha sua empresa',exact:true}).waitFor();
+        await page.getByRole('button',{name:company.name,exact:true}).click();
+        await page.getByText('Jornada do dia finalizada',{exact:true}).waitFor();
+        verify(true,'funcionario autentica, escolhe empresa e visualiza jornada concluida no navegador');
+        const history=page.locator('section').filter({has:page.getByRole('heading',{
+          name:'Meu histórico de ponto',exact:true
+        })}).last();
+        await history.getByLabel('Mês de referência',{exact:true}).fill(today.slice(0,7));
+        const downloaded=page.waitForEvent('download');
+        await history.getByRole('button',{name:'Baixar extrato CSV',exact:true}).click();
+        const download=await downloaded;
+        verify(await download.failure()===null && download.suggestedFilename()===
+          'cr-jornada-meu-ponto-'+today.slice(0,7)+'.csv','funcionario baixa extrato pelo navegador real');
+        verify(await history.locator('details').count()===4,
+          'historico visual do funcionario mostra quatro identificacoes de registro');
+      } finally {await context.close();}
+    }
+  } finally {await profilesBrowser.close();}
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
   await a.client.call('/api/company/reports/attendance?employee_id=' + a.employee.id + '&month=' + today.slice(0,7), {expected:401});
   await a.client.call('/api/company/reports/calculations?employee_id='+a.employee.id+'&month='+today.slice(0,7),{expected:401});
@@ -347,7 +386,7 @@ try {
   verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
   const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
   verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, apuracao provisoria com snapshots e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, apuracao provisoria com snapshots, login visual Superadmin/funcionario e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {

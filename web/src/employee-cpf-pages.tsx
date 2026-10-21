@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type CSSProperties } from 'react';
+import { useCallback, useEffect, useId, useState, type FormEvent, type CSSProperties } from 'react';
 import { Building2, CheckCircle2, Clock3, Eye, EyeOff, LogOut, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { EmployeeCpfPointHistory } from './employee-cpf-history';
 import { EmployeeCpfPunch } from './employee-cpf-punch';
@@ -83,6 +83,7 @@ const primary: CSSProperties = {
 };
 
 export function EmployeeCpfPage() {
+  const fieldId=useId();
   const [backendAvailable, setBackendAvailable] = useState(true);
   const [session, setSession] = useState<EmployeeSession | null>(null);
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -255,16 +256,16 @@ export function EmployeeCpfPage() {
             <p style={{ fontSize: 13, color: '#777', marginBottom: 20 }}>
               Por segurança, altere a senha inicial antes de continuar.
             </p>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Senha atual</label>
-            <input style={{ ...field, marginBottom: 15 }} type="password"
+            <label htmlFor={fieldId+'-current'} style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Senha atual</label>
+            <input id={fieldId+'-current'} style={{ ...field, marginBottom: 15 }} type="password"
               autoComplete="current-password" value={currentPassword}
               onChange={e => setCurrentPassword(e.target.value)} maxLength={128} required/>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Nova senha</label>
-            <input style={{ ...field, marginBottom: 15 }} type="password"
+            <label htmlFor={fieldId+'-new'} style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Nova senha</label>
+            <input id={fieldId+'-new'} style={{ ...field, marginBottom: 15 }} type="password"
               autoComplete="new-password" value={newPassword} minLength={12}
               onChange={e => setNewPassword(e.target.value)} maxLength={128} required/>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Confirme sua nova senha</label>
-            <input style={{ ...field, marginBottom: 20 }} type="password"
+            <label htmlFor={fieldId+'-confirm'} style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Confirme sua nova senha</label>
+            <input id={fieldId+'-confirm'} style={{ ...field, marginBottom: 20 }} type="password"
               autoComplete="new-password" value={confirmPassword} minLength={12}
               onChange={e => setConfirmPassword(e.target.value)} maxLength={128} required/>
             <button type="submit" style={primary} disabled={busy}>
@@ -331,14 +332,14 @@ export function EmployeeCpfPage() {
           </section>
         ) : (
           <form onSubmit={login}>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>CPF</label>
-            <input style={{ ...field, marginBottom: 18 }}
+            <label htmlFor={fieldId+'-cpf'} style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>CPF</label>
+            <input id={fieldId+'-cpf'} style={{ ...field, marginBottom: 18 }}
               type="text" inputMode="numeric" autoComplete="username"
               placeholder="000.000.000-00" value={cpf}
               onChange={e => setCpf(e.target.value)} maxLength={14} required/>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Senha</label>
+            <label htmlFor={fieldId+'-password'} style={{ display: 'block', fontSize: 13, marginBottom: 8 }}>Senha</label>
             <div style={{ position: 'relative', marginBottom: 20 }}>
-              <input style={{ ...field, paddingRight: 50 }}
+              <input id={fieldId+'-password'} style={{ ...field, paddingRight: 50 }}
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Digite sua senha" value={password}
                 onChange={e => setPassword(e.target.value)}
