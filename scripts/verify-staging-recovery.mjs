@@ -95,7 +95,7 @@ try {
   const importSql = join(folder, 'import.json');
   const prepared = spawnSync('python3', ['-B', 'scripts/prepare_d1_restore.py', restoredSql, importSql],
     { encoding: 'utf8', timeout: 60000 });
-  assert.equal(prepared.status, 0, 'Preparacao das dependencias SQL da restauracao');
+  assert.equal(prepared.status, 0, 'Preparacao das dependencias SQL da restauracao: ' + prepared.stderr.trim());
   const corrupted = Buffer.from(bytes); corrupted[corrupted.length-1] ^= 1;
   const damaged = join(folder, 'damaged.jdb'); writeFileSync(damaged, corrupted, { mode: 0o600 });
   const rejected = spawnSync(process.execPath, ['scripts/decrypt-backup.mjs', damaged, join(folder, 'invalid.sql')], { env, encoding: 'utf8', timeout: 60000 });

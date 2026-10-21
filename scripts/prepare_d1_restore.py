@@ -97,7 +97,8 @@ if __name__ == '__main__':
             source = input_path.read_text(encoding='utf-8')
             output.write(json.dumps(prepare_plan(source)) if output_path.suffix == '.json' else prepare(source))
         output_path.chmod(0o600)
-    except Exception:
+    except Exception as error:
         # Never echo SQL or values in public CI logs.
-        print('Preparacao do SQL de recuperacao recusada.', file=sys.stderr)
+        reason = str(error) if isinstance(error, ValueError) else getattr(error, 'sqlite_errorname', type(error).__name__)
+        print('Preparacao do SQL de recuperacao recusada: ' + reason, file=sys.stderr)
         sys.exit(1)
