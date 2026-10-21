@@ -41,7 +41,9 @@ if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])) {
  try{
    const config=JSON.parse(readFileSync('wrangler.jsonc','utf8'));
    const accountId=process.env.CLOUDFLARE_ACCOUNT_ID;
-   const token=process.env.CLOUDFLARE_API_TOKEN;
+   const token=process.env.CLOUDFLARE_AUDIT_TOKEN;
+   const editToken=process.env.CLOUDFLARE_API_TOKEN;
+   if(typeof editToken!=='string'||editToken.length<10) throw new Error('Token D1 Edit ausente.');
    if(!/^[a-f0-9]{32}$/i.test(accountId||''))throw new Error('Account ID ausente.');
    const targets=auditTargets(config,accountId,EXPECTED_WORKER);
    const inventory=await cloudflareReadOnlyInventory({token,targets});
