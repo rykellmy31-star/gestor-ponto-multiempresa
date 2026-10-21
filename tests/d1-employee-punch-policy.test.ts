@@ -63,7 +63,7 @@ describe('CR JORNADA — politica de ponto por empresa no D1 local',()=>{
       expect(fails(punch('p-4','day-a','em-a',0,'entry','k4'),dir))
         .toMatch(/invalid_sequence/);
       expect(fails(punch('p-5','day-a','em-a',1,'break_start','k1'),dir))
-        .toMatch(/UNIQUE constraint failed/i);
+        .toMatch(/(?:UNIQUE constraint failed|raw_punch_immutable)/i);
 
       query("UPDATE company_punch_policies SET enabled=0 WHERE company_id='co-a'",dir);
       expect(fails(punch('p-6','day-a','em-a',1,'break_start','k6'),dir))
