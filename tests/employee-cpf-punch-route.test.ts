@@ -37,8 +37,12 @@ const session = {
 function setup(options:{
   flag?:boolean; policy?:boolean; legacy?:boolean;
   nextSeq?:number; priorType?:string|null; validSchedule?:boolean;
-  batchError?:boolean;
+  batchError?:boolean; unreliableChanges?:boolean;
 }={}) {
+  let committedPunch:{
+    id:string;type:string;recorded_at:number;receipt_hash:string;
+    work_date:string;company_id:string;timezone:string
+  }|null=null;
   const statements:Array<{sql:string;args:unknown[]}> = [];
   const batched:Array<{sql:string;args:unknown[]}> = [];
   const db = {
@@ -51,6 +55,7 @@ function setup(options:{
         async first() {
           statements.push({sql,args:[...args]});
           if(sql.includes('FROM punches p JOIN work_days d')) {
+            if(committedPunch) return committedPunch;
             if(!options.priorType)return null;
             return {
               id:'punch-previous',type:options.priorType,
@@ -92,6 +97,16 @@ function setup(options:{
         batched.push(query);
       }
       if(options.batchError)throw new Error('UNIQUE constraint failed');
+      if(options.unreliableChanges){
+        const saved=batched[1];
+        committedPunch={
+          id:String(saved.args[0]),type:'entry',recorded_at:fixedNow,
+          receipt_hash:String(saved.args.at(-1)),
+          work_date:'2026-10-19',company_id:'company-a',
+          timezone:'America/Bahia'
+        };
+        return [{meta:{changes:1}},{meta:{changes:0}}];
+      }
       return [{meta:{changes:1}},{meta:{changes:1}}];
     }
   };
@@ -238,6 +253,18 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
     expect(t.batched[1].sql).toContain('sess.token_hash=?');
     expect(t.batched[1].args).toContain('company-a');
     expect(t.batched[1].args).toContain('token-hash');
+  });
+
+  it('retorna 201 quando a batida é gravada apesar de meta.changes inesperado',async()=>{
+    const t=setup({unreliableChanges:true});
+    const r=await t.request('/punch','POST',{
+      type:'entry',idempotency_key:uuid
+    });
+    expect(r.status).toBe(201);
+    const body=await jsonBody(r);
+    expect(body.replayed).toBe(false);
+    expect(body.punch.type).toBe('entry');
+    expect(t.batched).toHaveLength(2);
   });
 
   it('devolve confirmacao anterior para mesma chave e tipo sem criar nova batida',async()=>{

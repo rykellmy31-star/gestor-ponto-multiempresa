@@ -243,20 +243,38 @@ employeeCpfPunchRoutes.post('/punch',async c=>{
     s.employee_id,seq,type,now,key,ipHash(c),receipt
   );
 
+  // The response is based on confirmed persistence, never only on D1's
+  // per-statement meta.changes. Some local D1/SQLite trigger combinations
+  // can report an unexpected count even though the punch was committed.
+  const created = () => {
+    c.header('Cache-Control','private, no-store');
+    return c.json({success:true,replayed:false,punch:{
+      id:punchId,type,recorded_at:now,
+      work_date:ctx.workDate,receipt_hash:receipt
+    }},201);
+  };
   try {
     const r=await db.batch([insertDay,insertPunch]);
     ensure(r[1].meta.changes===1,409,'punch_not_confirmed',
       'O registro não foi confirmado.');
   } catch(err) {
     const confirmed=await prior(c,s,key);
-    if(confirmed)return replay(c,confirmed,type,s.company_id);
+    if(confirmed){
+      // A failed result check can follow a committed INSERT. If this exact
+      // freshly generated punch is in D1, it is the new registration (201),
+      // not a retry (200). Preserve replay semantics for older or competing
+      // requests; never infer success merely from an error message.
+      if(confirmed.id===punchId &&
+        confirmed.company_id===s.company_id &&
+        confirmed.type===type &&
+        confirmed.work_date===ctx.workDate &&
+        confirmed.recorded_at===now &&
+        confirmed.receipt_hash===receipt) return created();
+      return replay(c,confirmed,type,s.company_id);
+    }
     if(err instanceof ApiError)throw err;
     throw new ApiError(409,'punch_conflict',
       'Não foi possível confirmar o ponto. Atualize a tela e confira.');
   }
-  c.header('Cache-Control','private, no-store');
-  return c.json({success:true,replayed:false,punch:{
-    id:punchId,type,recorded_at:now,
-    work_date:ctx.workDate,receipt_hash:receipt
-  }},201);
+  return created();
 });
