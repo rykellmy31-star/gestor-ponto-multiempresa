@@ -4,9 +4,9 @@ import { CompanyAttendance } from './company-attendance';
 import { CompanyEmployeeAccess } from './company-employee-access';
 import { jsonRequest,isExpiredCompanySession } from './company-schedules-network';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import {
-  CalendarClock, CheckCircle2, Clock3, Copy, LogOut,
+  CalendarClock, CheckCircle2, Copy, LogOut,
   Plus, RefreshCw, ShieldCheck, UsersRound
 } from 'lucide-react';
 import type { Schedule, ScheduleDay } from '../../server/types';
@@ -60,14 +60,10 @@ function hours(n:number) {
   return Math.floor(n/60)+'h'+String(n%60).padStart(2,'0');
 }
 export function CompanySchedulesPage() {
-  const location=useLocation();
+  const navigate=useNavigate();
   const pendingScheduleCreate=useRef<{payload:string;key:string}|null>(null);
   const [session,setSession]=useState<CompanySession|null>(null);
   const [checking,setChecking]=useState(true);
-  const [loginBusy,setLoginBusy]=useState(false);
-  const [slug,setSlug]=useState('');
-  const [login,setLogin]=useState('');
-  const [password,setPassword]=useState('');
   const [currentPassword,setCurrentPassword]=useState('');
   const [newPassword,setNewPassword]=useState('');
   const [confirmPassword,setConfirmPassword]=useState('');
@@ -108,7 +104,6 @@ export function CompanySchedulesPage() {
   const onSessionExpired=useCallback(()=>{
     clearCompanyDraft();
     setSession(null);
-    setPassword('');
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -152,23 +147,6 @@ export function CompanySchedulesPage() {
   },[session,handleRequestError]);
   useEffect(()=>{void load();},[load]);
 
-  async function signIn(event:FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoginBusy(true);setError('');
-    try{
-      await jsonRequest<{success:boolean}>('/company/auth/login',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({company:slug.trim().toLowerCase(),login:login.trim(),password})
-      });
-      setPassword('');
-      setChecking(true);
-      await check();
-      setNotice('Acesso empresarial confirmado.');
-    }catch(err){
-      setError(err instanceof Error?err.message:'Não foi possível entrar.');
-      setPassword('');
-    }finally{setLoginBusy(false);setChecking(false);}
-  }
   async function changeInitialPassword(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(!session||changingPassword)return;
@@ -198,7 +176,7 @@ export function CompanySchedulesPage() {
       }
       setSession(null);
       clearCompanyDraft();
-      setNotice('Senha alterada. Entre novamente com a nova senha para acessar as escalas.');
+      navigate('/admin/entrar',{replace:true,state:{notice:'Senha alterada. Entre novamente com a nova senha.'}});
     }catch(err){
       handleRequestError(err,'Falha na troca de senha.');
     }finally{
@@ -214,8 +192,7 @@ export function CompanySchedulesPage() {
       });
       setSession(null);
       clearCompanyDraft();
-      setPassword('');
-      setNotice('Você saiu da área empresarial.');
+      navigate('/admin/entrar',{replace:true,state:{notice:'Você saiu da área empresarial.'}});
     } catch(err) {handleRequestError(err,'Não foi possível sair.');}
   }
   function update(key:keyof FormSchedule,value:unknown) {
@@ -338,39 +315,7 @@ export function CompanySchedulesPage() {
     <div className="company-schedules-card">Conferindo acesso empresarial…</div>
   </main>;
 
-  if(!session)return <main className="company-schedules-page">
-    <div className="company-schedules-login">
-      <div className="company-schedules-brand"><Clock3 size={27}/> CR JORNADA</div>
-      <h1>Área administrativa da empresa</h1>
-      <p>Entre com os dados da sua empresa para configurar funcionários e jornadas.</p>
-      <form onSubmit={signIn}>
-        <label>Identificador da empresa
-          <input required value={slug} maxLength={60}
-            autoComplete="organization"
-            placeholder="exemplo: minha-empresa"
-            onChange={e=>setSlug(e.target.value)}/>
-        </label>
-        <label>Usuário administrador
-          <input required value={login} maxLength={200}
-            autoComplete="username"
-            onChange={e=>setLogin(e.target.value)}/>
-        </label>
-        <label>Senha
-          <input required type="password" value={password}
-            autoComplete="current-password"
-            onChange={e=>setPassword(e.target.value)}/>
-        </label>
-        {error&&<p role="alert" className="company-schedules-error">{error}</p>}
-        {notice&&<p role="status" className="company-schedules-notice">{notice}</p>}
-        <button disabled={loginBusy}>{loginBusy?'Conferindo…':'Entrar na empresa'}</button>
-      </form>
-      <p className="company-schedules-hint">
-        O acesso real exige o backend do CR JORNADA em homologação.
-        Não informe senhas verdadeiras na prévia estática da Cloudflare Pages.
-      </p>
-      <Link to="/superadmin">Acesso Superadmin</Link>
-    </div>
-  </main>;
+  if(!session)return <Navigate to="/admin/entrar" replace/>;
 
   if(session.must_change_password)return <main className="company-schedules-page">
     <section className="company-schedules-login">
@@ -647,8 +592,6 @@ export function CompanySchedulesPage() {
         </div>}
       </section>
       <p className="company-schedules-footer">CR JORNADA · Módulo em homologação. Nenhum ponto real é ativado nesta página.</p>
-      {location.pathname==='/empresa/entrar'&&<p className="company-schedules-footer">
-        <Link to="/empresa/jornadas">Ir para jornadas</Link></p>}
     </div>
   </main>;
 }

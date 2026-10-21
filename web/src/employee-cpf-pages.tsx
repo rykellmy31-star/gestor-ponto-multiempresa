@@ -358,7 +358,7 @@ export function EmployeeCpfPage() {
             <p style={{fontSize:12,color:'#777',lineHeight:1.6,marginTop:14}}>
               Esqueceu sua senha? Solicite ajuda ao administrador da sua empresa.
             </p>
-            <Link to="/empresa/entrar" style={{
+            <Link to="/admin/entrar" style={{
               width: '100%', minHeight: 46, marginTop: 14, padding: '12px 16px',
               border: '1px solid #800000', borderRadius: 10, background: '#fff',
               color: '#800000', fontSize: 14, fontWeight: 650, textDecoration: 'none',

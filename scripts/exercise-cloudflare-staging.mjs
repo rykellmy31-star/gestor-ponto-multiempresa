@@ -194,11 +194,11 @@ try {
       const context = await policyBrowser.newContext();
       try {
         const page = await context.newPage();
-        await page.goto(STAGING_ORIGIN + '/empresa/entrar');
+        await page.goto(STAGING_ORIGIN + '/admin/entrar');
         await page.getByLabel('Identificador da empresa',{exact:true}).fill(company.slug);
-        await page.getByLabel('Usuário administrador',{exact:true}).fill('gestor');
+        await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
         await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
-        await page.getByRole('button',{name:'Entrar na empresa',exact:true}).click();
+        await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
         const panel = page.locator('section').filter({has:page.getByRole('heading',{
           name:'Regras de ponto da empresa',exact:true
         })});
@@ -288,11 +288,11 @@ try {
       try {
         const page = await context.newPage();
         page.on('pageerror',()=>console.log('DIAGNOSTICO: erro JavaScript na interface de staging'));
-        await page.goto(STAGING_ORIGIN + '/empresa/entrar');
+        await page.goto(STAGING_ORIGIN + '/admin/entrar');
         await page.getByLabel('Identificador da empresa',{exact:true}).fill(company.slug);
-        await page.getByLabel('Usuário administrador',{exact:true}).fill('gestor');
+        await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
         await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
-        await page.getByRole('button',{name:'Entrar na empresa',exact:true}).click();
+        await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
         await page.getByRole('heading',{name:'Jornadas e escalas',exact:true}).waitFor();
         verify(true,'login empresarial realizado pelo formulario real');
         const panel = page.locator('section').filter({has:page.getByRole('heading',{
@@ -352,11 +352,11 @@ try {
         const page=await context.newPage();
         await page.goto(STAGING_ORIGIN+'/funcionario');
         await page.getByRole('link',{name:'Acessar área da empresa',exact:true}).click();
-        await page.getByRole('heading',{name:'Área administrativa da empresa',exact:true}).waitFor();
+        await page.getByRole('heading',{name:'Gestão em boas mãos.',exact:true}).waitFor();
         await page.getByLabel('Identificador da empresa',{exact:true}).waitFor();
-        await page.getByLabel('Usuário administrador',{exact:true}).waitFor();
-        verify(new URL(page.url()).pathname==='/empresa/entrar',
-          'link da tela do funcionario abre o login da empresa no mesmo sistema');
+        await page.getByLabel('Usuário ou e-mail',{exact:true}).waitFor();
+        verify(new URL(page.url()).pathname==='/admin/entrar',
+          'link da tela do funcionario abre o login administrativo seguro no mesmo sistema');
         await page.goto(STAGING_ORIGIN+'/funcionario');
         await page.getByLabel('CPF',{exact:true}).fill(cpf);
         await page.getByLabel('Senha',{exact:true}).fill(employeePassword);

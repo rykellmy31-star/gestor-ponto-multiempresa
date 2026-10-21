@@ -23,7 +23,7 @@ export function usePublicConfig(){
   return config;
 }
 
-function AuthFrame({children,admin=false}:{children:ReactNode;admin?:boolean}){
+export function AuthFrame({children,admin=false}:{children:ReactNode;admin?:boolean}){
   return (
     <main className="auth-shell">
       <aside className="auth-story">

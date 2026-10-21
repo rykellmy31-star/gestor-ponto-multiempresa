@@ -5,7 +5,7 @@ import {BrowserRouter, Routes, Route, Navigate, Link} from 'react-router-dom';
 import '@fontsource-variable/inter';
 import './styles.css';
 
-import {LoginPage, ForgotPage, ResetPage, SetupPage} from './auth-pages';
+import {ForgotPage, ResetPage, SetupPage} from './auth-pages';
 import {ProtectedLayout, HelpPage} from './layout';
 import {ToastProvider, Button, Empty} from './ui';
 import {ClockPage, EmployeeReportPage, EmployeeRequestsPage, AccountPage} from './employee-pages';
@@ -19,6 +19,7 @@ import {EmployeeCpfPage} from './employee-cpf-pages';
 import {DeveloperCredit} from './developer-credit';
 import {SalesPage} from './sales-page';
 import {CompanySchedulesPage} from './company-schedules-page';
+import {CompanyAdminLoginPage} from './company-admin-login-page';
 
 class ErrorBoundary extends React.Component<
   {children: React.ReactNode},
@@ -68,7 +69,7 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<Navigate to="/funcionario" replace/>}/>
           <Route path="/entrar" element={<Navigate to="/funcionario" replace/>}/>
-          <Route path="/admin/entrar" element={<LoginPage realm="admin"/>}/>
+          <Route path="/admin/entrar" element={<CompanyAdminLoginPage/>}/>
           <Route path="/setup" element={<SetupPage/>}/>
           <Route path="/recuperar-senha" element={<ForgotPage/>}/>
           <Route path="/redefinir-senha" element={<ResetPage/>}/>
@@ -79,7 +80,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/planos" element={<Navigate to="/vendas" replace/>}/>
           <Route path="/superadmin/vendas" element={<PlatformPage/>}/>
           <Route path="/empresa" element={<Navigate to="/empresa/jornadas" replace/>}/>
-          <Route path="/empresa/entrar" element={<CompanySchedulesPage/>}/>
+          <Route path="/empresa/entrar" element={<Navigate to="/admin/entrar" replace/>}/>
           <Route path="/empresa/jornadas" element={<CompanySchedulesPage/>}/>
           <Route path="/funcionario" element={<EmployeeCpfPage/>}/>
 
