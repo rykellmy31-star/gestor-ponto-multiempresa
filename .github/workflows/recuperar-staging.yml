@@ -1,0 +1,36 @@
+name: Recuperacao isolada CR JORNADA
+on:
+  push:
+    branches: [desenvolvimento-cr-jornada]
+    paths:
+      - '.github/workflows/recuperar-staging.yml'
+      - 'scripts/verify-staging-recovery.mjs'
+      - 'scripts/prepare_d1_restore.py'
+      - 'scripts/test_prepare_d1_restore.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cr-jornada-staging
+  cancel-in-progress: false
+jobs:
+  recuperar:
+    if: github.ref == 'refs/heads/desenvolvimento-cr-jornada'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validar ordenacao e guardas antes de acesso remoto
+        run: |
+          python3 -B -m unittest discover -s scripts -p 'test_prepare_d1_restore.py' -v
+          node --test scripts/test_staging_guard.mjs scripts/test_provision_cloudflare_staging.mjs
+      - run: npm ci
+      - name: Backup cifrado e restauracao somente em destino separado vazio
+        env:
+          CLOUDFLARE_STAGING_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-staging-recovery.mjs

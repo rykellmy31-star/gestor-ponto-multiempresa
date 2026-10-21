@@ -18,7 +18,7 @@ def without_leading_comments(statement):
     return statement.lstrip()
 
 
-def prepare_sections(sql):
+def prepare_plan(sql):
     statements = []
     pending = ''
     for character in sql:
@@ -47,6 +47,39 @@ def prepare_sections(sql):
             raise ValueError('Exportacao contem instrucao fora do formato permitido.')
     if not groups[0]:
         raise ValueError('Exportacao nao contem tabelas.')
+    # Derive table dependencies from SQLite itself, not from regexes over
+    # REFERENCES clauses. This keeps FK parents before children across batches.
+    schema = sqlite3.connect(':memory:')
+    try:
+        for statement in groups[0]:
+            schema.execute(statement)
+        names = [row[0] for row in schema.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+        remaining = {name: {row[2] for row in schema.execute('PRAGMA foreign_key_list("' + name.replace('"', '""') + '")') if row[2] != name} for name in names}
+        order = []
+        while remaining:
+            ready = sorted(name for name, parents in remaining.items() if not parents.intersection(remaining))
+            if not ready:
+                raise ValueError('Dependencias ciclicas exigem revisao da recuperacao.')
+            for name in ready:
+                order.append(name)
+                del remaining[name]
+        rank = {name: i for i, name in enumerate(order)}
+        def table_rank(statement):
+            match = re.match(r'^INSERT\s+INTO\s+(?:"([^"]+)"|`([^`]+)`|\[([^]]+)\]|([a-zA-Z_][a-zA-Z0-9_]*))', without_leading_comments(statement), re.I)
+            if not match:
+                raise ValueError('Tabela do INSERT nao identificada.')
+            name = next(value for value in match.groups() if value is not None)
+            if name not in rank:
+                raise ValueError('INSERT em tabela fora do schema permitido.')
+            return rank[name]
+        groups[1].sort(key=table_rank)
+    finally:
+        schema.close()
+    return groups
+
+
+def prepare_sections(sql):
+    groups = prepare_plan(sql)
     return ['\n'.join(groups[0]) + '\n',
             'PRAGMA defer_foreign_keys=TRUE;\n' + '\n'.join(groups[1]) + '\n',
             '\n'.join(groups[2]) + '\n']
@@ -62,7 +95,7 @@ if __name__ == '__main__':
         input_path, output_path = map(Path, sys.argv[1:])
         with output_path.open('x', encoding='utf-8') as output:
             source = input_path.read_text(encoding='utf-8')
-            output.write(json.dumps(prepare_sections(source)) if output_path.suffix == '.json' else prepare(source))
+            output.write(json.dumps(prepare_plan(source)) if output_path.suffix == '.json' else prepare(source))
         output_path.chmod(0o600)
     except Exception:
         # Never echo SQL or values in public CI logs.

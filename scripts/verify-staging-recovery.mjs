@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync,
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, mkdtempSync, existsSync,
   rmSync, appendFileSync } from 'node:fs';
 import { randomBytes, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { createClient, validateStagingDatabase } from './provision-cloudflare-staging.mjs';
-import { assertStagingTarget, STAGING_DATABASE } from './staging-guard.mjs';
+import { createStagingConfig } from './prepare-cloudflare-staging.mjs';
+import { assertStagingTarget, STAGING_DATABASE, STAGING_WORKER, STAGING_ORIGIN } from './staging-guard.mjs';
 import { LIVE_D1_ID } from './verify-production-target.mjs';
 
 process.umask(0o077);
@@ -13,7 +14,19 @@ const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const token = process.env.CLOUDFLARE_STAGING_TOKEN;
 const api = createClient({ token, accountId });
 const base = JSON.parse(readFileSync('wrangler.jsonc', 'utf8'));
-const staging = JSON.parse(readFileSync('wrangler.staging.jsonc', 'utf8'));
+let staging;
+if (existsSync('wrangler.staging.jsonc')) staging = JSON.parse(readFileSync('wrangler.staging.jsonc', 'utf8'));
+else {
+  const matches = (await api('/d1/database?name=' + STAGING_DATABASE + '&per_page=100')).result?.filter(d => d.name === STAGING_DATABASE);
+  assert.equal(matches?.length, 1, 'D1 staging unico identificado');
+  const id = validateStagingDatabase(matches[0]);
+  staging = createStagingConfig(base, { worker: STAGING_WORKER, database: STAGING_DATABASE,
+    databaseId: id, origin: STAGING_ORIGIN });
+  for (const key of ['ENABLE_COMPANY_SCHEDULES','ENABLE_COMPANY_EMPLOYEE_REGISTRATION',
+    'ENABLE_EMPLOYEE_PASSWORD_RECOVERY','ENABLE_EMPLOYEE_PUNCHES']) staging.vars[key] = 'true';
+  assertStagingTarget(staging, accountId, base, { exerciseFeatures: true });
+  writeFileSync('wrangler.staging.jsonc', JSON.stringify(staging), { mode: 0o600 });
+}
 const sourceId = assertStagingTarget(staging, accountId, base, { exerciseFeatures: true });
 validateStagingDatabase((await api('/d1/database/' + sourceId)).result);
 const restoreName = 'cr-jornada-staging-restore-' + randomBytes(6).toString('hex');
@@ -89,7 +102,7 @@ try {
   assert.notEqual(rejected.status, 0, 'AES-GCM rejeita adulteracao');
   // Reutilizar somente destinos anteriores comprovadamente vazios. Nunca
   // apagar tabelas ou sobrescrever restauracoes completas/parciais.
-  const previous = (await api('/d1/database?name=cr-jornada-staging-restore-&per_page=100')).result;
+  const previous = (await api('/d1/database?per_page=100')).result;
   let database;
   for (const candidate of previous || []) {
     if (!/^cr-jornada-staging-restore-[a-f0-9]{12}$/.test(candidate.name) ||
@@ -108,14 +121,24 @@ try {
   console.log('Destino vazio de recuperacao confirmado: ' + destinationName + ' (' + database.uuid + ').');
   const sections = JSON.parse(readFileSync(importSql, 'utf8'));
   assert.ok(Array.isArray(sections) && sections.length === 3 &&
-    sections.every(sql => typeof sql === 'string' && Buffer.byteLength(sql) < 95000), 'Fases SQL limitadas ao tamanho seguro');
-  for (const [index, sql] of sections.entries()) {
+    sections.every(part => Array.isArray(part) && part.every(sql => typeof sql === 'string' && Buffer.byteLength(sql) < 85000)), 'Instrucoes SQL limitadas ao tamanho seguro');
+  for (const [index, statements] of sections.entries()) {
     // A API de query e usada em vez do importador bulk que reiniciou D1.
     // Tabelas primeiro; dados numa transacao com FKs diferidas; triggers por ultimo.
-    const restored = await api('/d1/database/' + database.uuid + '/query', {
-      method: 'POST', body: { sql }, databaseId: database.uuid
-    });
-    assert.ok(Array.isArray(restored.result) && restored.result.every(r => r.success), 'Fase de recuperacao ' + index);
+    let batch = 'PRAGMA defer_foreign_keys=TRUE;\n';
+    const execute = async sql => {
+      const restored = await api('/d1/database/' + database.uuid + '/query', {
+        method: 'POST', body: { sql }, databaseId: database.uuid
+      });
+      assert.ok(Array.isArray(restored.result) && restored.result.every(r => r.success), 'Fase de recuperacao ' + index);
+    };
+    for (const statement of statements) {
+      if (Buffer.byteLength(batch + statement) > 90000) {
+        await execute(batch); batch = 'PRAGMA defer_foreign_keys=TRUE;\n';
+      }
+      batch += statement + '\n';
+    }
+    if (statements.length) await execute(batch);
     console.log('Fase de recuperacao aprovada: ' + ['tabelas','dados','indices e triggers'][index]);
   }
   const restoredSchema = await query(database.uuid, schemaSql);

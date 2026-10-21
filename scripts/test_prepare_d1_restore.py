@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from prepare_d1_restore import prepare
+from prepare_d1_restore import prepare, prepare_plan
 
 
 class RestoreOrderingTests(unittest.TestCase):
@@ -41,6 +41,22 @@ COMMIT;
             with self.assertRaises(ValueError) as error:
                 prepare(sql)
             self.assertNotIn('private-marker', str(error.exception))
+
+    def test_data_can_cross_batches_with_foreign_keys_enabled(self):
+        tables, data, objects = prepare_plan("""
+CREATE TABLE child(id TEXT PRIMARY KEY,parent_id TEXT REFERENCES parent(id));
+INSERT INTO child VALUES('child','parent');
+CREATE TABLE parent(id TEXT PRIMARY KEY);
+INSERT INTO parent VALUES('parent');
+""")
+        restored = sqlite3.connect(':memory:')
+        self.addCleanup(restored.close)
+        restored.execute('PRAGMA foreign_keys=ON')
+        for statement in tables + data + objects:
+            restored.execute(statement)
+            restored.commit()
+        self.assertEqual(restored.execute('SELECT * FROM child').fetchall(), [('child','parent')])
+        self.assertEqual(restored.execute('PRAGMA foreign_key_check').fetchall(), [])
 
 
 if __name__ == '__main__':
