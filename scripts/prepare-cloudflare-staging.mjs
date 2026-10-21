@@ -27,25 +27,51 @@ export function createStagingConfig(base, { worker, database, databaseId, origin
       url.username || url.password || origin === base.vars?.APP_ORIGIN) {
     throw new Error('APP_ORIGIN deve ser HTTPS, exclusivo do staging e sem caminho/barra final.');
   }
-  const config = structuredClone(base);
-  config.name = worker;
-  config.d1_databases = [{ ...originalDb, database_name: database, database_id: databaseId }];
-  // O staging usa os mesmos controles estritos de cookies e origem que a producao.
-  config.vars = {
-    ...config.vars,
-    ENVIRONMENT: 'production',
-    APP_ORIGIN: origin,
-    ENABLE_COMPANY_SCHEDULES: 'false',
-    ENABLE_COMPANY_EMPLOYEE_REGISTRATION: 'false',
-    ENABLE_EMPLOYEE_PASSWORD_RECOVERY: 'false',
-    ENABLE_EMPLOYEE_PUNCHES: 'false',
-    ENABLE_SALES_LEADS: 'false'
+  // Construir a partir de uma LISTA POSITIVA: clonar a configuracao de
+  // producao poderia herdar variables, bindings, rotas ou crons de outro
+  // ambiente, mesmo apos remover os campos mais conhecidos.
+  const config = {
+    ...(typeof base.$schema === 'string' ? { $schema: base.$schema } : {}),
+    name: worker,
+    main: base.main,
+    ...(typeof base.compatibility_date === 'string'
+      ? { compatibility_date: base.compatibility_date } : {}),
+    ...(Array.isArray(base.compatibility_flags)
+      ? { compatibility_flags: [...base.compatibility_flags] } : {}),
+    assets: {
+      directory: base.assets.directory,
+      ...(typeof base.assets.binding === 'string'
+        ? { binding: base.assets.binding } : {}),
+      run_worker_first: true,
+      ...(typeof base.assets.not_found_handling === 'string'
+        ? { not_found_handling: base.assets.not_found_handling } : {})
+    },
+    d1_databases: [{
+      binding: 'DB',
+      database_name: database,
+      database_id: databaseId,
+      ...(typeof originalDb.migrations_dir === 'string'
+        ? { migrations_dir: originalDb.migrations_dir } : {})
+    }],
+    vars: {
+      ENVIRONMENT: 'production',
+      APP_ORIGIN: origin,
+      SESSION_HOURS: String(base.vars?.SESSION_HOURS ?? '8'),
+      ENABLE_COMPANY_SCHEDULES: 'false',
+      ENABLE_COMPANY_EMPLOYEE_REGISTRATION: 'false',
+      ENABLE_EMPLOYEE_PASSWORD_RECOVERY: 'false',
+      ENABLE_EMPLOYEE_PUNCHES: 'false',
+      ENABLE_SALES_LEADS: 'false'
+    },
+    ...(Array.isArray(base.rules)
+      ? { rules: structuredClone(base.rules) } : {}),
+    ...(base.observability && typeof base.observability === 'object'
+      ? { observability: {
+          enabled: base.observability.enabled === true,
+          ...(typeof base.observability.head_sampling_rate === 'number'
+            ? { head_sampling_rate: base.observability.head_sampling_rate } : {})
+        } } : {})
   };
-  // Nunca herdar o dominio de producao nem cron de manutencao da config principal.
-  delete config.routes;
-  delete config.route;
-  delete config.workers_dev;
-  delete config.triggers;
   return config;
 }
 

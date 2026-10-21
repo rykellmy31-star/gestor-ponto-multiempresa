@@ -36,6 +36,42 @@ describe('CR JORNADA — configuracao Cloudflare staging isolada', () => {
     }
     assert.equal(JSON.stringify(result).includes('ponto.example.org'), false);
   });
+  it('nao herda bindings, segredos, crons nem URLs adicionais da producao', () => {
+    const unsafeProduction = {
+      ...production,
+      vars: {
+        ...production.vars,
+        SESSION_HOURS: '6',
+        PROD_API_KEY: 'SEGREDO-SOMENTE-PRODUCAO',
+        PAYMENT_GATEWAY_URL: 'https://checkout.prod.example'
+      },
+      account_id: 'conta-da-producao',
+      routes: [{ pattern:'dominio-prod.example', custom_domain:true }],
+      triggers: { crons:['* * * * *'] },
+      kv_namespaces: [{ binding:'KV', id:'kv-prod-id' }],
+      r2_buckets: [{ binding:'FILES', bucket_name:'prod-bucket' }],
+      queues: { producers:[{ binding:'QUEUE', queue:'prod-jobs' }] },
+      services: [{ binding:'BILLING', service:'billing-prod' }],
+      unsafe: { bindings:[{ name:'SECRET', value:'danger' }] }
+    };
+    const staging = createStagingConfig(unsafeProduction, opts);
+    assert.deepEqual(Object.keys(staging).sort(), [
+      'assets','d1_databases','main','name','vars'
+    ].sort());
+    assert.deepEqual(Object.keys(staging.vars).sort(), [
+      'APP_ORIGIN','ENVIRONMENT','SESSION_HOURS','ENABLE_COMPANY_SCHEDULES',
+      'ENABLE_COMPANY_EMPLOYEE_REGISTRATION','ENABLE_EMPLOYEE_PASSWORD_RECOVERY',
+      'ENABLE_EMPLOYEE_PUNCHES','ENABLE_SALES_LEADS'
+    ].sort());
+    assert.equal(staging.vars.SESSION_HOURS, '6');
+    assert.equal(JSON.stringify(staging).includes('SEGREDO-SOMENTE-PRODUCAO'), false);
+    assert.equal(JSON.stringify(staging).includes('checkout.prod.example'), false);
+    assert.equal(JSON.stringify(staging).includes('prod-bucket'), false);
+    assert.equal(JSON.stringify(staging).includes('prod-jobs'), false);
+    assert.equal(JSON.stringify(staging).includes('billing-prod'), false);
+    assert.equal(JSON.stringify(staging).includes('dominio-prod.example'), false);
+    assert.equal(JSON.stringify(unsafeProduction.vars).includes('SEGREDO-SOMENTE-PRODUCAO'), true);
+  });
   it('recusa banco da producao e URL de producao', () => {
     assert.throws(() => createStagingConfig(production, {...opts, databaseId: productionId}), /ID diferente/);
     assert.throws(() => createStagingConfig(production, {...opts, origin: production.vars.APP_ORIGIN}), /APP_ORIGIN/);

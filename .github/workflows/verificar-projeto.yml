@@ -60,6 +60,11 @@ jobs:
       - name: Compilar interface React
         run: npm run build:web
 
+      - name: Simular configuracao staging com banco ficticio e sem credenciais
+        run: |
+          node scripts/prepare-cloudflare-staging.mjs --worker cr-jornada-staging --database cr-jornada-staging-db --database-id 018b0f87-4bd3-4ec3-9852-e2566909ac24 --origin https://cr-jornada-staging.example.workers.dev
+      - name: Compilar Worker staging sem deploy e sem acesso remoto ao D1
+        run: npx wrangler deploy --dry-run --config wrangler.staging.jsonc --outdir .worker-staging-bundle
       - name: Verificar Cloudflare Worker
         run: npx wrangler deploy --dry-run --outdir .worker-bundle
 
