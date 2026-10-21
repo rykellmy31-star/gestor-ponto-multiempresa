@@ -67,7 +67,7 @@ test('backup D1 local cifra, restaura e rejeita fraude ou senha incorreta', () =
     const restored = new DatabaseSync(':memory:');
     try {
       restored.exec(readFileSync(plainSql, 'utf8'));
-      assert.deepEqual(restored.prepare('SELECT id, name, note FROM employees').get(), {
+      assert.deepEqual({ ...restored.prepare('SELECT id, name, note FROM employees').get() }, {
         id: 'employee-01',
         name: 'Funcionario Ficticio',
         note: "Texto com aspas: 'teste'"
