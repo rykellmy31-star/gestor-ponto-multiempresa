@@ -27,7 +27,22 @@ const run = (script, args) => {
     env, encoding: 'utf8', timeout: 300000, maxBuffer: 32 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  assert.equal(result.status, 0, 'Recuperacao staging falhou em ' + script.split('/').at(-1) + ' ' + args.slice(0,2).join(' '));
+  if (result.status !== 0) {
+    const output = (result.stdout || '') + (result.stderr || '');
+    const categories = [
+      ['foreign_key', /FOREIGN KEY constraint failed|foreign key mismatch/i],
+      ['not_authorized', /not authorized|SQLITE_AUTH|Authentication error|permission denied/i],
+      ['schema_exists', /already exists|UNIQUE constraint failed/i],
+      ['missing_table', /no such table/i],
+      ['file_missing', /no such file|does not exist|could not read|could not find.*file/i],
+      ['syntax', /syntax error|Unknown argument|unrecognized token/i],
+      ['immutable_trigger', /immutable|no_delete|no_implicit_replacement|owner_invalid|company_mismatch/i],
+      ['transaction', /transaction|SAVEPOINT/i]
+    ].filter(([,pattern]) => pattern.test(output)).map(([name]) => name);
+    const codes = [...new Set(output.match(/\b(?:SQLITE_[A-Z_]+|D1_[A-Z_]+)\b/g) || [])];
+    throw new Error('Recuperacao staging falhou em ' + script.split('/').at(-1) + ' ' + args.slice(0,2).join(' ') +
+      '; categorias=' + (categories.join(',') || 'desconhecida') + '; codigos=' + (codes.join(',') || 'indisponiveis'));
+  }
   return result.stdout;
 };
 const query = async (id, sql) => {
