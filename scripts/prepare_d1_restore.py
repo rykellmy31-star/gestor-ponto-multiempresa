@@ -47,6 +47,9 @@ def prepare_plan(sql):
             raise ValueError('Exportacao contem instrucao fora do formato permitido.')
     if not groups[0]:
         raise ValueError('Exportacao nao contem tabelas.')
+    sequence_pattern = re.compile(r'^INSERT\s+INTO\s+["`\[]?sqlite_sequence\b', re.I)
+    sequence_data = [statement for statement in groups[1] if sequence_pattern.match(without_leading_comments(statement))]
+    groups[1] = [statement for statement in groups[1] if not sequence_pattern.match(without_leading_comments(statement))]
     # Derive table dependencies from SQLite itself, not from regexes over
     # REFERENCES clauses. This keeps FK parents before children across batches.
     schema = sqlite3.connect(':memory:')
@@ -57,6 +60,9 @@ def prepare_plan(sql):
         # as employees.deleted_by -> users do not create a data dependency
         # when every restored value is NULL; users.employee_id still does.
         for statement in groups[1]:
+            schema.execute(statement)
+        automatic_sequences = dict(schema.execute('SELECT name,MAX(seq) FROM sqlite_sequence GROUP BY name')) if sequence_data else {}
+        for statement in sequence_data:
             schema.execute(statement)
         names = [row[0] for row in schema.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
         quote = lambda name: '"' + name.replace('"', '""') + '"'
@@ -81,6 +87,19 @@ def prepare_plan(sql):
                 raise ValueError('INSERT em tabela fora do schema permitido.')
             return rank[name]
         groups[1].sort(key=table_rank)
+        if sequence_data:
+            # Explicit row IDs recreate counters, but a deleted highest row may
+            # leave a higher source counter. Preserve it without recreating or
+            # clearing SQLite's internal table and without touching CF metadata.
+            for name, sequence in schema.execute('SELECT name,MAX(seq) FROM sqlite_sequence GROUP BY name'):
+                if name not in rank:
+                    raise ValueError('Sequencia fora das tabelas da aplicacao.')
+                if not isinstance(sequence, int) or sequence < 0:
+                    raise ValueError('Contador de sequencia invalido.')
+                if sequence <= automatic_sequences.get(name, 0):
+                    continue
+                literal = "'" + name.replace("'", "''") + "'"
+                groups[1].append('UPDATE sqlite_sequence SET seq=' + str(sequence) + ' WHERE name=' + literal + ';')
     finally:
         schema.close()
     return groups

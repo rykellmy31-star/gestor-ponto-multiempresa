@@ -73,6 +73,21 @@ INSERT INTO employees VALUES('employee',NULL);
             restored.commit()
         self.assertEqual(restored.execute('PRAGMA foreign_key_check').fetchall(), [])
 
+    def test_autoincrement_metadata_is_preserved_without_recreating_internal_table(self):
+        tables,data,objects=prepare_plan("""
+CREATE TABLE items(id INTEGER PRIMARY KEY AUTOINCREMENT,value TEXT);
+INSERT INTO items VALUES(3,'kept');
+DELETE FROM sqlite_sequence;
+INSERT INTO sqlite_sequence VALUES('items',10);
+""")
+        restored=sqlite3.connect(':memory:')
+        self.addCleanup(restored.close)
+        for statement in tables+data+objects:
+            restored.execute(statement)
+            restored.commit()
+        restored.execute("INSERT INTO items(value) VALUES('next')")
+        self.assertEqual(restored.execute("SELECT id FROM items WHERE value='next'").fetchone()[0],11)
+
 
 if __name__ == '__main__':
     unittest.main()
