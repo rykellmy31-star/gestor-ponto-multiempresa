@@ -40,10 +40,14 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
           }
           if (sql.includes('SELECT COALESCE(h.config_json,s.config_json)')) {
             return {
-              config_json:JSON.stringify({...schedule,day_overrides:{
-                '2':{start:'13:00',break_start:'16:00',
-                  break_end:'17:00',end:'22:00',paid_break:false}
-              }}),
+              config_json:JSON.stringify({
+                start:'07:00',break_start:'11:00',break_end:'12:00',
+                end:'16:00',paid_break:false,weekdays:[1,2,3,4,5],
+                day_overrides:{
+                  '2':{start:'13:00',break_start:'16:00',
+                    break_end:'17:00',end:'22:00',paid_break:false}
+                }
+              }),
               assignment_id:'assigned-a'
             };
           }
@@ -141,7 +145,7 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect(data.company_id).toBe('company-a');
     expect(data.employee_name).toBe('João');
     expect(data.days).toHaveLength(7);
-    expect(data.days[0].shift.start).toBe('09:00');
+    expect(data.days[0].shift.start).toBe('07:00');
     expect(data.days[1].shift.start).toBe('13:00');
     expect(data.days[5].shift).toBeNull();
     const lookups=t.sqls.filter(x=>x.sql.includes('SELECT COALESCE(h.config_json,s.config_json)'));
