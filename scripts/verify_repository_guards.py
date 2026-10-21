@@ -2,6 +2,8 @@
 """Read-only public repository guards: migrations and tracked secrets."""
 from __future__ import annotations
 from pathlib import Path, PurePosixPath
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -37,6 +39,50 @@ def verify_migrations(root: Path, minimum: int = MIN_REQUIRED_MIGRATION) -> int:
     return count
 
 
+
+
+def verify_pinned_migrations(root: Path, manifest_path: Path | None = None) -> int:
+    """Reject silent edits or renames of migrations 0001-0038.
+
+    Git blob object IDs are pinned to the audited development commit.
+    Later additive migrations remain possible; this lock covers only the
+    38 existing migrations. It does not execute any SQL or access D1.
+    """
+    manifest_file = manifest_path or root / 'scripts' / 'pinned-migrations.json'
+    document = json.loads(manifest_file.read_text(encoding='utf-8'))
+    if not isinstance(document, dict) or document.get('schema') != 1:
+        raise ValueError('Invalid pinned migrations manifest')
+    entries = document.get('git_blobs')
+    if not isinstance(entries, dict) or len(entries) != MIN_REQUIRED_MIGRATION:
+        raise ValueError('Pinned migration inventory must contain exactly 38 files')
+    expected = {}
+    for index, (relative, sha) in enumerate(sorted(entries.items()), start=1):
+        if (not isinstance(relative, str) or
+                not re.fullmatch(r'migrations/\d{4}_[a-z0-9_]+\.sql', relative) or
+                int(relative.split('/')[1][:4]) != index or
+                not isinstance(sha, str) or
+                re.fullmatch(r'[0-9a-f]{40}', sha) is None):
+            raise ValueError('Invalid pinned migration path or Git blob SHA')
+        expected[relative] = sha
+    current = {
+        f'migrations/{p.name}'
+        for p in (root / 'migrations').iterdir()
+        if p.suffix == '.sql' and p.name[:4].isdigit()
+        and int(p.name[:4]) <= MIN_REQUIRED_MIGRATION
+    }
+    if current != set(expected):
+        raise ValueError('Pinned migration filenames were changed')
+    for relative, original_sha in expected.items():
+        file = root / relative
+        if not file.is_file() or file.is_symlink():
+            raise ValueError(f'Pinned migration missing or unsafe: {relative}')
+        content = file.read_bytes()
+        blob = b'blob ' + str(len(content)).encode('ascii') + b'\0' + content
+        if hashlib.sha1(blob).hexdigest() != original_sha:
+            raise ValueError(f'Pinned migration content changed: {relative}')
+    return len(expected)
+
+
 def is_blocked_tracked_path(name: str) -> bool:
     path = PurePosixPath(name)
     base = path.name.lower()
@@ -63,11 +109,12 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     try:
         n = verify_migrations(root)
+        pinned_count = verify_pinned_migrations(root)
         verify_tracked_secrets(root)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f'REPOSITORY GUARD FAILED: {error}', file=sys.stderr)
         return 1
-    print(f'REPOSITORY GUARD OK: migrations 0001-{n:04d}; no blocked tracked secret filenames')
+    print(f'REPOSITORY GUARD OK: migrations 0001-{n:04d}, {pinned_count} locked; no blocked tracked secret filenames')
     return 0
 
 

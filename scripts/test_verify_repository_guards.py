@@ -1,4 +1,6 @@
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,6 +21,47 @@ class RepositoryGuardTests(unittest.TestCase):
         for n in range(1, 39):
             (self.root / 'migrations' / f'{n:04d}_example.sql').write_text('SELECT 1;\n')
         subprocess.run(['git', 'init', '-q'], cwd=self.root, check=True)
+
+
+    def pin_current_fixture(self):
+        blobs = {}
+        for path in sorted((self.root / 'migrations').glob('*.sql')):
+            data = path.read_bytes()
+            object_bytes = b'blob ' + str(len(data)).encode('ascii') + b'\0' + data
+            blobs['migrations/' + path.name] = hashlib.sha1(object_bytes).hexdigest()
+        target = self.root / 'pinned.json'
+        target.write_text(json.dumps({'schema': 1, 'git_blobs': blobs}))
+        return target
+
+    def test_pinned_migrations_match(self):
+        manifest = self.pin_current_fixture()
+        self.assertEqual(mod.verify_pinned_migrations(self.root, manifest), 38)
+
+    def test_pinned_migration_modified_is_rejected(self):
+        manifest = self.pin_current_fixture()
+        (self.root / 'migrations' / '0030_example.sql').write_text('SELECT 2;')
+        with self.assertRaisesRegex(ValueError, 'Pinned migration content changed'):
+            mod.verify_pinned_migrations(self.root, manifest)
+
+    def test_pinned_migration_rename_is_rejected(self):
+        manifest = self.pin_current_fixture()
+        (self.root / 'migrations' / '0030_example.sql').rename(
+            self.root / 'migrations' / '0030_renamed.sql'
+        )
+        with self.assertRaisesRegex(ValueError, 'Pinned migration filenames were changed'):
+            mod.verify_pinned_migrations(self.root, manifest)
+
+    def test_invalid_pinned_manifest_is_rejected(self):
+        manifest = self.pin_current_fixture()
+        manifest.write_text(json.dumps({'schema': 1, 'git_blobs': {}}))
+        with self.assertRaisesRegex(ValueError, 'inventory must contain exactly 38'):
+            mod.verify_pinned_migrations(self.root, manifest)
+
+    def test_new_migration_after_0038_is_allowed(self):
+        manifest = self.pin_current_fixture()
+        (self.root / 'migrations' / '0039_new_feature.sql').write_text('SELECT 3;')
+        self.assertEqual(mod.verify_migrations(self.root), 39)
+        self.assertEqual(mod.verify_pinned_migrations(self.root, manifest), 38)
 
     def test_38_contiguous_migrations_are_valid(self):
         self.assertEqual(mod.verify_migrations(self.root), 38)
