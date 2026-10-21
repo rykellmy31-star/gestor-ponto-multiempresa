@@ -34,6 +34,19 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
         bind(...args: unknown[]) { params = args; return st; },
         async first() {
           sqls.push({ sql, params: [...params] });
+          if (sql.includes('SELECT id,full_name FROM employees')) {
+            return params[0]==='employee-a' && params[1]==='company-a'
+              ? {id:'employee-a',full_name:'João'} : null;
+          }
+          if (sql.includes('SELECT COALESCE(h.config_json,s.config_json)')) {
+            return {
+              config_json:JSON.stringify({...schedule,day_overrides:{
+                '2':{start:'13:00',break_start:'16:00',
+                  break_end:'17:00',end:'22:00',paid_break:false}
+              }}),
+              assignment_id:'assigned-a'
+            };
+          }
           if (sql.includes('FROM schedule_assignments a')) {
             if (mode === 'assignment-replay') return {
               id: 'assignment-original', schedule_id: 'schedule-a'
@@ -118,6 +131,36 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const result = await t.request('');
     expect(result.status).toBe(503);
     expect(t.sqls.some(x => x.sql.includes('FROM schedules s'))).toBe(false);
+  });
+
+  it('gestor visualiza João 07h segunda e 13h terça sem cruzar empresas', async () => {
+    const t=makeApp();
+    const response=await t.request('/employee/employee-a/week?from=2026-10-26');
+    expect(response.status).toBe(200);
+    const data=await jsonBody(response);
+    expect(data.company_id).toBe('company-a');
+    expect(data.employee_name).toBe('João');
+    expect(data.days).toHaveLength(7);
+    expect(data.days[0].shift.start).toBe('09:00');
+    expect(data.days[1].shift.start).toBe('13:00');
+    expect(data.days[5].shift).toBeNull();
+    const lookups=t.sqls.filter(x=>x.sql.includes('SELECT COALESCE(h.config_json,s.config_json)'));
+    expect(lookups).toHaveLength(7);
+    expect(lookups[0].params).toEqual(['company-a','2026-10-26','employee-a','2026-10-26']);
+  });
+
+  it('não revela prévia de funcionário de outra empresa', async () => {
+    const t=makeApp();
+    const response=await t.request('/employee/employee-b/week?from=2026-10-26');
+    expect(response.status).toBe(404);
+    const queries=t.sqls.filter(x=>x.sql.includes('SELECT COALESCE(h.config_json,s.config_json)'));
+    expect(queries).toHaveLength(0);
+  });
+
+  it('rejeita período malformado na prévia', async () => {
+    const t=makeApp();
+    const response=await t.request('/employee/employee-a/week?from=2026-02-30');
+    expect(response.status).toBe(400);
   });
 
   it('rejeita acesso sem sessao empresarial', async () => {

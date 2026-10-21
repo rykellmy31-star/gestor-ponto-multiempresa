@@ -82,6 +82,10 @@ export function CompanySchedulesPage() {
   const [selectedEmployee,setSelectedEmployee]=useState('');
   const [effective,setEffective]=useState('');
   const [assigning,setAssigning]=useState(false);
+  const [previewing,setPreviewing]=useState(false);
+  const [weekPreview,setWeekPreview]=useState<Array<{
+    date:string;assignment_id:string|null;shift:Schedule|null;
+  }> | null>(null);
 
   const check=useCallback(async()=>{
     try{
@@ -236,6 +240,24 @@ export function CompanySchedulesPage() {
     }catch(err){setError(err instanceof Error?err.message:'Falha ao salvar.');}
     finally{setSaving(false);}
   }
+  async function previewWeek(){
+    if(!session||!selectedEmployee||!effective||previewing)return;
+    setPreviewing(true);setError('');
+    try{
+      const response=await jsonRequest<{
+        success:boolean;company_id:string;employee_id:string;
+        days:Array<{date:string;assignment_id:string|null;shift:Schedule|null}>;
+      }>('/company/schedules/employee/'+encodeURIComponent(selectedEmployee)+
+        '/week?from='+encodeURIComponent(effective));
+      if(response.company_id!==session.company.id||
+        response.employee_id!==selectedEmployee)
+        throw new Error('A prévia retornou dados de outra empresa ou funcionário.');
+      setWeekPreview(response.days);
+    }catch(err){
+      setWeekPreview(null);
+      setError(err instanceof Error?err.message:'Erro ao consultar a escala.');
+    }finally{setPreviewing(false);}
+  }
   async function assign(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(!session||assigning||!selectedSchedule||!selectedEmployee||!effective)return;
@@ -253,7 +275,7 @@ export function CompanySchedulesPage() {
       setNotice(response.reused
         ? 'Atribuição já confirmada. Nenhum registro duplicado foi criado.'
         : 'Escala atribuída com sucesso. Datas e jornadas anteriores serão preservadas conforme o histórico do sistema.');
-      setSelectedEmployee('');
+      setWeekPreview(null);
     }catch(err){setError(err instanceof Error?err.message:'Falha ao atribuir.');}
     finally{setAssigning(false);}
   }
@@ -515,7 +537,7 @@ export function CompanySchedulesPage() {
           </label>
           <label>Funcionário
             <select required value={selectedEmployee}
-              onChange={e=>setSelectedEmployee(e.target.value)}>
+              onChange={e=>{setSelectedEmployee(e.target.value);setWeekPreview(null);}}>
               <option value="">Selecione um funcionário</option>
               {employees.filter(e=>e.status==='active').map(e=>
                 <option value={e.id} key={e.id}>{e.full_name} · {e.registration}</option>)}
@@ -523,12 +545,32 @@ export function CompanySchedulesPage() {
           </label>
           <label>Data de início da escala
             <input type="date" required value={effective}
-              onChange={e=>setEffective(e.target.value)}/>
+              onChange={e=>{setEffective(e.target.value);setWeekPreview(null);}}/>
           </label>
           <button disabled={assigning||!selectedSchedule||!selectedEmployee||!effective}>
             {assigning?'Atribuindo…':'Confirmar atribuição'}
           </button>
+          <button type="button" className="company-schedules-secondary"
+            disabled={previewing||!selectedEmployee||!effective}
+            onClick={()=>void previewWeek()}>
+            {previewing?'Consultando…':'Pré-visualizar os próximos 7 dias'}
+          </button>
         </form>
+        {weekPreview&&<div className="company-schedules-week-preview"
+          aria-label="Prévia da escala do funcionário">
+          <h3>Turnos por data — funcionário selecionado</h3>
+          <ul>{weekPreview.map(item=><li key={item.date}>
+            <strong>{item.date.split('-').reverse().join('/')}</strong>
+            <span>{item.shift
+              ? item.shift.start+'–'+item.shift.end+
+                ' · Intervalo '+item.shift.break_start+'–'+item.shift.break_end
+              : item.assignment_id?'Folga (sem expediente)':'Sem escala atribuída'}</span>
+          </li>)}</ul>
+          <p className="company-schedules-hint">
+            Prévia informativa. O ponto utiliza os registros reais e as regras
+            vigentes no momento da marcação.
+          </p>
+        </div>}
       </section>
       <p className="company-schedules-footer">CR JORNADA · Módulo em homologação. Nenhum ponto real é ativado nesta página.</p>
       {location.pathname==='/empresa/entrar'&&<p className="company-schedules-footer">

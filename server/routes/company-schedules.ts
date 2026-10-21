@@ -5,7 +5,8 @@ import type { App, Schedule } from '../types';
 import { ensure } from '../core/errors';
 import { sha256 } from '../core/crypto';
 import { limit } from '../core/security';
-import { scheduleMinutes } from '../core/time';
+import { scheduleMinutes, scheduleForDate } from '../core/time';
+import { SELECT_ACTIVE_COMPANY_SCHEDULE_SQL } from '../core/active-company-schedule';
 import { scheduleSchema as validatedSchedule, dayOverridesSchema } from '../core/validation';
 import { requireCompanyAdmin } from './company-auth';
 import { VALID_COMPANY_ADMIN_WRITE_SQL, companyAdminWriteParams } from '../core/company-admin-write-guard';
@@ -144,6 +145,47 @@ companySchedulesRoutes.post('/', async c => {
     (!requestKey || result[2].meta.changes === 1),
     409, 'company_inactive', 'Empresa inativa ou cadastro alterado.');
   return c.json({ success: true, id, company_id: company.id }, 201);
+});
+
+// Read-only preview: shows exactly which active assignment the employee
+// would use on each date. No punches or schedules are modified.
+companySchedulesRoutes.get('/employee/:id/week', async c => {
+  const company=c.get('company');
+  ensure(company,401,'unauthenticated','Empresa não autenticada.');
+  const from=c.req.query('from')??'';
+  const first=DateTime.fromISO(from,{zone:'utc'});
+  ensure(/^\d{4}-\d{2}-\d{2}$/.test(from) && first.isValid &&
+    first.toISODate()===from && from>='1900-01-01' && from<='2100-12-24',
+    400,'invalid_date','Selecione uma data válida.');
+  const db=c.get('db'), employeeId=c.req.param('id');
+  const employee=await db.prepare([
+    'SELECT id,full_name FROM employees',
+    'WHERE id=? AND company_id=? AND deleted_at IS NULL'
+  ].join(' ')).bind(employeeId,company.id)
+    .first<{id:string;full_name:string}>();
+  ensure(employee,404,'employee_not_found',
+    'Funcionário não encontrado nesta empresa.');
+  const dates=Array.from({length:7},(_,i)=>first.plus({days:i}).toISODate()!);
+  const days=await Promise.all(dates.map(async date=>{
+    const row=await db.prepare(SELECT_ACTIVE_COMPANY_SCHEDULE_SQL)
+      .bind(company.id,date,employeeId,date)
+      .first<{config_json:string;assignment_id:string}>();
+    if(!row) return {date,assignment_id:null,shift:null};
+    const parsed=validatedSchedule.safeParse(JSON.parse(row.config_json));
+    ensure(parsed.success,409,'invalid_company_schedule',
+      'A jornada cadastrada precisa de conferência.');
+    const weekday=DateTime.fromISO(date,{zone:'utc'}).weekday%7;
+    return {
+      date,assignment_id:row.assignment_id,
+      shift:parsed.data.weekdays.includes(weekday)
+        ? scheduleForDate(parsed.data,date) : null
+    };
+  }));
+  c.header('Cache-Control','private, no-store');
+  return c.json({
+    success:true,company_id:company.id,employee_id:employee.id,
+    employee_name:employee.full_name,from,days
+  });
 });
 
 companySchedulesRoutes.post('/:id/assign', async c => {

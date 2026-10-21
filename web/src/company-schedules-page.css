@@ -58,3 +58,9 @@
 .company-schedules-daily legend{padding:0 7px;color:#783b4c;font-size:13px;font-weight:800}
 .company-schedules-daily-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:#5b4c53}
 .company-schedules-shortcuts button[aria-pressed="true"]{background:#800000;color:white;border-color:#800000}
+
+.company-schedules-week-preview{margin-top:20px;border:1px solid #e5d4d8;border-radius:12px;padding:17px}
+.company-schedules-week-preview h3{font-size:15px;margin:0 0 12px}
+.company-schedules-week-preview ul{list-style:none;padding:0;margin:0;display:grid;gap:4px}
+.company-schedules-week-preview li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid #f0e5e7;font-size:12px}
+.company-schedules-week-preview li strong{color:#782b43}
