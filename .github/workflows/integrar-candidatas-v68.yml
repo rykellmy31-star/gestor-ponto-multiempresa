@@ -74,7 +74,7 @@ jobs:
           set -euo pipefail
           test "$(git branch --show-current)" = 'desenvolvimento-cr-jornada'
           git diff --cached --check
-          test "$(git diff --cached --name-only | wc -l)" -eq 17
+          test "$(git diff --cached --name-only | wc -l)" -eq 18
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat: integrar correções auditadas v68 e migrações 0030-0038'

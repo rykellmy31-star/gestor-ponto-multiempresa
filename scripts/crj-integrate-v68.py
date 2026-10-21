@@ -22,10 +22,9 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = 'd90fdd3a54eb31b8354d8385ca9488b38d87247c'
+EXPECTED_PARENT = '63b03dccb89308a01ca8b8822f3dbd8132c9aac7'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
-                         'scripts/crj-integrate-v68.py',
-                         'scripts/test_crj_integrate_v68.py'}
+                         'scripts/crj-integrate-v68.py'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
 ARCHIVE_SHA256 = 'dedb2f75488838c789a6cfcacd19934dda0a3ff6dd1fff4d50b9b2f05686f67c'
 ARCHIVE_BYTES = 607804
@@ -115,8 +114,8 @@ def verify_launch_commit(repo: Path) -> None:
 
 
 def check_and_transfer(source: Path, dest: Path, paths: set[str]) -> list[str]:
-    if len(paths) != 19 or not ALREADY_COMMITTED.issubset(paths):
-        raise RuntimeError(f'Expected 19 pinned changes, got {len(paths)}')
+    if len(paths) != 20 or not ALREADY_COMMITTED.issubset(paths):
+        raise RuntimeError(f'Expected 20 pinned changes, got {len(paths)}')
     if run('git', 'status', '--porcelain', cwd=dest):
         raise RuntimeError('Checkout was not clean')
     verify_launch_commit(dest)
@@ -146,8 +145,8 @@ def check_and_transfer(source: Path, dest: Path, paths: set[str]) -> list[str]:
             raise RuntimeError(f'Unexpected new path exists: {name}')
         target.write_bytes(expected)
         staged.append(name)
-    if len(staged) != 17:
-        raise RuntimeError(f'Expected 17 new/updated files, got {len(staged)}')
+    if len(staged) != 18:
+        raise RuntimeError(f'Expected 18 new/updated files, got {len(staged)}')
     run('git', 'add', '--', *staged, cwd=dest)
     index_paths = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
     if index_paths != set(staged):
@@ -174,15 +173,43 @@ def main() -> None:
         run('git', 'clone', '-q', '--no-hardlinks', str(repo), str(source), cwd=tmp)
         run('git', 'checkout', '-q', '-B', BRANCH, BASE_SHA, cwd=source)
         run('git', 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git', cwd=source)
-        print('INTEGRATION: safe dry-run against pinned baseline', flush=True)
-        print(run(sys.executable, '-I', '-B', str(script), 'dry-run', str(source),
-                  cwd=bundle, timeout=1200), flush=True)
-        print('INTEGRATION: apply and inspect approved local candidate', flush=True)
-        print(run(sys.executable, '-I', '-B', str(script), 'apply-local', str(source),
-                  '--confirm-local-only', cwd=bundle, timeout=1200),flush=True)
-        print(run(sys.executable, '-I', '-B', str(script), 'inspect', str(source),
-                  cwd=bundle, timeout=1200),flush=True)
+        print('INTEGRATION: stage audited v65 candidate against pinned baseline',flush=True)
+        # v68's original wrapper omitted the company-schedules route from its
+        # path inventory (19 instead of the actual 20). We keep the approved
+        # v68 ZIP immutable and perform the same stages explicitly, checking
+        # the full 20-path set after the extra v67 route edit.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('_verified_v68', script)
+        v68 = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(v68)
+        v68.verify()
+        v65 = v68.load_v65()
+        v65_args = v68.v65_args(source)
+        plan = v65.stage(*v65_args, apply=False)
+        if plan.get('candidate_paths') != 18 or plan.get('writes') != 0:
+            raise RuntimeError('v65 dry-run unexpectedly changed')
+        result = v65.stage(*v65_args, apply=True)
+        if result.get('exact_change_count') != 18:
+            raise RuntimeError('v65 audit rejected candidate')
+        before = status_paths(source)
+        if len(before) != 18 or v68.UI not in before or v68.ROUTE in before:
+            raise RuntimeError('Unexpected upstream v65 staged paths')
+        print('INTEGRATION: apply exact pinned v67 route+UI patch',flush=True)
+        v68.patch_cmd(source, check=True)
+        v68.patch_cmd(source)
+        v68.patch_cmd(source, reverse=True, check=True)
+        sql38 = source / v68.SQL38
+        if sql38.exists() or sql38.is_symlink():
+            raise RuntimeError('Unexpected preexisting migration 0038')
+        with sql38.open('xb') as output:
+            output.write(v68.source_v67_sql())
         changed = status_paths(source)
+        expected = before | {v68.ROUTE, v68.SQL38}
+        if len(changed) != 20 or changed != expected:
+            raise RuntimeError('v67 scope mismatch: require exactly 20 approved paths')
+        if sql38.read_bytes() != v68.source_v67_sql():
+            raise RuntimeError('Migration 0038 differs from pinned bytes')
+        print('INTEGRATION: 20 approved paths reconstructed from exact pinned sources',flush=True)
         written = check_and_transfer(source, repo, changed)
         print(f'INTEGRATION: {len(written)} candidate paths staged safely; no deploy',flush=True)
     # The workflow runs all required checks and may commit/push only after they pass.
