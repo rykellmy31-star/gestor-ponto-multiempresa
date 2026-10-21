@@ -79,7 +79,7 @@ try {
   assert.equal(manifest.sha256, createHash('sha256').update(bytes).digest('hex'), 'Integridade SHA256 do backup');
   const restoredSql = join(folder, 'restore.sql');
   run('scripts/decrypt-backup.mjs', [encrypted, restoredSql]);
-  const importSql = join(folder, 'import.sql');
+  const importSql = join(folder, 'import.json');
   const prepared = spawnSync('python3', ['-B', 'scripts/prepare_d1_restore.py', restoredSql, importSql],
     { encoding: 'utf8', timeout: 60000 });
   assert.equal(prepared.status, 0, 'Preparacao das dependencias SQL da restauracao');
@@ -87,34 +87,36 @@ try {
   const damaged = join(folder, 'damaged.jdb'); writeFileSync(damaged, corrupted, { mode: 0o600 });
   const rejected = spawnSync(process.execPath, ['scripts/decrypt-backup.mjs', damaged, join(folder, 'invalid.sql')], { env, encoding: 'utf8', timeout: 60000 });
   assert.notEqual(rejected.status, 0, 'AES-GCM rejeita adulteracao');
-  const database = (await api('/d1/database', { method: 'POST', body: { name: restoreName } })).result;
-  assert.ok(database?.name === restoreName && database.uuid !== sourceId && database.uuid !== LIVE_D1_ID &&
+  // Reutilizar somente destinos anteriores comprovadamente vazios. Nunca
+  // apagar tabelas ou sobrescrever restauracoes completas/parciais.
+  const previous = (await api('/d1/database?name=cr-jornada-staging-restore-&per_page=100')).result;
+  let database;
+  for (const candidate of previous || []) {
+    if (!/^cr-jornada-staging-restore-[a-f0-9]{12}$/.test(candidate.name) ||
+        candidate.uuid === sourceId || candidate.uuid === LIVE_D1_ID) continue;
+    const tables = await query(candidate.uuid, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'");
+    if (!tables.length) { database = candidate; break; }
+  }
+  database ||= (await api('/d1/database', { method: 'POST', body: { name: restoreName } })).result;
+  const destinationName = database.name;
+  assert.ok(/^cr-jornada-staging-restore-[a-f0-9]{12}$/.test(destinationName) && database.uuid !== sourceId && database.uuid !== LIVE_D1_ID &&
     /^[0-9a-f-]{36}$/i.test(database.uuid), 'Novo destino de recuperacao separado');
   const detail = (await api('/d1/database/' + database.uuid)).result;
-  assert.equal(detail.name, restoreName);
+  assert.equal(detail.name, destinationName);
   const empty = await query(database.uuid, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'");
   assert.equal(empty.length, 0, 'Restauracao apenas em novo banco vazio');
-  console.log('Destino novo de recuperacao confirmado: ' + restoreName + ' (' + database.uuid + ').');
-  const restoreConfig = join(folder, 'wrangler.restore.json');
-  writeFileSync(restoreConfig, JSON.stringify({ name: 'cr-jornada-staging-restore',
-    compatibility_date: staging.compatibility_date,
-    d1_databases: [{ binding: 'RESTORE', database_name: restoreName, database_id: database.uuid }] }), { mode: 0o600 });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      run('node_modules/wrangler/bin/wrangler.js', ['d1', 'execute', 'RESTORE', '--remote', '--config', restoreConfig, '--file', importSql, '--yes']);
-      break;
-    } catch (error) {
-      if (!error.message.includes('D1_RESET_DO') || attempt === 2) throw error;
-      await new Promise(r => setTimeout(r, 5000));
-      const currentSchema = await query(database.uuid, schemaSql);
-      if (currentSchema.length) {
-        // O servidor pode ter confirmado antes da conexao cair. Nao repetir
-        // inserts nem apagar dados: a verificacao integral abaixo decide.
-        assert.equal(digest(currentSchema), digest(sourceSchema), 'Importacao interrompida deixou schema parcial; nao sobrescrever');
-        break;
-      }
-      console.log('D1 reiniciou durante importacao; destino ainda vazio, repetindo com seguranca.');
-    }
+  console.log('Destino vazio de recuperacao confirmado: ' + destinationName + ' (' + database.uuid + ').');
+  const sections = JSON.parse(readFileSync(importSql, 'utf8'));
+  assert.ok(Array.isArray(sections) && sections.length === 3 &&
+    sections.every(sql => typeof sql === 'string' && Buffer.byteLength(sql) < 95000), 'Fases SQL limitadas ao tamanho seguro');
+  for (const [index, sql] of sections.entries()) {
+    // A API de query e usada em vez do importador bulk que reiniciou D1.
+    // Tabelas primeiro; dados numa transacao com FKs diferidas; triggers por ultimo.
+    const restored = await api('/d1/database/' + database.uuid + '/query', {
+      method: 'POST', body: { sql }, databaseId: database.uuid
+    });
+    assert.ok(Array.isArray(restored.result) && restored.result.every(r => r.success), 'Fase de recuperacao ' + index);
+    console.log('Fase de recuperacao aprovada: ' + ['tabelas','dados','indices e triggers'][index]);
   }
   const restoredSchema = await query(database.uuid, schemaSql);
   assert.equal(digest(restoredSchema), digest(sourceSchema), 'Schema restaurado identico');
@@ -126,7 +128,7 @@ try {
   const check = await query(database.uuid, 'PRAGMA foreign_key_check');
   assert.equal(check.length, 0, 'Integridade referencial restaurada');
   const report = 'Recuperacao remota aprovada: ' + tables.length + ' tabelas, schema e hashes de conteudo identicos; SHA256/AES-256-GCM/adulteracao aprovados.\n' +
-    'Origem: ' + STAGING_DATABASE + '; destino novo: ' + restoreName + ' (' + database.uuid + '). Producao nao exportada nem restaurada.\n';
+    'Origem: ' + STAGING_DATABASE + '; destino separado: ' + destinationName + ' (' + database.uuid + '). Producao nao exportada nem restaurada.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {

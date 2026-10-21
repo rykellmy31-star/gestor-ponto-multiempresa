@@ -5,6 +5,7 @@ The destination must independently be verified as a new, empty staging database.
 """
 import re
 import sqlite3
+import json
 from pathlib import Path
 import sys
 
@@ -17,7 +18,7 @@ def without_leading_comments(statement):
     return statement.lstrip()
 
 
-def prepare(sql):
+def prepare_sections(sql):
     statements = []
     pending = ''
     for character in sql:
@@ -46,14 +47,22 @@ def prepare(sql):
             raise ValueError('Exportacao contem instrucao fora do formato permitido.')
     if not groups[0]:
         raise ValueError('Exportacao nao contem tabelas.')
-    return 'PRAGMA defer_foreign_keys=TRUE;\n' + '\n'.join(sum(groups, [])) + '\n'
+    return ['\n'.join(groups[0]) + '\n',
+            'PRAGMA defer_foreign_keys=TRUE;\n' + '\n'.join(groups[1]) + '\n',
+            '\n'.join(groups[2]) + '\n']
+
+
+def prepare(sql):
+    sections = prepare_sections(sql)
+    return 'PRAGMA defer_foreign_keys=TRUE;\n' + '\n'.join(sections)
 
 
 if __name__ == '__main__':
     try:
         input_path, output_path = map(Path, sys.argv[1:])
         with output_path.open('x', encoding='utf-8') as output:
-            output.write(prepare(input_path.read_text(encoding='utf-8')))
+            source = input_path.read_text(encoding='utf-8')
+            output.write(json.dumps(prepare_sections(source)) if output_path.suffix == '.json' else prepare(source))
         output_path.chmod(0o600)
     except Exception:
         # Never echo SQL or values in public CI logs.
