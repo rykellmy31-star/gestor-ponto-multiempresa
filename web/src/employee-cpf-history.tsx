@@ -42,8 +42,9 @@ function formatTime(timestamp: number, zone: string) {
 }
 
 export function EmployeeCpfPointHistory({
-  timezone, refreshVersion = 0
+  companyId,employeeId,timezone, refreshVersion = 0
 }: {
+  companyId:string;employeeId:string;
   timezone?: 'America/Bahia' | 'America/Sao_Paulo';
   refreshVersion?: number;
 }) {
@@ -71,6 +72,9 @@ export function EmployeeCpfPointHistory({
       }
       return response.json() as Promise<HistoryPayload>;
     }).then(payload => {
+      if(payload.company_id!==companyId||payload.employee_id!==employeeId||
+        payload.month!==month)
+        throw new Error('O histórico retornado não corresponde à empresa, ao funcionário ou ao mês selecionado. Entre novamente.');
       if (!ctrl.signal.aborted) setHistory(payload);
     }).catch(err => {
       if (!ctrl.signal.aborted) {
@@ -81,7 +85,7 @@ export function EmployeeCpfPointHistory({
     });
 
     return () => ctrl.abort();
-  }, [month, reload, refreshVersion]);
+  }, [month, reload, refreshVersion, companyId, employeeId]);
 
   const zone = timezone || 'America/Bahia';
   const canExport = !loading && !error && history?.month === month &&

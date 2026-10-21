@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clock3, CheckCircle2, RefreshCw, ShieldCheck } from 'lucide-react';
 import './employee-cpf-punch.css';
+import {nextEmployeePunchAttempt,matchesEmployeePunchConfirmation,
+  type PendingEmployeePunch} from './employee-cpf-ui-safety';
 
 type PunchType = 'entry'|'break_start'|'break_end'|'exit';
 type Confirmation = {
@@ -23,9 +25,10 @@ const descriptions:Record<PunchType,string> = {
 };
 
 export function EmployeeCpfPunch({
-  companyId, csrfToken, timezone = 'America/Bahia', onConfirmed
+  companyId, employeeId, csrfToken, timezone = 'America/Bahia', onConfirmed
 }: {
   companyId:string;
+  employeeId:string;
   csrfToken:string;
   timezone?: 'America/Bahia' | 'America/Sao_Paulo';
   onConfirmed?:()=>void;
@@ -38,7 +41,7 @@ export function EmployeeCpfPunch({
   const [notice,setNotice]=useState('');
   const [lastConfirmation,setLastConfirmation]=useState<Confirmation|null>(null);
   // Enquanto a confirmacao nao vier, reutiliza a MESMA chave no retry.
-  const pendingKey=useRef<{type:PunchType;key:string}|null>(null);
+  const pendingKey=useRef<PendingEmployeePunch|null>(null);
 
   const load=useCallback(async()=>{
     setLoading(true);setError('');setNotice('');
@@ -55,7 +58,7 @@ export function EmployeeCpfPunch({
           : 'Não foi possível consultar o próximo horário. Atualize a tela.');
       }
       const data=await response.json() as Today;
-      if(data.company_id!==companyId){
+      if(data.company_id!==companyId||data.employee_id!==employeeId){
         throw new Error('A empresa da sessão mudou. Entre novamente.');
       }
       setToday(data);setDisabled(false);
@@ -63,7 +66,7 @@ export function EmployeeCpfPunch({
       setToday(null);
       setError(e instanceof Error?e.message:'Falha ao consultar.');
     }finally{setLoading(false);}
-  },[companyId]);
+  },[companyId,employeeId]);
 
   // Renderiza o modulo mesmo que ainda esteja desligado. A requisicao
   // so acontece depois da autenticacao confirmada do funcionario.
@@ -76,10 +79,11 @@ export function EmployeeCpfPunch({
   async function punch(){
     const type=today?.next_type;
     if(!type||busy||disabled)return;
-    if(pendingKey.current?.type!==type) {
-      pendingKey.current={type,key:crypto.randomUUID()};
-    }
-    const key=pendingKey.current.key;
+    const attempt=nextEmployeePunchAttempt(pendingKey.current,{
+      companyId,employeeId,workDate:today!.work_date,type
+    },()=>crypto.randomUUID());
+    pendingKey.current=attempt;
+    const key=attempt.key;
     setBusy(true);setError('');setNotice('');
     try{
       const response=await fetch('/api/employee/cpf-work/punch',{
@@ -95,6 +99,13 @@ export function EmployeeCpfPunch({
       if(!response.ok||!data?.success||!data.punch){
         throw new Error(data?.error?.message||
           'Não foi possível confirmar o ponto. Confira e tente novamente.');
+      }
+      if(!matchesEmployeePunchConfirmation(data.punch,attempt)){
+        // Uma confirmacao antiga (p.ex. de ontem) nunca vira um
+        // comprovante de hoje, mesmo se o servidor responder replay.
+        pendingKey.current=null;
+        await load();
+        throw new Error('A confirmação não corresponde ao ponto de hoje. Confira o histórico antes de registrar novamente.');
       }
       pendingKey.current=null;
       setLastConfirmation(data.punch);

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type CSSProperties } from 'react';
 import { Building2, CheckCircle2, Clock3, Eye, EyeOff, LogOut, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { EmployeeCpfPointHistory } from './employee-cpf-history';
 import { EmployeeCpfPunch } from './employee-cpf-punch';
+import { employeeCpfSessionEndpointUnavailable } from './employee-cpf-ui-safety';
 
 type CompanyChoice = { id: string; name: string };
 type EmployeeSession = {
@@ -40,6 +41,11 @@ async function requestEmployee<T>(
     ...(body ? { body: JSON.stringify(body) } : {})
   });
 
+  // Sites Pages estaticos podem retornar HTML/404 para a rota de API.
+  // Isso nao se confunde com uma sessao simplesmente nao autenticada (401).
+  if(path==='/session'&&employeeCpfSessionEndpointUnavailable(
+    response.status,response.headers.get('Content-Type')
+  )) throw new Error('employee_api_unavailable');
   const data = await response.json().catch(() => null) as
     | (T & { error?: { message?: string } })
     | null;
@@ -77,7 +83,7 @@ const primary: CSSProperties = {
 };
 
 export function EmployeeCpfPage() {
-  const staticPreview = window.location.hostname.endsWith('.pages.dev');
+  const [backendAvailable, setBackendAvailable] = useState(true);
   const [session, setSession] = useState<EmployeeSession | null>(null);
   const [historyVersion, setHistoryVersion] = useState(0);
   const [checking, setChecking] = useState(true);
@@ -99,24 +105,22 @@ export function EmployeeCpfPage() {
   }
 
   useEffect(() => {
-    if (staticPreview) {
-      setChecking(false);
-      return;
-    }
     let active = true;
     requestEmployee<EmployeeSession>('/session').then(data => {
-      if (active) setSession(data);
+      if (active) { setBackendAvailable(true); setSession(data); }
     }).catch(err => {
-      if (active && err instanceof Error && err.message !== 'not_authenticated') {
-        setError(err.message);
-      }
+      if(!active||!(err instanceof Error))return;
+      if(err.message==='employee_api_unavailable'){
+        setBackendAvailable(false);
+        setError('');
+      }else if(err.message!=='not_authenticated')setError(err.message);
     }).finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
   }, []);
 
   async function login(event: FormEvent) {
     event.preventDefault();
-    if (staticPreview) return;
+    if (!backendAvailable) return;
     setError('');
     setBusy(true);
     try {
@@ -213,14 +217,14 @@ export function EmployeeCpfPage() {
           </p>
         </header>
 
-        {staticPreview && <div role="status" style={{
+        {!backendAvailable && <div role="status" style={{
           background: '#fff8ed', border: '1px solid #f1dcc2',
           color: '#78542e', padding: 12, borderRadius: 9,
           marginBottom: 18, fontSize: 13
         }}>
-          Versão de demonstração visual. O login ficará disponível
-          quando conectarmos um Worker e um banco de testes.
-          Não utilize dados pessoais reais.
+          A API de autenticação do funcionário não foi encontrada neste endereço.
+          Conecte o Worker e o banco de dados para liberar o login.
+          Não informe CPF ou senha enquanto o acesso estiver indisponível.
         </div>}
 
         {error && <div role="alert" style={{
@@ -275,10 +279,13 @@ export function EmployeeCpfPage() {
             </div>
             <EmployeeCpfPunch key={session.user.id + session.company.id}
               companyId={session.company.id}
+              employeeId={session.user.employee_id}
               csrfToken={session.csrf_token}
               timezone={session.company.timezone}
               onConfirmed={() => setHistoryVersion(v => v + 1)}/>
             <EmployeeCpfPointHistory key={session.company.id}
+              companyId={session.company.id}
+              employeeId={session.user.employee_id}
               timezone={session.company.timezone}
               refreshVersion={historyVersion}/>
             <button type="button" style={primary} onClick={logout} disabled={busy}>
@@ -331,8 +338,8 @@ export function EmployeeCpfPage() {
                   position: 'absolute', top: 8, right: 9, padding: 5
                 }}>{showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button>
             </div>
-            <button type="submit" disabled={busy || staticPreview} style={primary}>
-              {staticPreview ? 'Login indisponível na prévia' : busy ? 'Conferindo…' : 'Entrar com segurança'}
+            <button type="submit" disabled={busy || !backendAvailable} style={primary}>
+              {!backendAvailable ? 'Login indisponível sem API' : busy ? 'Conferindo…' : 'Entrar com segurança'}
             </button>
             <p style={{fontSize:12,color:'#777',lineHeight:1.6,marginTop:14}}>
               Esqueceu sua senha? Solicite ajuda ao administrador da sua empresa.
