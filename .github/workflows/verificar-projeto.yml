@@ -63,6 +63,22 @@ jobs:
       - name: Verificar Cloudflare Worker
         run: npx wrangler deploy --dry-run --outdir .worker-bundle
 
+      # Auditoria remota OPCIONAL de metadados via token Cloudflare read-only.
+      # Nenhum deploy, SQL, migracao ou alteracao na conta remota.
+      - name: Testar relatorio Cloudflare somente leitura (sem rede)
+        run: node --test scripts/test_cloudflare_readonly.mjs
+
+      - name: Inventario Cloudflare remoto (somente leitura, se autorizado)
+        env:
+          CLOUDFLARE_AUDIT_TOKEN: ${{ secrets.CLOUDFLARE_AUDIT_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_AUDIT_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            node scripts/cloudflare-readonly.mjs
+          else
+            echo "Auditoria remota nao executada: credenciais de leitura ainda nao configuradas."
+          fi
+
   d1-local:
     name: Integracao D1 local (parte ${{ matrix.shard }} de 3)
     runs-on: ubuntu-latest
