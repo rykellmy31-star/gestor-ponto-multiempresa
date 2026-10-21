@@ -10,6 +10,9 @@ on:
       - 'scripts/exercise-cloudflare-staging.mjs'
       - 'server/routes/company-schedules.ts'
       - 'server/routes/company-attendance.ts'
+      - 'server/routes/company-punch-policy.ts'
+      - 'web/src/company-punch-policy.tsx'
+      - 'migrations/0039_company_punch_policy_audit.sql'
       - 'web/src/company-attendance.tsx'
       - 'web/src/company-schedules-page.tsx'
       - 'server/routes/platform-sales.ts'
@@ -48,7 +51,7 @@ jobs:
           npm run typecheck
           npm run build:web
       - name: Validar cadastro e isolamento antes de publicar staging
-        run: npx vitest run tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts tests/d1-sales-trigger-routes.test.ts tests/d1-company-attendance.test.ts --maxWorkers=1 --no-file-parallelism
+        run: npx vitest run tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts tests/d1-sales-trigger-routes.test.ts tests/d1-company-attendance.test.ts tests/d1-company-punch-policy.test.ts --maxWorkers=1 --no-file-parallelism
       - name: Instalar navegador para validar o painel no staging real
         run: npx playwright install --with-deps chromium
       - name: Validar token, identificar recursos e provisionar staging separado

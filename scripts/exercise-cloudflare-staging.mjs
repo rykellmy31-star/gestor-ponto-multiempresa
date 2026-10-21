@@ -177,18 +177,47 @@ try {
     verify(history.company_id === company.id && history.employee_id === company.employee.id, 'historico vinculado a sessao');
     employeeClients.push(client);
   }
-  // Politica de ponto e uma fixture explicita no D1 STAGING, pois o painel de
-  // configuracao desta politica ainda precisa ser homologado separadamente.
-  // Nao modificar registros preexistentes nem politica de outra empresa.
+  // Configurar as politicas pelo painel real, sem fixtures SQL.
+  // Usar somente as duas empresas ficticias criadas nesta rodada.
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bahia',
     year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const rules = { mark_tolerance: 5, daily_tolerance: 10, rounding_step: 1,
     rounding_mode: 'floor', auto_approve_overtime: false, compensation: 'review', max_shift_hours: 24 };
+  const policyBrowser = await chromium.launch({headless:true});
+  try {
+    for (const company of companies) {
+      const initial = await company.client.call('/api/company/punch-policy');
+      verify(!initial.enabled && initial.revision === 0, 'empresa nova inicia com ponto bloqueado');
+      await company.client.call('/api/company/punch-policy?company_id=' + company.id, {expected:400});
+      await company.client.call('/api/company/punch-policy', {method:'PUT',csrf:'invalid',
+        body:{enabled:true,rules,expected_revision:0},expected:403});
+      const context = await policyBrowser.newContext();
+      try {
+        const page = await context.newPage();
+        await page.goto(STAGING_ORIGIN + '/empresa/entrar');
+        await page.getByLabel('Identificador da empresa',{exact:true}).fill(company.slug);
+        await page.getByLabel('Usuário administrador',{exact:true}).fill('gestor');
+        await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
+        await page.getByRole('button',{name:'Entrar na empresa',exact:true}).click();
+        const panel = page.locator('section').filter({has:page.getByRole('heading',{
+          name:'Regras de ponto da empresa',exact:true
+        })});
+        await panel.getByLabel('Permitir registro de ponto',{exact:true}).check();
+        await panel.getByLabel('Tolerância por marcação (minutos)',{exact:true}).fill('5');
+        await panel.getByRole('button',{name:'Salvar regras de ponto',exact:true}).click();
+        await panel.getByText('Regras salvas. Os registros e as regras dos dias já iniciados foram preservados.',{exact:true}).waitFor();
+        verify(true,'politica de ponto configurada pelo painel real');
+      } finally {await context.close();}
+      const saved = await company.client.call('/api/company/punch-policy');
+      verify(saved.enabled && saved.revision === 1 &&
+        JSON.stringify(saved.rules) === JSON.stringify(rules), 'API confirma regras salvas pelo painel');
+      await company.client.call('/api/company/punch-policy', {method:'PUT',
+        body:{enabled:false,rules,expected_revision:0},expected:409});
+    }
+  } finally {await policyBrowser.close();}
   const punchSchedule = { ...morning, name: 'Janela QA de ponto', start: '00:00', end: '23:00', weekdays: [0,1,2,3,4,5,6] };
   for (let i = 0; i < companies.length; i++) {
     const company = companies[i], employee = employeeClients[i];
-    await query('INSERT INTO company_punch_policies(company_id,enabled,rules_json,updated_at) VALUES(?,1,?,?)',
-      [company.id, JSON.stringify(rules), Date.now()]);
     const schedule = await company.client.call('/api/company/schedules', { method: 'POST', body: punchSchedule, expected: 201 });
     await company.client.call('/api/company/schedules/' + schedule.id + '/assign', { method: 'POST',
       body: { employee_id: company.employee.id, effective_from: today }, expected: 201 });
@@ -199,12 +228,27 @@ try {
       const confirmed = await employee.call('/api/employee/cpf-work/punch', { method: 'POST', body, expected: 201 });
       const repeated = await employee.call('/api/employee/cpf-work/punch', { method: 'POST', body });
       verify(confirmed.punch.id === repeated.punch.id && repeated.replayed, 'ponto idempotente sem duplicacao');
+      if(i === 0 && type === 'entry') {
+        await company.client.call('/api/company/punch-policy', {method:'PUT',
+          body:{enabled:true,rules:{...rules,mark_tolerance:7},expected_revision:1}});
+        const other = await companies[1].client.call('/api/company/punch-policy');
+        verify(other.rules.mark_tolerance === 5, 'alterar politica A preserva politica B');
+      }
+
     }
     const finished = await employee.call('/api/employee/cpf-work/today');
     verify(finished.completed && finished.next_seq === 4, 'quatro batidas confirmadas');
     const saved = await query('SELECT COUNT(*) AS total FROM punches p JOIN work_days d ON d.id=p.work_day_id WHERE d.company_id=? AND p.employee_id=?',
       [company.id, company.employee.id]);
     verify(saved[0].total === 4, 'D1 confirma quatro batidas por empresa');
+    const snapshot = await query('SELECT rules_json FROM work_days WHERE company_id=? AND employee_id=? AND work_date=?',
+      [company.id,company.employee.id,today]);
+    verify(JSON.parse(snapshot[0].rules_json).mark_tolerance === 5,
+      'D1 preserva regras do dia iniciado apos alteracao da politica');
+    const audit = await query('SELECT revision,enabled FROM company_punch_policy_audit WHERE company_id=? ORDER BY revision',[company.id]);
+    verify(audit.length === (i===0?2:1) && audit.every((row,index)=>row.revision===index+1 && row.enabled===1),
+      'D1 confirma auditoria versionada da politica por empresa');
+
   }
   for (const [index, company] of companies.entries()) {
     const other = companies[1-index];
@@ -268,7 +312,7 @@ try {
   verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
   const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
   verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios e suspensao. Politicas de ponto preparadas como fixtures D1, sem homologar a configuracao pelo painel.\n';
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {
