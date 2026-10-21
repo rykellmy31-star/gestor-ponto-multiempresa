@@ -68,6 +68,24 @@ describe('relatorio empresarial mensal — D1 local e roteador real',()=>{
       await db.prepare("UPDATE company_admins SET must_change_password=0,auth_version=2 WHERE id='admin-a'").run();
       expect((await call()).status).toBe(401);
       await db.prepare("UPDATE company_admins SET auth_version=1 WHERE id='admin-a'").run();
+      // Suspension after middleware/employee lookup, before the marks query.
+      // A second SQL authorization check must prevent even one receipt leaking.
+      env.DB={withSession:()=>({prepare(sql:string){
+        const statement=db.prepare(sql);
+        if(!sql.includes('FROM work_days d'))return statement;
+        let bound=statement;
+        return {
+          bind(...values:any[]){bound=statement.bind(...values);return this;},
+          async all(){
+            await db.prepare("UPDATE companies SET status='suspended' WHERE id='a'").run();
+            return bound.all();
+          }
+        };
+      }})};
+      const raced=await (await call()).json() as any;
+      expect(raced.rows).toEqual([]);
+      expect(JSON.stringify(raced)).not.toContain('receipt-a');
+      env.DB=binding;
       await db.prepare("UPDATE companies SET status='suspended' WHERE id='a'").run();
       expect((await call()).status).toBe(401);
       expect((await call('employee_id=em-b&month=2026-10',tokenB)).status).toBe(200);

@@ -219,18 +219,22 @@ try {
     verify(csv.includes('Comprovante') && report.rows.every(row => csv.includes(row.receipt_hash)),
       'CSV real preserva os quatro comprovantes');
   }
-  // Real browser against the deployed staging UI. Session cookies originate
-  // from the authenticated HTTP flow above; no passwords enter browser logs.
+  // Real browser against the deployed staging UI, including its login form.
+  // Only masked fictitious QA credentials are used; no production credentials.
   const browser = await chromium.launch({headless:true});
   try {
     for (const company of companies) {
       const context = await browser.newContext({acceptDownloads:true});
       try {
-        await context.addCookies([...company.client.cookies].map(([name,value]) => ({
-          name,value,url:STAGING_ORIGIN,secure:true,httpOnly:true,sameSite:'Strict'
-        })));
         const page = await context.newPage();
-        await page.goto(STAGING_ORIGIN + '/empresa/jornadas');
+        page.on('pageerror',()=>console.log('DIAGNOSTICO: erro JavaScript na interface de staging'));
+        await page.goto(STAGING_ORIGIN + '/empresa/entrar');
+        await page.getByLabel('Identificador da empresa',{exact:true}).fill(company.slug);
+        await page.getByLabel('Usuário administrador',{exact:true}).fill('gestor');
+        await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
+        await page.getByRole('button',{name:'Entrar na empresa',exact:true}).click();
+        await page.getByRole('heading',{name:'Jornadas e escalas',exact:true}).waitFor();
+        verify(true,'login empresarial realizado pelo formulario real');
         const panel = page.locator('section').filter({has:page.getByRole('heading',{
           name:'Relatório mensal de marcações',exact:true
         })});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { isExpiredCompanySession, jsonRequest } from './company-schedules-network';
 
 type Report = {
@@ -13,6 +13,7 @@ const labels:Record<string,string>={entry:'Entrada',break_start:'Início do inte
 export function CompanyAttendance({companyId,employees,onSessionExpired}:{
   companyId:string;employees:Array<{id:string;full_name:string}>;onSessionExpired:()=>void
 }) {
+  const controlId=useId();
   const [employee,setEmployee]=useState('');
   const [month,setMonth]=useState(new Date().toISOString().slice(0,7));
   const [report,setReport]=useState<Report|null>(null);
@@ -44,12 +45,12 @@ export function CompanyAttendance({companyId,employees,onSessionExpired}:{
     <h2>Relatório mensal de marcações</h2>
     <p>Consulte os registros confirmados de cada funcionário. Dias sem registros não representam, por si só, falta ou folga.</p>
     <form onSubmit={event=>void load(event)}>
-      <label>Funcionário <select required value={employee} onChange={e=>{invalidate();setEmployee(e.target.value);}}>
+      <label htmlFor={controlId+'-employee'}>Funcionário</label>{' '}<select id={controlId+'-employee'} required value={employee} onChange={e=>{invalidate();setEmployee(e.target.value);}}>
         <option value="">Selecione</option>
         {employees.map(person=><option key={person.id} value={person.id}>{person.full_name}</option>)}
-      </select></label>{' '}
-      <label>Mês <input required type="month" min="2000-01" max="2099-12" value={month}
-        onChange={e=>{invalidate();setMonth(e.target.value);}}/></label>{' '}
+      </select>{' '}
+      <label htmlFor={controlId+'-month'}>Mês</label>{' '}<input id={controlId+'-month'} required type="month" min="2000-01" max="2099-12" value={month}
+        onChange={e=>{invalidate();setMonth(e.target.value);}}/>{' '}
       <button className="company-schedules-secondary" disabled={busy||!employee}>
         {busy?'Consultando…':'Consultar marcações'}</button>
     </form>
