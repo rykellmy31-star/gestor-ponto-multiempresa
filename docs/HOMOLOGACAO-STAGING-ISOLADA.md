@@ -2,7 +2,15 @@
 
 O banco de producao **cr-jornada-db** ja recebeu 38 migrations em 2026-10-21. A instalacao foi encerrada e o job remoto de inicializacao foi desativado. **Nao recriar ou aplicar migrations no banco de producao durante a homologacao.**
 
-## Estado atual — políticas pelo painel
+## Apuração e logins visuais — rodada atual
+
+Actions `39674118629`, código `ead8fd018ae563cca951fe3f3e5dfefb7539e613`: **sucesso integral**, 230 verificações HTTP/navegador. Apuração provisória por empresa com snapshots, consulta mensal e CSV aprovados nas empresas A/B. Login Superadmin e visualização das empresas aprovados. Funcionário autenticou pelo formulário, escolheu cada empresa do CPF, visualizou a jornada concluída e baixou seu extrato, com quatro registros próprios. Os rótulos de CPF e senha foram associados explicitamente aos campos.
+
+A apuração identifica dias sem histórico suficiente para conferência, sem faltas presumidas. Não é fechamento definitivo: calendário/ocorrências por empresa, conciliação de legado, ajustes e fechamento ainda exigem entrega própria. Detalhes em `APURACAO-EMPRESARIAL-PROVISORIA.md`. O teste inicial de apuração `39673853923` também passou, com 223 verificações.
+
+Recuperação remota novamente aprovada: 52 tabelas, schema e hashes de conteúdo idênticos, integridade referencial, AES-256-GCM/SHA256 e adulteração aprovados. Destino `cr-jornada-staging-restore-02b3d3191742`, ID `6b33fe89-5993-409b-be88-2c1c7d5b6212`. Staging conserva 39 migrations; produção conserva 38 e não foi exportada, migrada ou restaurada.
+
+## Políticas pelo painel — rodada anterior
 
 Actions `39671265454`, código `9808e88d5b1848902e816cba4a52d5d64df8c091`: **sucesso integral**, 202 verificações HTTP/navegador, políticas de ponto configuradas pela interface nas duas empresas, controle de revisão, auditoria e preservação das regras congeladas após alteração durante o dia. Não há mais fixture SQL para criar políticas neste teste.
 
