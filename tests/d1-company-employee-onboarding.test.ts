@@ -152,14 +152,14 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         break_start:'16:00',break_end:'17:00',end:'22:00'
       };
       const schedulePost=(token:string,csrf:string,path:string,data:object)=>
-        app.request('/api/company/schedules'+path,{
+        app.request('/api/company/schedules'+(path==='/'?'':path),{
           method:'POST',headers:{
             Cookie:'cr_jornada_company_dev='+token,
             'X-CSRF-Token':csrf,'Content-Type':'application/json'
           },body:JSON.stringify(data)
         },env);
       const scheduleGet=(token:string,path:string)=>
-        app.request('/api/company/schedules'+path,{
+        app.request('/api/company/schedules'+(path==='/'?'':path),{
           headers:{Cookie:'cr_jornada_company_dev='+token}
         },env);
       const morningA=await schedulePost(tokenA,'csrf-a','/',morning);
