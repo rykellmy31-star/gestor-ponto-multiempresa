@@ -24,7 +24,7 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = '8881fac3d092be92eb59f3f80081d9af0b61fc8f'
+EXPECTED_PARENT = '21b4a01ef9bfcc2b3aa80d71d498988d7c03fcb5'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
 ARCHIVE_SHA256 = 'dedb2f75488838c789a6cfcacd19934dda0a3ff6dd1fff4d50b9b2f05686f67c'
@@ -261,7 +261,17 @@ def stage_d1_trigger_message_regressions(source: Path, dest: Path) -> None:
         staged = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
         expected = (source / relative).read_bytes() if relative in staged else baseline
         if target.read_bytes() != expected:
-            raise RuntimeError(f'D1 regression fixture diverged: {relative}')
+            candidate_bytes = (source / relative).read_bytes()
+            def short_hash(data: bytes) -> str:
+                return hashlib.sha256(data).hexdigest()[:12]
+            raise RuntimeError(
+                f'D1 regression fixture diverged: {relative} '
+                f'staged={relative in staged} '
+                f'target={short_hash(target.read_bytes())} '
+                f'candidate={short_hash(candidate_bytes)} '
+                f'baseline={short_hash(baseline)} '
+                f'expected={short_hash(expected)}'
+            )
         content = target.read_text(encoding='utf-8')
         if content.count(before) != 1:
             raise RuntimeError(f'D1 error assertion anchor missing or duplicated: {relative}')
