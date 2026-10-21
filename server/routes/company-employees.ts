@@ -70,6 +70,7 @@ companyEmployeesRoutes.post('/', async c=>{
     hashPassword(temporaryPassword,c.env.AUTH_PEPPER),
     encryptPersonal(cpf,c.env.DATA_KEY)
   ]);
+  const guardId=crypto.randomUUID();
   const batch=[
     db.prepare([
       'INSERT INTO employees(',
@@ -84,9 +85,9 @@ companyEmployeesRoutes.post('/', async c=>{
       company.id,...companyAdminWriteParams(adminToken,adminId,company.id,now)
     ),
     db.prepare('INSERT INTO company_employee_write_guards(id,affected_rows) VALUES (?,changes())')
-      .bind(crypto.randomUUID()),
+      .bind(guardId),
     // The CHECK-as-guard above aborts the entire transaction if auth changed.
-    db.prepare('DELETE FROM company_employee_write_guards'),
+    db.prepare('DELETE FROM company_employee_write_guards WHERE id=?').bind(guardId),
     db.prepare([
       'INSERT INTO users(id,login,email,display_name,password_hash,',
       'role,employee_id,active,must_change_password,',
