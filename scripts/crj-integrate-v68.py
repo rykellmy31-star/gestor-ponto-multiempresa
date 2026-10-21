@@ -24,9 +24,8 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = '4f51b93bba08ce0b4cc6942eb8681ec4be325751'
-EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
-                         'scripts/crj-integrate-v68.py'}
+EXPECTED_PARENT = '8881fac3d092be92eb59f3f80081d9af0b61fc8f'
+EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
 ARCHIVE_SHA256 = 'dedb2f75488838c789a6cfcacd19934dda0a3ff6dd1fff4d50b9b2f05686f67c'
 ARCHIVE_BYTES = 607804
@@ -109,8 +108,15 @@ def verify_launch_commit(repo: Path) -> None:
         raise RuntimeError('GitHub workflow SHA does not match checkout')
     parent = run('git', 'rev-parse', 'HEAD^', cwd=repo)
     if parent != EXPECTED_PARENT:
-        raise RuntimeError('Launch commit has unexpected parent')
-    changed = set(run('git', 'diff', '--name-only', EXPECTED_PARENT, 'HEAD', cwd=repo).splitlines())
+        # This workflow is enabled in its own commit, immediately after one
+        # reviewed script-only repair commit. Validate both exact path sets.
+        grandparent = run('git', 'rev-parse', 'HEAD^^', cwd=repo)
+        if grandparent != EXPECTED_PARENT:
+            raise RuntimeError('Launch commit has unexpected ancestry')
+        prior_changed = set(run('git', 'diff', '--name-only', EXPECTED_PARENT, 'HEAD^', cwd=repo).splitlines())
+        if prior_changed != {'scripts/crj-integrate-v68.py'}:
+            raise RuntimeError('Unexpected integration script update')
+    changed = set(run('git', 'diff', '--name-only', 'HEAD^', 'HEAD', cwd=repo).splitlines())
     if changed != EXPECTED_LAUNCH_FILES:
         raise RuntimeError('Launch commit contains unexpected source files')
 
@@ -224,7 +230,7 @@ def stage_historical_schedule_regression_tests(source: Path, dest: Path) -> None
 
 
 
-def stage_d1_trigger_message_regressions(dest: Path) -> None:
+def stage_d1_trigger_message_regressions(source: Path, dest: Path) -> None:
     """Accept only the new, stricter immutable-state rejection errors.
 
     Both operations must still fail. Pin exact original files and exact lines
@@ -247,7 +253,14 @@ def stage_d1_trigger_message_regressions(dest: Path) -> None:
         baseline = subprocess.check_output(
             ['git', 'show', f'{BASE_SHA}:{relative}'], cwd=dest
         )
-        if not target.is_file() or target.is_symlink() or target.read_bytes() != baseline:
+        if not target.is_file() or target.is_symlink():
+            raise RuntimeError(f'D1 regression fixture missing or unsafe: {relative}')
+        # The punch-policy test is already one of the 20 vetted candidate
+        # paths. It must match the audited staged candidate bytes, not the
+        # original 0027 baseline. The other fixture must match its baseline.
+        staged = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
+        expected = (source / relative).read_bytes() if relative in staged else baseline
+        if target.read_bytes() != expected:
             raise RuntimeError(f'D1 regression fixture diverged: {relative}')
         content = target.read_text(encoding='utf-8')
         if content.count(before) != 1:
@@ -255,7 +268,7 @@ def stage_d1_trigger_message_regressions(dest: Path) -> None:
         target.write_text(content.replace(before, after), encoding='utf-8')
     run('git', 'add', '--', *sorted(corrections), cwd=dest)
     staged = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
-    if len(staged) != 21 or not set(corrections).issubset(staged):
+    if len(staged) != 20 or not set(corrections).issubset(staged):
         raise RuntimeError('Unexpected D1 fixture integration scope')
     run('git', 'diff', '--cached', '--check', cwd=dest)
 
@@ -318,8 +331,8 @@ def main() -> None:
         print('INTEGRATION: 20 approved paths reconstructed from exact pinned sources',flush=True)
         written = check_and_transfer(source, repo, changed)
         stage_historical_schedule_regression_tests(source, repo)
-        stage_d1_trigger_message_regressions(repo)
-        print(f'INTEGRATION: {len(written)} candidate paths + 3 pinned test fixes staged safely; no deploy',flush=True)
+        stage_d1_trigger_message_regressions(source, repo)
+        print(f'INTEGRATION: {len(written)} candidate paths + 2 new test paths staged safely; no deploy',flush=True)
     # The workflow runs all required checks and may commit/push only after they pass.
 
 
