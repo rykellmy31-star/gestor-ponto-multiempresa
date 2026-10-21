@@ -158,6 +158,35 @@ try {
     verify(history.company_id === company.id && history.employee_id === company.employee.id, 'historico vinculado a sessao');
     employeeClients.push(client);
   }
+  // Politica de ponto e uma fixture explicita no D1 STAGING, pois o painel de
+  // configuracao desta politica ainda precisa ser homologado separadamente.
+  // Nao modificar registros preexistentes nem politica de outra empresa.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bahia',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const rules = { mark_tolerance: 5, daily_tolerance: 10, rounding_step: 1,
+    rounding_mode: 'floor', auto_approve_overtime: false, compensation: 'review', max_shift_hours: 24 };
+  const punchSchedule = { ...morning, name: 'Janela QA de ponto', start: '00:00', end: '23:00', weekdays: [0,1,2,3,4,5,6] };
+  for (let i = 0; i < companies.length; i++) {
+    const company = companies[i], employee = employeeClients[i];
+    await query('INSERT INTO company_punch_policies(company_id,enabled,rules_json,updated_at) VALUES(?,1,?,?)',
+      [company.id, JSON.stringify(rules), Date.now()]);
+    const schedule = await company.client.call('/api/company/schedules', { method: 'POST', body: punchSchedule, expected: 201 });
+    await company.client.call('/api/company/schedules/' + schedule.id + '/assign', { method: 'POST',
+      body: { employee_id: company.employee.id, effective_from: today }, expected: 201 });
+    for (const type of ['entry','break_start','break_end','exit']) {
+      const current = await employee.call('/api/employee/cpf-work/today');
+      verify(current.next_type === type && current.company_id === company.id, 'sequencia e empresa do ponto');
+      const body = { type, idempotency_key: randomUUID() };
+      const confirmed = await employee.call('/api/employee/cpf-work/punch', { method: 'POST', body, expected: 201 });
+      const repeated = await employee.call('/api/employee/cpf-work/punch', { method: 'POST', body });
+      verify(confirmed.punch.id === repeated.punch.id && repeated.replayed, 'ponto idempotente sem duplicacao');
+    }
+    const finished = await employee.call('/api/employee/cpf-work/today');
+    verify(finished.completed && finished.next_seq === 4, 'quatro batidas confirmadas');
+    const saved = await query('SELECT COUNT(*) AS total FROM punches p JOIN work_days d ON d.id=p.work_day_id WHERE d.company_id=? AND p.employee_id=?',
+      [company.id, company.employee.id]);
+    verify(saved[0].total === 4, 'D1 confirma quatro batidas por empresa');
+  }
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
   await a.client.call('/api/company/auth/session', { expected: 401 });
   await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
@@ -169,8 +198,8 @@ try {
   const count = await query('SELECT COUNT(*) AS total FROM employees WHERE company_id IN (?,?)', [a.id,b.id]);
   verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
   const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
-  verify(assignments[0].total === 2, 'D1 confirma historico de duas atribuicoes');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas e suspensao.\n';
+  verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto e suspensao. Politicas de ponto preparadas como fixtures D1, sem homologar a configuracao pelo painel.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {

@@ -8,6 +8,8 @@ on:
       - 'scripts/provision-cloudflare-staging.mjs'
       - 'scripts/test_provision_cloudflare_staging.mjs'
       - 'scripts/exercise-cloudflare-staging.mjs'
+      - 'scripts/verify-staging-recovery.mjs'
+      - 'server/routes/company-schedules.ts'
       - 'server/index.ts'
   workflow_dispatch:
 
@@ -43,7 +45,14 @@ jobs:
       - name: Validar cadastro e isolamento antes de publicar staging
         run: npx vitest run tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts --maxWorkers=1 --no-file-parallelism
       - name: Validar token, identificar recursos e provisionar staging separado
+        id: remote
         env:
           CLOUDFLARE_STAGING_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/exercise-cloudflare-staging.mjs
+      - name: Verificar backup cifrado e restauracao em novo D1 separado
+        if: ${{ !cancelled() && steps.remote.outcome != 'skipped' }}
+        env:
+          CLOUDFLARE_STAGING_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-staging-recovery.mjs

@@ -141,7 +141,11 @@ companySchedulesRoutes.post('/', async c => {
   // D1.batch executa as instrucões atomicamente: cadastro, auditoria e chave.
   const result = await db.batch(statements);
   if (requestKey && result[0].meta.changes === 0) return replay();
-  ensure(result[0].meta.changes === 1 && result[1].meta.changes === 1 &&
+  // O SELECT acima usa a chave primaria da empresa: insere no maximo uma
+  // jornada. D1.meta.changes inclui os triggers de historico/revisao, logo
+  // um INSERT confirmado pode reportar mais de uma alteracao. Zero continua
+  // indicando sessao revogada/inatividade/replay; auditoria e chave exigem 1.
+  ensure(result[0].meta.changes >= 1 && result[1].meta.changes === 1 &&
     (!requestKey || result[2].meta.changes === 1),
     409, 'company_inactive', 'Empresa inativa ou cadastro alterado.');
   return c.json({ success: true, id, company_id: company.id }, 201);
@@ -369,7 +373,9 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       return c.json({ success:true, company_id:company.id, reused:true }, 200);
     }
   }
-  ensure(result[0].meta.changes === 1 && result[1].meta.changes === 1,
+  // A identidade unica do funcionario limita este INSERT a uma linha;
+  // o trigger de revisao tambem entra em meta.changes no schema completo.
+  ensure(result[0].meta.changes >= 1 && result[1].meta.changes === 1,
     404, 'invalid_company_assignment',
     'Funcionário ou jornada não pertence à empresa.');
   return c.json({ success: true, company_id: company.id }, 201);

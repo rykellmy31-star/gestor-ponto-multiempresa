@@ -51,8 +51,14 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         db.prepare("CREATE TABLE company_employee_registration_audit(id TEXT PRIMARY KEY,company_id TEXT,employee_id TEXT,admin_id TEXT,action TEXT,created_at INTEGER)"),
         db.prepare("CREATE TABLE company_employee_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CHECK(affected_rows=1))"),
         db.prepare('CREATE TABLE schedules(id TEXT PRIMARY KEY,name TEXT,config_json TEXT,created_by TEXT,created_at INTEGER,company_id TEXT,deleted_at INTEGER)'),
+        // Triggers presentes no schema real: D1.meta.changes inclui tambem
+        // estas atualizacoes, embora cada INSERT principal grave uma linha.
+        db.prepare('CREATE TABLE data_revision(id INTEGER PRIMARY KEY,value INTEGER NOT NULL)'),
+        db.prepare('INSERT INTO data_revision VALUES(1,0)'),
+        db.prepare('CREATE TRIGGER revision_schedules_insert AFTER INSERT ON schedules BEGIN UPDATE data_revision SET value=value+1 WHERE id=1; END'),
         db.prepare('CREATE TABLE schedule_history(id TEXT PRIMARY KEY,schedule_id TEXT,effective_from TEXT,config_json TEXT)'),
         db.prepare('CREATE TABLE schedule_assignments(id TEXT PRIMARY KEY,employee_id TEXT,schedule_id TEXT,effective_from TEXT,created_at INTEGER)'),
+        db.prepare('CREATE TRIGGER revision_schedule_assignments_insert AFTER INSERT ON schedule_assignments BEGIN UPDATE data_revision SET value=value+1 WHERE id=1; END'),
         db.prepare('CREATE TABLE schedule_assignment_cancellations(assignment_id TEXT PRIMARY KEY)'),
         db.prepare('CREATE TABLE company_schedule_audit(id TEXT PRIMARY KEY,company_id TEXT,admin_id TEXT,action TEXT,schedule_id TEXT,employee_id TEXT,details_json TEXT,created_at INTEGER)'),
         db.prepare('CREATE TABLE company_schedule_create_requests(company_id TEXT,admin_id TEXT,request_key TEXT,request_fingerprint TEXT,schedule_id TEXT,created_at INTEGER,PRIMARY KEY(company_id,admin_id,request_key))'),
