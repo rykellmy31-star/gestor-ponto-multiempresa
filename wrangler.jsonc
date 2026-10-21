@@ -1,7 +1,7 @@
 
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "cr-jornada",
+  "name": "gestor-ponto-multiempresa",
   "main": "server/index.ts",
   "compatibility_date": "2026-10-15",
   "compatibility_flags": [
@@ -26,7 +26,7 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    "APP_ORIGIN": "https://cr-jornada.netssh3-0.workers.dev",
+    "APP_ORIGIN": "https://gestor-ponto-multiempresa.netssh3-0.workers.dev",
     "SESSION_HOURS": "8"
   },
   "rules": [

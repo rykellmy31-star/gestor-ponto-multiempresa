@@ -48,6 +48,11 @@ jobs:
       - name: Validar gerador seguro de ambiente staging
         run: node --test scripts/test_prepare_cloudflare_staging.mjs
 
+      - name: Confirmar alvo de producao sem publicar
+        run: |
+          node --test scripts/test_verify_production_target.mjs
+          node scripts/verify-production-target.mjs
+
       - name: Verificar TypeScript
         run: npm run typecheck
 

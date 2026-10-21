@@ -16,7 +16,7 @@ A configuracao staging e construida por lista positiva e somente copia `main`, d
 4. Gerar a configuracao com `npm run cloudflare:prepare-staging -- --worker cr-jornada-staging --database cr-jornada-staging-db --database-id UUID_REAL_STAGING --origin https://CR-JORNADA-STAGING.workers.dev`.
 5. Executar migrations com config staging, popular somente fixtures ficticias, validar isolamento com empresas A/B, CSP, cookies, CSRF, sessoes, jornada e ponto; registrar resultados antes da liberacao da trava de deploy.
 
-**Atenção:** a URL `cr-jornada.netssh3-0.workers.dev` na configuracao principal ainda nao identifica o Worker publico `gestor-ponto-multiempresa` observado na Cloudflare. Nao executar `npm run deploy` no ambiente principal ate conciliar nome, origem e bindings com auditoria e autorizacao adequadas.
+**Alvo conciliado em 2026-10-21:** o arquivo principal agora aponta para o Worker publico `gestor-ponto-multiempresa`, origem `https://gestor-ponto-multiempresa.netssh3-0.workers.dev` e banco D1 `cr-jornada-db`, conforme auditoria remota somente leitura. `scripts/verify-production-target.mjs` impede configuracoes divergentes, mas **nao autoriza deploy**. `scripts/preflight.mjs` continua bloqueando publicacao ate a revisao integral do isolamento multiempresa e homologacao.
 
 ## Permissoes
 
