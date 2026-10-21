@@ -29,6 +29,7 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
     prepare(sql: string) {
       let params: unknown[] = [];
       const st = {
+        sql,
         bind(...args: unknown[]) { params = args; return st; },
         async first() {
           sqls.push({ sql, params: [...params] });
@@ -126,6 +127,7 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const query = t.sqls.find(x => x.sql.includes('FROM schedules s'));
     expect(query?.params).toEqual(['company-a']);
     expect(query?.sql).toContain('s.company_id=?');
+    expect(query?.sql).toContain('s.deleted_at IS NULL');
   });
 
   it('exige CSRF para criar jornadas', async () => {
@@ -191,6 +193,17 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect(result.status).toBe(201);
     expect(t.batches).toHaveLength(1);
     expect(t.batches[0]).toHaveLength(2);
+  });
+
+  it('impede atribuir jornada excluída logicamente na própria consulta SQL', async () => {
+    const t = makeApp();
+    const response = await t.request('/schedule-a/assign', 'POST', {
+      employee_id: 'employee-a', effective_from: '2026-11-02'
+    }, { csrf: 'csrf-a' });
+    expect(response.status).toBe(201);
+    const firstStatement = t.batches[0][0] as { sql: string };
+    expect(firstStatement.sql).toContain('s.company_id=e.company_id');
+    expect(firstStatement.sql).toContain('s.deleted_at IS NULL');
   });
 
   it('rejeita data inexistente antes de gravar atribuicao', async () => {

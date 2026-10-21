@@ -50,7 +50,7 @@ companySchedulesRoutes.get('/', async c => {
   const result = await c.get('db').prepare([
     'SELECT s.id,s.name,s.config_json,s.created_at',
     'FROM schedules s JOIN companies c ON c.id=s.company_id',
-    'WHERE s.company_id=? AND c.status=\'active\'',
+    'WHERE s.company_id=? AND c.status=\'active\' AND s.deleted_at IS NULL',
     'ORDER BY s.created_at DESC,s.id DESC LIMIT 100'
   ].join(' ')).bind(company.id).all<{
     id: string; name: string; config_json: string; created_at: number;
@@ -165,7 +165,7 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       'INSERT INTO schedule_assignments(',
       'id,employee_id,schedule_id,effective_from,created_at)',
       'SELECT ?,e.id,s.id,?,? FROM employees e',
-      'JOIN schedules s ON s.id=? AND s.company_id=e.company_id',
+      'JOIN schedules s ON s.id=? AND s.company_id=e.company_id AND s.deleted_at IS NULL',
       'JOIN companies co ON co.id=e.company_id',
       'WHERE e.id=? AND e.company_id=?',
       'AND e.deleted_at IS NULL AND e.status=\'active\'',
