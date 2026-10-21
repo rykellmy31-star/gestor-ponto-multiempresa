@@ -33,6 +33,7 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         db.prepare('CREATE TABLE platform_audit_log(id TEXT PRIMARY KEY,actor_id TEXT,action TEXT,entity_type TEXT,entity_id TEXT,details_json TEXT,created_at INTEGER)'),
         db.prepare('CREATE TABLE company_admins(id TEXT PRIMARY KEY,company_id TEXT,login TEXT COLLATE NOCASE,email TEXT,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,must_change_password INTEGER NOT NULL DEFAULT 1,temporary_password_expires_at INTEGER,created_at INTEGER,updated_at INTEGER,UNIQUE(company_id,login))'),
         db.prepare('CREATE TABLE company_admin_sessions(token_hash TEXT PRIMARY KEY,company_id TEXT,admin_id TEXT,csrf_token TEXT,created_at INTEGER,expires_at INTEGER,last_seen_at INTEGER,auth_version INTEGER)'),
+        db.prepare('CREATE TABLE employee_company_sessions(token_hash TEXT PRIMARY KEY,company_id TEXT NOT NULL)'),
         db.prepare('CREATE TABLE company_admin_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CONSTRAINT company_admin_write_conflict CHECK(affected_rows=1))'),
         db.prepare('CREATE TABLE company_admin_security_events(id TEXT PRIMARY KEY,company_id TEXT,admin_id TEXT,action TEXT,created_at INTEGER)'),
         db.prepare('INSERT INTO platform_admins VALUES(?,?,?,?,?,1,1,?,?)')
@@ -145,6 +146,17 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       const changedSession=await call('/api/company/auth/session','GET',undefined,changedCookie);
       expect((await changedSession.json() as any).must_change_password).toBe(false);
 
+      // Uma sessao de funcionario ficticio por empresa: o superadmin
+      // precisa revogar somente os acessos da empresa suspensa.
+      await db.prepare('INSERT INTO employee_company_sessions VALUES(?,?),(?,?)')
+        .bind('employee-token-a',companyA.id,'employee-token-b',companyB.id).run();
+      const sessionsBefore=await db.prepare(
+        'SELECT company_id,COUNT(*) AS total FROM company_admin_sessions GROUP BY company_id ORDER BY company_id'
+      ).all<any>();
+      expect(sessionsBefore.results).toEqual([
+        {company_id:companyA.id,total:1},
+        {company_id:companyB.id,total:1}
+      ]);
       const suspend=await call('/api/platform/companies/'+companyA.id+'/status',
         'PATCH',{status:'suspended'},superCookie,csrf);
       expect(suspend.status).toBe(200);
@@ -153,9 +165,29 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         .toBe(401);
       expect((await call('/api/company/auth/session','GET',undefined,cookieB)).status)
         .toBe(200);
+      const sessionRows=await db.prepare(
+        'SELECT company_id,COUNT(*) AS total FROM company_admin_sessions GROUP BY company_id ORDER BY company_id'
+      ).all<any>();
+      expect(sessionRows.results).toEqual([{company_id:companyB.id,total:1}]);
+      const employeeRows=await db.prepare(
+        'SELECT company_id,token_hash FROM employee_company_sessions ORDER BY company_id'
+      ).all<any>();
+      expect(employeeRows.results).toEqual([
+        {company_id:companyB.id,token_hash:'employee-token-b'}
+      ]);
+      const guardsAfterSuspend=await db.prepare(
+        'SELECT COUNT(*) AS total FROM company_admin_write_guards'
+      ).first<{total:number}>();
+      expect(guardsAfterSuspend?.total).toBe(0);
       const resume=await call('/api/platform/companies/'+companyA.id+'/status',
         'PATCH',{status:'active'},superCookie,csrf);
       expect(resume.status).toBe(200);
+      // Reativar a empresa NAO restaura os cookies emitidos antes
+      // da suspensao. Os gestores precisam entrar novamente.
+      expect((await call('/api/company/auth/session','GET',undefined,changedCookie)).status)
+        .toBe(401);
+      expect((await db.prepare('SELECT COUNT(*) AS total FROM employee_company_sessions WHERE company_id=?')
+        .bind(companyA.id).first<{total:number}>())?.total).toBe(0);
       expect((await loginManager(companyA.slug,managerNew)).status).toBe(200);
       expect((await call('/api/platform/companies/'+companyA.id+'/admins','GET',
         undefined,superCookie)).status).toBe(200);

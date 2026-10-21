@@ -367,29 +367,42 @@ platformCompaniesRoutes.patch('/:id/status', async c => {
 
   const now = Date.now();
 
-  await db.batch([
+  // Uma empresa suspensa nao pode recuperar sessoes antigas ao ser
+  // reativada. Revogar administradores e funcionarios NO MESMO batch
+  // da alteracao de status, sem tocar nas sessoes de outras empresas.
+  // A guarda otimista impede auditar uma transicao que nao aconteceu.
+  const statements:D1PreparedStatement[] = [
     db.prepare(`
       UPDATE companies
       SET status = ?, updated_at = ?
-      WHERE id = ? AND status != 'archived'
-    `).bind(parsed.data.status, now, id),
-    db.prepare(`
-      INSERT INTO platform_audit_log (
-        id, actor_id, action, entity_type,
-        entity_id, details_json, created_at
-      ) VALUES (?, ?, ?, 'company', ?, ?, ?)
-    `).bind(
-      crypto.randomUUID(),
-      admin.id,
-      'company.status_changed',
-      id,
-      JSON.stringify({
-        previous_status: existing.status,
-        new_status: parsed.data.status
-      }),
-      now
-    )
-  ]);
+      WHERE id = ? AND status = ? AND status != 'archived'
+    `).bind(parsed.data.status, now, id, existing.status)
+  ];
+  if (parsed.data.status === 'suspended') {
+    statements.push(
+      db.prepare('DELETE FROM company_admin_sessions WHERE company_id = ?')
+        .bind(id),
+      db.prepare('DELETE FROM employee_company_sessions WHERE company_id = ?')
+        .bind(id)
+    );
+  }
+  statements.push(db.prepare(`
+    INSERT INTO platform_audit_log (
+      id, actor_id, action, entity_type,
+      entity_id, details_json, created_at
+    ) VALUES (?, ?, ?, 'company', ?, ?, ?)
+  `).bind(
+    crypto.randomUUID(),
+    admin.id,
+    'company.status_changed',
+    id,
+    JSON.stringify({
+      previous_status: existing.status,
+      new_status: parsed.data.status
+    }),
+    now
+  ));
+  await companyAdminWrite(db, statements, 'company_status_conflict');
 
   return c.json({
     success: true,
