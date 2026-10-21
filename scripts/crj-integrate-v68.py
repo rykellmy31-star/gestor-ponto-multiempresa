@@ -24,7 +24,7 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = '21b4a01ef9bfcc2b3aa80d71d498988d7c03fcb5'
+EXPECTED_PARENT = 'd4b308de42b44794ea7c798e71feaf4584b10f69'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
 ARCHIVE_SHA256 = 'dedb2f75488838c789a6cfcacd19934dda0a3ff6dd1fff4d50b9b2f05686f67c'
@@ -260,6 +260,16 @@ def stage_d1_trigger_message_regressions(source: Path, dest: Path) -> None:
         # original 0027 baseline. The other fixture must match its baseline.
         staged = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
         expected = (source / relative).read_bytes() if relative in staged else baseline
+        if relative == 'tests/d1-employee-punch-policy.test.ts' and relative not in staged:
+            # This exact preexisting regression fix was committed after BASE_SHA.
+            # Accept only its byte-for-byte known transformation, not arbitrary
+            # differences from the pinned baseline.
+            prior = baseline.decode('utf-8')
+            original = '.toMatch(/UNIQUE constraint failed/i);'
+            approved = '.toMatch(/(?:UNIQUE constraint failed|raw_punch_immutable)/i);'
+            if prior.count(original) != 1:
+                raise RuntimeError('Preexisting D1 fixture anchor mismatch')
+            expected = prior.replace(original, approved).encode('utf-8')
         if target.read_bytes() != expected:
             candidate_bytes = (source / relative).read_bytes()
             def short_hash(data: bytes) -> str:
@@ -278,7 +288,7 @@ def stage_d1_trigger_message_regressions(source: Path, dest: Path) -> None:
         target.write_text(content.replace(before, after), encoding='utf-8')
     run('git', 'add', '--', *sorted(corrections), cwd=dest)
     staged = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
-    if len(staged) != 20 or not set(corrections).issubset(staged):
+    if len(staged) != 21 or not set(corrections).issubset(staged):
         raise RuntimeError('Unexpected D1 fixture integration scope')
     run('git', 'diff', '--cached', '--check', cwd=dest)
 
@@ -342,7 +352,7 @@ def main() -> None:
         written = check_and_transfer(source, repo, changed)
         stage_historical_schedule_regression_tests(source, repo)
         stage_d1_trigger_message_regressions(source, repo)
-        print(f'INTEGRATION: {len(written)} candidate paths + 2 new test paths staged safely; no deploy',flush=True)
+        print(f'INTEGRATION: {len(written)} candidate paths + 3 test fixtures staged safely; no deploy',flush=True)
     # The workflow runs all required checks and may commit/push only after they pass.
 
 
