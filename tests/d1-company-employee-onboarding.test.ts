@@ -434,7 +434,136 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         .first<{total:number}>())?.total).toBe(4);
       expect((await db.prepare('SELECT COUNT(*) AS total FROM company_admin_write_guards')
         .first<{total:number}>())?.total).toBe(0);
-            const guards=await db.prepare('SELECT COUNT(*) AS total FROM company_employee_write_guards').first<{total:number}>();
+
+      // Segundo dia, mesma empresa e funcionario diferente: o gestor mudou
+      // a escala de João para 13h na terça-feira. Provar com quatro batidas
+      // reais no turno novo, sem alterar os quatro pontos de Ana na segunda.
+      const loginJoao=async(password:string)=>{
+        const response=await employeeRequest('/api/employee/cpf-auth/login',{
+          cpf,password
+        });
+        return {
+          response,
+          cookie:response.headers.get('set-cookie')?.split(';')[0]||''
+        };
+      };
+      let joaoLogin=await loginJoao(a.temporary_password);
+      expect(joaoLogin.response.status).toBe(200);
+      let joaoCookie=joaoLogin.cookie;
+      const joaoInitialSession=await employeeRequest(
+        '/api/employee/cpf-auth/session',undefined,joaoCookie
+      );
+      expect(joaoInitialSession.status).toBe(200);
+      const joaoInitial=await joaoInitialSession.json() as any;
+      expect(joaoInitial.user.employee_id).toBe(a.employee.id);
+      expect(joaoInitial.company.id).toBe('co-a');
+      expect(joaoInitial.user.must_change_password).toBe(true);
+      const joaoPassword='SenhaDefinitivaJoao2026!';
+      const joaoChange=await employeeRequest('/api/employee/cpf-auth/password',{
+        current_password:a.temporary_password,new_password:joaoPassword
+      },joaoCookie,joaoInitial.csrf_token);
+      expect(joaoChange.status).toBe(200);
+      expect((await employeeRequest('/api/employee/cpf-auth/session',
+        undefined,joaoCookie)).status).toBe(401);
+
+      const tuesday=(hour:number)=>at(hour)+86400000;
+      vi.mocked(Date.now).mockReturnValue(tuesday(13));
+      joaoLogin=await loginJoao(joaoPassword);
+      expect(joaoLogin.response.status).toBe(200);
+      joaoCookie=joaoLogin.cookie;
+      const joaoActiveSession=await employeeRequest(
+        '/api/employee/cpf-auth/session',undefined,joaoCookie
+      );
+      expect(joaoActiveSession.status).toBe(200);
+      let joaoCsrf=(await joaoActiveSession.json() as any).csrf_token as string;
+      const joaoMarks=[tuesday(13),tuesday(16),tuesday(17),tuesday(22)];
+      const joaoKeys=[
+        '66666666-6666-4666-8666-666666666666',
+        '77777777-7777-4777-8777-777777777777',
+        '88888888-8888-4888-8888-888888888888',
+        '99999999-9999-4999-8999-999999999999'
+      ];
+      for(let i=0;i<types.length;i++){
+        vi.mocked(Date.now).mockReturnValue(joaoMarks[i]);
+        let preview=await employeeRequest(
+          '/api/employee/cpf-work/today',undefined,joaoCookie
+        );
+        if(preview.status===401){
+          joaoLogin=await loginJoao(joaoPassword);
+          expect(joaoLogin.response.status).toBe(200);
+          joaoCookie=joaoLogin.cookie;
+          const renewed=await employeeRequest(
+            '/api/employee/cpf-auth/session',undefined,joaoCookie
+          );
+          expect(renewed.status).toBe(200);
+          joaoCsrf=(await renewed.json() as any).csrf_token;
+          preview=await employeeRequest(
+            '/api/employee/cpf-work/today',undefined,joaoCookie
+          );
+        }
+        expect(preview.status).toBe(200);
+        expect(await preview.json()).toMatchObject({
+          company_id:'co-a',employee_id:a.employee.id,
+          work_date:'2026-10-27',next_seq:i,next_type:types[i]
+        });
+        const punch=await employeeRequest('/api/employee/cpf-work/punch',{
+          type:types[i],idempotency_key:joaoKeys[i]
+        },joaoCookie,joaoCsrf);
+        const result=await punch.json() as any;
+        expect(punch.status,JSON.stringify(result)).toBe(201);
+        expect(result.punch.recorded_at).toBe(joaoMarks[i]);
+        expect(result.punch.work_date).toBe('2026-10-27');
+        const retry=await employeeRequest('/api/employee/cpf-work/punch',{
+          type:types[i],idempotency_key:joaoKeys[i]
+        },joaoCookie,joaoCsrf);
+        expect(retry.status).toBe(200);
+        expect((await retry.json() as any).replayed).toBe(true);
+      }
+      const daysAfter=await db.prepare([
+        'SELECT employee_id,work_date,next_seq,schedule_json FROM work_days',
+        'ORDER BY work_date,employee_id'
+      ].join(' ')).all<any>();
+      expect(daysAfter.results).toHaveLength(2);
+      const anaMonday=daysAfter.results!.find(
+        x=>x.employee_id===ana.employee.id&&x.work_date==='2026-10-26'
+      );
+      const joaoTuesday=daysAfter.results!.find(
+        x=>x.employee_id===a.employee.id&&x.work_date==='2026-10-27'
+      );
+      expect(anaMonday?.next_seq).toBe(4);
+      expect(JSON.parse(anaMonday.schedule_json).start).toBe('07:00');
+      expect(joaoTuesday?.next_seq).toBe(4);
+      expect(JSON.parse(joaoTuesday.schedule_json).start).toBe('13:00');
+      expect(JSON.parse(joaoTuesday.schedule_json).end).toBe('22:00');
+      const joaoHistory=await employeeRequest(
+        '/api/employee/cpf-work/history?month=2026-10&company_id=co-b',
+        undefined,joaoCookie
+      );
+      expect(joaoHistory.status).toBe(200);
+      expect(await joaoHistory.json()).toMatchObject({
+        company_id:'co-a',employee_id:a.employee.id,
+        days:[{date:'2026-10-27',next_seq:4,
+          punches:expect.arrayContaining([
+            expect.objectContaining({type:'entry'}),
+            expect.objectContaining({type:'exit'})
+          ])}]
+      });
+      const allPunches=await db.prepare([
+        'SELECT p.employee_id,d.work_date,p.seq,p.type,p.recorded_at',
+        'FROM punches p JOIN work_days d ON d.id=p.work_day_id',
+        'ORDER BY d.work_date,p.seq'
+      ].join(' ')).all<any>();
+      expect(allPunches.results).toHaveLength(8);
+      expect(allPunches.results!.filter(x=>x.employee_id===ana.employee.id)
+        .map(x=>x.recorded_at)).toEqual(marks);
+      expect(allPunches.results!.filter(x=>x.employee_id===a.employee.id)
+        .map(x=>x.recorded_at)).toEqual(joaoMarks);
+      expect(allPunches.results).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({employee_id:b.employee.id})
+      ]));
+      expect((await db.prepare('SELECT COUNT(*) AS total FROM company_admin_write_guards')
+        .first<{total:number}>())?.total).toBe(0);
+      const guards=await db.prepare('SELECT COUNT(*) AS total FROM company_employee_write_guards').first<{total:number}>();
       expect(guards?.total).toBe(0);
       expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toHaveLength(0);
     }finally{
