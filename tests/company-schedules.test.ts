@@ -236,7 +236,7 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const insert = t.batches[0][0] as {sql:string;params:unknown[]};
     expect(insert.sql).toContain('NOT EXISTS (SELECT 1 FROM schedule_assignments existing');
     expect(insert.sql).toContain('cancelled.assignment_id=existing.id');
-    expect(insert.params.at(-1)).toBe('2026-11-02');
+    expect(insert.params[6]).toBe('2026-11-02');
     const lookup = t.sqls.find(x => x.sql.includes('FROM schedule_assignments a'));
     expect(lookup?.params).toEqual(['employee-a', 'company-a', '2026-11-02']);
     expect(lookup?.sql).toContain('co.status=\'active\'');
