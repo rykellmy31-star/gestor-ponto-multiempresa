@@ -70,6 +70,7 @@ const SCHEMA_NAMES_SQL = "SELECT name FROM sqlite_master WHERE type='table' " +
   "AND name IN ('rate_limits','platform_admins','platform_sessions','platform_audit_log','d1_migrations')";
 const ADMIN_COUNT_SQL = 'SELECT COUNT(*) AS total FROM platform_admins';
 const TABLE_COUNT_SQL = "SELECT COUNT(*) AS total FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+const TABLE_NAMES_SQL = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name LIMIT 100";
 const MIGRATIONS_COUNT_SQL = 'SELECT COUNT(*) AS total FROM d1_migrations';
 
 // SQL fixo, unicamente SELECT: o token D1 Read nao autoriza DDL/DML.
@@ -79,7 +80,7 @@ export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fet
     throw new Error('Token de auditoria ausente ou invalido.');
   }
   const query = async sql => {
-    if (![SCHEMA_NAMES_SQL, ADMIN_COUNT_SQL, MIGRATIONS_COUNT_SQL, TABLE_COUNT_SQL].includes(sql)) {
+    if (![SCHEMA_NAMES_SQL, ADMIN_COUNT_SQL, MIGRATIONS_COUNT_SQL, TABLE_COUNT_SQL, TABLE_NAMES_SQL].includes(sql)) {
       throw new Error('SQL de auditoria nao autorizado.');
     }
     const response = await fetchImpl(
@@ -111,6 +112,12 @@ export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fet
   const required = ['rate_limits','platform_admins','platform_sessions','platform_audit_log'];
   const tableCount = Number((await query(TABLE_COUNT_SQL))[0]?.total);
   if (!Number.isSafeInteger(tableCount) || tableCount < 0) throw new Error('Contagem de tabelas invalida.');
+  // Sao exibidos apenas nomes das tabelas, nunca registros.
+  const rawNames=(await query(TABLE_NAMES_SQL)).map(row=>row.name);
+  const cleanNames=rawNames.map(name=>
+    typeof name==='string' && /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(name)
+      ? name : '[nome_nao_exibido]'
+  );
   const admins = names.has('platform_admins')
     ? Number((await query(ADMIN_COUNT_SQL))[0]?.total) : null;
   const migrations = names.has('d1_migrations')
@@ -122,6 +129,7 @@ export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fet
   return {
     tabelas_basicas_superadmin_presentes: required.every(name => names.has(name)),
     total_tabelas_nao_internas: tableCount,
+    nomes_das_tabelas_sem_dados: cleanNames,
     tabela_rate_limits: names.has('rate_limits'),
     tabela_platform_admins: names.has('platform_admins'),
     tabela_platform_sessions: names.has('platform_sessions'),

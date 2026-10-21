@@ -71,7 +71,8 @@ test('auditoria SQL usa exclusivamente SELECT fixo e mostra apenas contagens', a
   assert.equal(r.quantidade_superadmins,1);
   assert.equal(r.migracoes_registradas,38);
   assert.equal(r.total_tabelas_nao_internas,5);
-  assert.equal(visited.length,4);
+  assert.equal(r.nomes_das_tabelas_sem_dados.length,5);
+  assert.equal(visited.length,5);
   assert.ok(visited.every(x=>x.options.method==='POST'));
   assert.ok(visited.every(x=>x.url.endsWith('/query')));
   assert.ok(visited.every(x=>/^SELECT /i.test(JSON.parse(x.options.body).sql)));
@@ -89,6 +90,7 @@ test('esquema inexistente nao tenta ler tabela ausente',async()=>{
     }});
   assert.equal(r.tabelas_basicas_superadmin_presentes,false);
   assert.equal(r.total_tabelas_nao_internas,0);
+  assert.deepEqual(r.nomes_das_tabelas_sem_dados,[]);
   assert.equal(r.quantidade_superadmins,null);
   assert.equal(r.migracoes_registradas,null);
 });
