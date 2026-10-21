@@ -1,7 +1,7 @@
 # CR JORNADA — auditoria de isolamento e travas de homologacao
 
 **Data:** 2026-10-21. **Branch:** `desenvolvimento-cr-jornada`.
-**Escopo:** verificacao de codigo + CI, auditoria de producao somente leitura, 158 verificacoes HTTP em staging real e recuperacao remota de dados ficticios. Isto **nao e** laudo de pentest nem auditoria de backups operacionais de producao.
+**Escopo:** verificacao de codigo + CI, auditoria de producao somente leitura, 179 verificacoes de fluxo HTTP/navegador em staging real e recuperacao remota de dados ficticios. Isto **nao e** laudo de pentest nem auditoria de backups operacionais de producao.
 
 ## Evidencias confirmadas
 
@@ -22,6 +22,7 @@
 | `/api/company/auth/*` | Login com slug + usuario, sessao empresarial associada ao `company_id`, CSRF e bloqueio de empresa suspensa | `company-auth`, `d1-company-login-race` |
 | `/api/company/employees` | Middleware empresarial, `WHERE company_id=?` na listagem; cadastro e recuperacao condicionados a flags | `company-routing`, `company-employees`, `d1-company-employee-onboarding`; flags ainda desabilitadas na configuracao base |
 | `/api/company/schedules/*` | `requireCompanyAdmin`, `company_id` obtido da sessao, verificacoes SQL na escrita em lote e controle de conflitos | `company-schedules`, `company-schedules-bulk`, `d1-company-schedules-bulk-operation`; flag ainda desabilitada |
+| `/api/company/reports/attendance` | Administrador empresarial, empresa da sessão, revalidação SQL, filtro mensal, CSV contra fórmulas e sem cache | `d1-company-attendance`; Actions `39669565281` aprovou API, login e relatório no navegador com duas empresas |
 | `/api/employee/cpf-auth/*` | Identidade por CPF e selecao de vinculo validado, sessao de usuario/funcionario/empresa propria | `employee-cpf-auth-route`, `d1-employee-cpf-isolation`, `d1-employee-session-isolation` |
 | `/api/employee/cpf-work/history` | Acesso pela sessao CPF; consulta filtra `employee_id` e `company_id` derivados da sessao | `employee-cpf-history-route`, `d1-employee-history-safety` |
 | `/api/employee/cpf-work/punch` | Sessao CPF, politica de pontos da empresa, validacao do dia e idempotencia; flag de escrita desabilitada | `employee-cpf-punch-route`, `d1-employee-cpf-full-workday`; teste com Worker staging real pendente |
@@ -33,7 +34,7 @@
 ## Travas ainda abertas para liberar producao
 
 1. Auditar **todas** as rotas e triggers de D1, inclusive mutacoes pouco usadas, execucoes concorrentes, CPF repetido em duas empresas e autorizacao apos suspensao/arquivamento.
-2. Completar validacao de interface, relatorios/exportacoes e configuracao das politicas de ponto pelo painel. Os fluxos HTTP centrais com duas empresas passaram; politicas de ponto foram fixtures SQL de staging, nao configuradas pela interface.
+2. Completar validação dos demais fluxos de interface, cálculos de relatórios empresariais e configuração das políticas de ponto pelo painel. O relatório mensal de marcações e o CSV, incluindo login pelo formulário empresarial, passaram no navegador real em `39669565281`. Os fluxos HTTP centrais com duas empresas passaram; politicas de ponto foram fixtures SQL de staging, nao configuradas pela interface.
 3. Manter os Secrets exclusivos e revisar cada flag antes de qualquer futura liberacao produtiva. Nenhuma chave de producao foi copiada.
 4. Definir backup operacional cifrado de producao com cofre, retencao e janela aprovada. O ensaio de restauracao remota de staging ja passou; ele nao substitui a copia operacional. Nunca restaurar destrutivamente em producao.
 5. Publicar versao revisada apenas apos remover a trava de preflight **por justificativa tecnica sustentada por evidencias** e aprovacao do proprietario. O nome/origem do Worker ja foram conciliados, mas ainda nao foi feito deploy.
