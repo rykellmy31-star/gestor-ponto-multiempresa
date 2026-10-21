@@ -12,6 +12,7 @@ on:
 # Só é executado quando o próprio arquivo é adicionado/alterado na branch.
 # Validação dos escopos de ambos os patches auditados v47/v56.
 # Mantem asserts historicos e aceita somente bloqueios D1 mais restritivos.
+# Ajuste do escopo: um teste D1 ja pertence aos 20 caminhos auditados.
 permissions:
   contents: write
 
@@ -77,7 +78,7 @@ jobs:
           set -euo pipefail
           test "$(git branch --show-current)" = 'desenvolvimento-cr-jornada'
           git diff --cached --check
-          test "$(git diff --cached --name-only | wc -l)" -eq 21
+          test "$(git diff --cached --name-only | wc -l)" -eq 20
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat: integrar correções auditadas v68 e migrações 0030-0038'
