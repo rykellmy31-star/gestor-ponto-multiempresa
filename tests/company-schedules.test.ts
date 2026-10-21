@@ -30,6 +30,7 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
       let params: unknown[] = [];
       const st = {
         sql,
+        get params() { return [...params]; },
         bind(...args: unknown[]) { params = args; return st; },
         async first() {
           sqls.push({ sql, params: [...params] });
