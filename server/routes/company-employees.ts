@@ -75,8 +75,8 @@ companyEmployeesRoutes.post('/', async c=>{
       'INSERT INTO employees(',
       'id,full_name,registration,company_registration,cpf_encrypted,cpf_last4,',
       'job_title,admission_date,employment_end,status,notes,created_at,updated_at,company_id)',
-      'SELECT ?,?,?,?,?,?,?,?,NULL,\\'active\\',\\'\\',?,?,co.id FROM companies co',
-      'WHERE co.id=? AND co.status=\\'active\\'',
+      'SELECT ?,?,?,?,?,?,?,?,NULL,\'active\',\'\',?,?,co.id FROM companies co',
+      'WHERE co.id=? AND co.status=\'active\'',
       'AND '+VALID_COMPANY_ADMIN_WRITE_SQL
     ].join(' ')).bind(
       employeeId,input.full_name,'emp-'+employeeId,input.registration,
@@ -91,7 +91,7 @@ companyEmployeesRoutes.post('/', async c=>{
       'INSERT INTO users(id,login,email,display_name,password_hash,',
       'role,employee_id,active,must_change_password,',
       'employee_temporary_password_expires_at,created_at,updated_at)',
-      'VALUES (?,?,NULL,?,?,\\'employee\\',?,1,1,?,?,?)'
+      'VALUES (?,?,NULL,?,?,\'employee\',?,1,1,?,?,?)'
     ].join(' ')).bind(userId,'cpf-'+employeeId,input.full_name,
       passwordHash,employeeId,expiresAt,now,now),
     db.prepare([
@@ -102,7 +102,7 @@ companyEmployeesRoutes.post('/', async c=>{
     db.prepare([
       'INSERT INTO company_employee_registration_audit(',
       'id,company_id,employee_id,admin_id,action,created_at)',
-      'VALUES(?,?,?,?,\\'created\\',?)'
+      'VALUES(?,?,?,?,\'created\',?)'
     ].join(' ')).bind(crypto.randomUUID(),company.id,employeeId,adminId,now)
   ];
   try {

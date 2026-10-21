@@ -236,7 +236,7 @@ describe('CR JORNADA - isolamento de funcionarios', () => {
     const batch=t.recordedBatches[0];
     expect(batch).toHaveLength(6);
     expect(batch[0].sql).toContain('AND '+ 'EXISTS (SELECT 1 FROM company_admin_sessions');
-    expect(batch[0].sql).toContain('co.status=\\'active\\'');
+    expect(batch[0].sql).toContain('co.status=\'active\'');
     expect(batch[0].params).toContain('company-a');
     expect(batch[0].params).toContain('JOAO-001');
     expect(batch[0].params).not.toContain('52998224725');
