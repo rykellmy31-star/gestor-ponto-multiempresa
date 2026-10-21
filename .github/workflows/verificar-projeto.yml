@@ -45,6 +45,9 @@ jobs:
       - name: Auditar dependencias
         run: npm audit --audit-level=moderate
 
+      - name: Validar gerador seguro de ambiente staging
+        run: node --test scripts/test_prepare_cloudflare_staging.mjs
+
       - name: Verificar TypeScript
         run: npm run typecheck
 

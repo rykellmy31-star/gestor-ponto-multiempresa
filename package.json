@@ -29,6 +29,7 @@
     "test:restart": "tsx tests/restart.ts",
     "backup:decrypt": "node scripts/decrypt-backup.mjs",
     "deploy:check": "node scripts/preflight.mjs",
+    "cloudflare:prepare-staging": "node scripts/prepare-cloudflare-staging.mjs",
     "dev:bundle": "wrangler dev .worker-bundle/index.js --no-bundle --ip 0.0.0.0 --port 8787 --persist-to .data --var ENVIRONMENT:development --var APP_ORIGIN:http://localhost:8787",
     "test:serve:bundle": "wrangler dev .worker-bundle/index.js --no-bundle --ip 0.0.0.0 --port 8788 --persist-to .test-data --config wrangler.test.jsonc"
   },

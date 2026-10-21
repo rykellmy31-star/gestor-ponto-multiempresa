@@ -60,7 +60,8 @@ As URLs protegidas são verificadas no Worker, antes de servir a página. As API
 
 ## Documentação
 
-- [Publicação Cloudflare, domínio e atualização](docs/PUBLICACAO.md)
+- [Preparação Cloudflare para o CR JORNADA multiempresa](docs/INICIAR-CLOUDFLARE-CR-JORNADA.md)
+- [Publicação Cloudflare, domínio e atualização (guia legado; não seguir antes da homologação multiempresa)](docs/PUBLICACAO.md)
 - [Uso, cadastro, marcações e fechamento](docs/USO.md)
 - [Regras e fórmulas dos cálculos](docs/CALCULOS.md)
 - [Segurança, privacidade e limitações](docs/SEGURANCA.md)
