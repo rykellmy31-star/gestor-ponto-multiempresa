@@ -88,14 +88,29 @@ export function CompanySchedulesPage() {
     date:string;assignment_id:string|null;shift:Schedule|null;
   }> | null>(null);
 
-  const onSessionExpired=useCallback(()=>{
+  const clearCompanyDraft=useCallback(()=>{
     pendingScheduleCreate.current=null;
-    setSession(null);
     setSchedules([]);
     setEmployees([]);
+    setSelectedSchedule('');
+    setSelectedEmployee('');
+    setAssignAll(false);
+    setEffective('');
     setWeekPreview(null);
-    setError('Sua sessão empresarial expirou. Entre novamente.');
+    setForm({...base,weekdays:[...base.weekdays]});
+    setFormOpen(false);
+    setEditDayByDay(false);
+    setNotice('');
   },[]);
+  const onSessionExpired=useCallback(()=>{
+    clearCompanyDraft();
+    setSession(null);
+    setPassword('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setError('Sua sessão empresarial expirou. Entre novamente.');
+  },[clearCompanyDraft]);
   const handleRequestError=useCallback((err:unknown,fallback:string)=>{
     if(isExpiredCompanySession(err)){
       onSessionExpired();
@@ -179,7 +194,7 @@ export function CompanySchedulesPage() {
         throw new Error('A troca de senha não foi confirmada.');
       }
       setSession(null);
-      setSchedules([]);setEmployees([]);
+      clearCompanyDraft();
       setNotice('Senha alterada. Entre novamente com a nova senha para acessar as escalas.');
     }catch(err){
       handleRequestError(err,'Falha na troca de senha.');
@@ -194,7 +209,9 @@ export function CompanySchedulesPage() {
       await jsonRequest('/company/auth/logout',{
         method:'POST',headers:{'X-CSRF-Token':session.csrf_token}
       });
-      setSession(null);setSchedules([]);setEmployees([]);
+      setSession(null);
+      clearCompanyDraft();
+      setPassword('');
       setNotice('Você saiu da área empresarial.');
     } catch(err) {handleRequestError(err,'Não foi possível sair.');}
   }
@@ -202,17 +219,17 @@ export function CompanySchedulesPage() {
     setForm(prev=>({...prev,[key]:value}));setError('');
   }
   function updateWeekday(day:number,checked:boolean){
-    setForm(prev=>({...prev,...selectScheduleDays(prev,checked
-      ? [...prev.weekdays,day] : prev.weekdays.filter(d=>d!==day))}));
+    setForm(prev=>selectScheduleDays(prev,checked
+      ? [...prev.weekdays,day] : prev.weekdays.filter(d=>d!==day)));
   }
   function setAllDays(days:number[]){
-    setForm(prev=>({...prev,...selectScheduleDays(prev,days)}));
+    setForm(prev=>selectScheduleDays(prev,days));
   }
   function updateDailyShift(day:number,key:keyof ScheduleDay,value:string|boolean){
     setForm(prev=>({...prev,...updateShiftForDay(prev,day,key,value)}));
   }
   function resetDailyShift(day:number){
-    setForm(prev=>({...prev,...resetShiftForDay(prev,day)}));
+    setForm(prev=>resetShiftForDay(prev,day));
   }
   function startNew() {
     setForm({...base,weekdays:[...base.weekdays]});

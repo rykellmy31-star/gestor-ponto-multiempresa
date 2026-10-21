@@ -28,11 +28,11 @@ export function updateShiftForDay(
   };
 }
 
-export function resetShiftForDay(schedule: Schedule, day: number): Schedule {
+export function resetShiftForDay<T extends Schedule>(schedule: T, day: number): T {
   const overrides = {...(schedule.day_overrides ?? {})};
   delete overrides[String(day) as keyof typeof overrides];
   const {day_overrides: _previous, ...rest} = schedule;
-  return Object.keys(overrides).length ? {...rest,day_overrides:overrides} : rest;
+  return (Object.keys(overrides).length ? {...rest,day_overrides:overrides} : rest) as T;
 }
 
 export function applyStandardShiftToAll<T extends Schedule>(schedule: T): T {
@@ -42,14 +42,14 @@ export function applyStandardShiftToAll<T extends Schedule>(schedule: T): T {
   return rest as T;
 }
 
-export function selectScheduleDays(schedule: Schedule, days: number[]): Schedule {
+export function selectScheduleDays<T extends Schedule>(schedule: T, days: number[]): T {
   const unique = [...new Set(days)].filter(d=>Number.isInteger(d)&&d>=0&&d<=6).sort();
   const overrides = {...(schedule.day_overrides ?? {})};
   for (const day of allWeekdays) {
     if (!unique.includes(day)) delete overrides[String(day) as keyof typeof overrides];
   }
   const {day_overrides: _previous, ...rest} = schedule;
-  return Object.keys(overrides).length
+  return (Object.keys(overrides).length
     ? {...rest,weekdays:unique,day_overrides:overrides}
-    : {...rest,weekdays:unique};
+    : {...rest,weekdays:unique}) as T;
 }

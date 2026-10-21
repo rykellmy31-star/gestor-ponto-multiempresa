@@ -68,6 +68,21 @@ describe('CR JORNADA — gestor configura turnos semanais e por funcionário', (
     expect(schedule.day_overrides).toBeUndefined();
     expect(updateShiftForDay(schedule,2,'start','15:00')).toBe(schedule);
   });
+  it('desmarcar um dia ou restaurar uma exceção remove a chave do JSON do formulário',()=>{
+    const named={...updateShiftForDay(original,2,'start','13:00'),
+      name:'Turno da empresa A'};
+    const reset=resetShiftForDay(named,2);
+    expect(reset.name).toBe(named.name);
+    expect(reset.day_overrides).toBeUndefined();
+    expect(Object.hasOwn(reset,'day_overrides')).toBe(false);
+    expect(JSON.stringify(reset)).not.toContain('day_overrides');
+    const unchecked=selectScheduleDays(named,[1,3,4,5]);
+    expect(unchecked.name).toBe(named.name);
+    expect(unchecked.weekdays).toEqual([1,3,4,5]);
+    expect(unchecked.day_overrides).toBeUndefined();
+    expect(Object.hasOwn(unchecked,'day_overrides')).toBe(false);
+    expect(scheduleSchema.safeParse(unchecked).success).toBe(true);
+  });
   it('não autoriza um horário especial fora da ordem', () => {
     const invalid=updateShiftForDay(original,2,'break_start','07:00');
     expect(scheduleSchema.safeParse(invalid).success).toBe(false);
