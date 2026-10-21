@@ -263,6 +263,51 @@ describe('CR JORNADA - protecao das rotas', () => {
     expect((await authenticated.request('/api/company/employees/employee-a/reset-password','POST')).status).toBe(403);
   });
 
+  it('matriz fail-closed: nenhuma rota legada volta a funcionar nas empresas A/B', async () => {
+    const forbidden: Array<[string, string]> = [
+      ['POST', '/api/employee/punch'],
+      ['GET', '/api/employee/history'],
+      ['GET', '/api/admin/employees'],
+      ['POST', '/api/admin/employees'],
+      ['GET', '/api/admin/reports'],
+      ['GET', '/api/auth/session'],
+      ['GET', '/api/company/employees/employee-b'],
+      ['PATCH', '/api/company/employees/employee-b'],
+      ['DELETE', '/api/company/employees/employee-b'],
+      ['POST', '/api/company/employees']
+    ];
+    for (const scenario of ['company-a', 'company-b'] as const) {
+      const t = makeEnvironment(scenario);
+      for (const [method, path] of forbidden) {
+        const response = await t.request(path, method);
+        expect(response.status, `${scenario} ${method} ${path}`).toBe(503);
+        const data = await jsonBody(response);
+        expect(data.error.code).toBe('tenant_isolation_pending');
+      }
+      expect(t.statements.some(sql => /FROM\\s+employees\\b/i.test(sql))).toBe(false);
+    }
+  });
+
+  it('cookie de empresa nao concede sessao Superadmin nem CPF', async () => {
+    const company = makeEnvironment('company-a');
+    const platform = await company.request('/api/platform/companies');
+    expect(platform.status).toBe(401);
+    const cpfHistory = await company.request('/api/employee/cpf-work/history');
+    expect(cpfHistory.status).toBe(401);
+    const cpfToday = await company.request('/api/employee/cpf-work/today');
+    expect(cpfToday.status).toBe(401);
+    expect(company.statements.some(sql => /FROM\\s+employees\\b/i.test(sql))).toBe(false);
+  });
+
+  it('rotas de jornada exigem flag mesmo para administrador com sessao valida', async () => {
+    const t = makeEnvironment('company-a');
+    const response = await t.request('/api/company/schedules', 'GET');
+    expect(response.status).toBe(503);
+    const data = await jsonBody(response);
+    expect(data.error.code).toBe('company_schedules_unavailable');
+    expect(t.statements.some(sql => /FROM\\s+schedules\\b/i.test(sql))).toBe(false);
+  });
+
   it('nao libera cadastro de funcionarios', async () => {
     const t = makeEnvironment('company-a');
 
