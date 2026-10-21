@@ -33,6 +33,19 @@ describe('Cálculo real de jornada',()=>{
   it('não cobra faltantes em dia futuro',()=>{const d=calc({now:at('23:00','2026-09-06'),marks:[null,null,null,null]});expect(d.expected_minutes).toBe(480);expect(d.missing_minutes).toBe(0);expect(d.absence).toBe(false);});
   it('turno atravessa meia-noite e virada do mês',()=>{const overnight={...s,start:'22:00',break_start:'02:00',break_end:'03:00',end:'07:00',weekdays:[0,1,2,3,4,5,6]};const d=calc({date:'2026-09-30',schedule:overnight,marks:[at('22:00','2026-09-30'),at('02:00','2026-10-01'),at('03:00','2026-10-01'),at('07:00','2026-10-01')],now:at('12:00','2026-10-01')});expect(d.worked_minutes).toBe(480);expect(d.expected_minutes).toBe(480);expect(d.date).toBe('2026-09-30');expect(anchorDate(at('03:00','2026-10-01'),overnight,zone)).toBe('2026-09-30');});
   it('turno noturno não vira falta à meia-noite',()=>{const overnight={...s,start:'22:00',break_start:'02:00',break_end:'03:00',end:'07:00'};expect(calc({schedule:overnight,marks:[null,null,null,null],now:at('23:00')}).absence).toBe(false);});
+  it('associa madrugada de domingo ao sabado noturno especial',()=>{
+    const saturdayNight={...s,weekdays:[1,2,3,4,5,6],
+      day_overrides:{'6':{start:'22:00',break_start:'02:00',break_end:'03:00',end:'06:00',paid_break:false}}};
+    expect(anchorDate(at('03:00','2026-09-13'),saturdayNight,zone)).toBe('2026-09-12');
+    expect(anchorDate(at('11:00','2026-09-13'),saturdayNight,zone)).toBe('2026-09-13');
+  });
+  it('nao herda turno noturno-base quando sabado tem turno diurno',()=>{
+    const saturdayDay={...s,start:'22:00',break_start:'02:00',break_end:'03:00',end:'07:00',
+      weekdays:[1,2,3,4,5,6],
+      day_overrides:{'6':{start:'07:00',break_start:'10:00',break_end:'10:15',end:'13:00',paid_break:false}}};
+    expect(anchorDate(at('03:00','2026-09-13'),saturdayDay,zone)).toBe('2026-09-13');
+    expect(anchorDate(at('03:00','2026-09-08'),saturdayDay,zone)).toBe('2026-09-07');
+  });
   it('arredonda apenas a duração, preservando horários brutos',()=>{const marks=[at('08:00')+30000,at('12:00'),at('13:00'),at('17:00')];const d=calc({marks,rules:{...DEFAULT_RULES,rounding_step:5,daily_tolerance:0,rounding_mode:'floor'}});expect(d.worked_minutes).toBe(475);expect(d.marks[0]).toBe(marks[0]);});
   it('soma dias, faltas e pendências semanal/mensal sem limitar horas a 24',()=>{const days=Array.from({length:22},()=>calc());const sum=sumDays(days);expect(sum.worked_minutes).toBe(10560);expect(sum.worked_days).toBe(22);expect(duration(sum.worked_minutes)).toBe('176:00');});
 });

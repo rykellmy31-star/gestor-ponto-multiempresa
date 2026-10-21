@@ -1,5 +1,6 @@
 import { CompanyEmployeeAccess } from './company-employee-access';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { jsonRequest } from './company-schedules-network';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   CalendarClock, CheckCircle2, Clock3, Copy, LogOut,
@@ -58,31 +59,9 @@ function hours(n:number) {
   if(!Number.isFinite(n)||n<0)return '—';
   return Math.floor(n/60)+'h'+String(n%60).padStart(2,'0');
 }
-async function jsonRequest<T>(path:string,options?:RequestInit):Promise<T> {
-  let response:Response;
-  try {
-    response=await fetch('/api'+path,{
-      credentials:'same-origin',cache:'no-store',...options
-    });
-  } catch {
-    throw new Error('Sem conexão com o servidor da empresa. Nenhuma alteração foi gravada.');
-  }
-  const data=await response.json().catch(()=>null) as
-    ({error?:{message?:string}}&T)|null;
-  if(!response.ok) {
-    if(response.status===503)throw new Error(
-      'As escalas da empresa ainda estão em homologação. Nenhum cadastro foi alterado.'
-    );
-    throw new Error(data?.error?.message||
-      (response.status===401?'Sessão encerrada. Entre novamente.':
-      'Não foi possível confirmar. Nenhuma operação deve ser considerada concluída.'));
-  }
-  if(!data)throw new Error('O servidor retornou uma resposta inesperada.');
-  return data;
-}
-
 export function CompanySchedulesPage() {
   const location=useLocation();
+  const pendingScheduleCreate=useRef<{payload:string;key:string}|null>(null);
   const [session,setSession]=useState<CompanySession|null>(null);
   const [checking,setChecking]=useState(true);
   const [loginBusy,setLoginBusy]=useState(false);
@@ -248,16 +227,25 @@ export function CompanySchedulesPage() {
     setSaving(true);setError('');
     try {
       const {name,...config}=form;
-      const response=await jsonRequest<{success:boolean;id:string;company_id:string}>(
+      const payload=JSON.stringify({name,...config});
+      // Se a resposta se perdeu, repetir a mesma chave nao cria outra escala.
+      // Editar a escala altera o payload e recebe nova chave.
+      if(!pendingScheduleCreate.current || pendingScheduleCreate.current.payload!==payload)
+        pendingScheduleCreate.current={payload,key:crypto.randomUUID()};
+      const response=await jsonRequest<{success:boolean;id:string;company_id:string;reused?:boolean}>(
         '/company/schedules',{
           method:'POST',
           headers:{'Content-Type':'application/json',
-            'X-CSRF-Token':session.csrf_token},
-          body:JSON.stringify({name,...config})
+            'X-CSRF-Token':session.csrf_token,
+            'Idempotency-Key':pendingScheduleCreate.current.key},
+          body:payload
         });
       if(response.company_id!==session.company.id)
         throw new Error('A empresa retornada não corresponde à sessão.');
-      setFormOpen(false);setNotice('Escala criada. Selecione um funcionário e atribua a nova escala.');
+      pendingScheduleCreate.current=null;
+      setFormOpen(false);setNotice(response.reused
+        ?'Escala já cadastrada, recuperada sem duplicar. Selecione um funcionário.'
+        :'Escala criada. Selecione um funcionário e atribua a nova escala.');
       setSelectedSchedule(response.id);
       await load();
     }catch(err){setError(err instanceof Error?err.message:'Falha ao salvar.');}

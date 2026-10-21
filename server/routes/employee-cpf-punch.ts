@@ -7,6 +7,8 @@ import { sha256, safeEqual } from '../core/crypto';
 import { limit, ipHash } from '../core/security';
 import { localDate, scheduleMinutes, shiftBounds, scheduleForDate } from '../core/time';
 import { getEmployeeCpfSession, type ActiveSession } from './employee-cpf-auth';
+import { canUseFrozenCompanyWorkday } from '../core/workday-start-state';
+import { SELECT_ACTIVE_COMPANY_SCHEDULE_SQL, CURRENT_ACTIVE_ASSIGNMENT_ID_SQL, CURRENT_ASSIGNMENT_CONFIG_SQL } from '../core/active-company-schedule';
 
 export const employeeCpfPunchRoutes = new Hono<App>();
 export const cpfPunchTypes = ['entry','break_start','break_end','exit'] as const;
@@ -86,8 +88,12 @@ async function loadContext(c:Ctx,s:ActiveSession,now:number) {
   ].join(' ')).bind(s.employee_id,workDate).first<Day>();
   ensure(!day||day.company_id===s.company_id,409,'legacy_day_pending',
     'O histórico deste dia precisa ser conciliado pelo administrador.');
+  ensure(canUseFrozenCompanyWorkday(day),409,'unstarted_company_workday',
+    'O dia ainda não possui marcações confirmadas. Solicite conferência ao administrador.');
 
   let shift:Schedule, rules:Rules;
+  let activeAssignmentId:string|null=null;
+  let activeScheduleConfigJson:string|null=null;
   if(day) {
     const parsed=shiftSchema.safeParse(JSON.parse(day.schedule_json));
     const r=rulesSchema.safeParse(JSON.parse(day.rules_json));
@@ -96,15 +102,13 @@ async function loadContext(c:Ctx,s:ActiveSession,now:number) {
     shift=scheduleForDate(parsed.data as Schedule,workDate);
     rules=r.data as Rules;
   } else {
-    const row=await db.prepare([
-      'SELECT s.config_json FROM schedule_assignments a',
-      'JOIN schedules s ON s.id=a.schedule_id AND s.company_id=?',
-      'WHERE a.employee_id=? AND a.effective_from<=?',
-      'ORDER BY a.effective_from DESC,a.created_at DESC,a.id DESC LIMIT 1'
-    ].join(' ')).bind(s.company_id,s.employee_id,workDate)
-      .first<{config_json:string}>();
+    const row=await db.prepare(SELECT_ACTIVE_COMPANY_SCHEDULE_SQL)
+      .bind(s.company_id,workDate,s.employee_id,workDate)
+      .first<{config_json:string;assignment_id:string}>();
     ensure(row,409,'no_company_schedule',
       'Sua empresa ainda não atribuiu uma jornada.');
+    activeAssignmentId=row.assignment_id;
+    activeScheduleConfigJson=row.config_json;
     const parsed=shiftSchema.safeParse(JSON.parse(row.config_json));
     const r=rulesSchema.safeParse(JSON.parse(employee.rules_json));
     ensure(parsed.success && r.success,409,'invalid_company_schedule',
@@ -123,7 +127,7 @@ async function loadContext(c:Ctx,s:ActiveSession,now:number) {
   const bounds=shiftBounds(workDate,shift,employee.timezone);
   ensure(now>=bounds.start-4*3600000 && now<=bounds.end+6*3600000,
     409,'outside_punch_window','O horário está fora da janela segura de ponto.');
-  return {day,employee,shift,rules,workDate};
+  return {day,employee,shift,rules,workDate,activeAssignmentId,activeScheduleConfigJson};
 }
 
 async function prior(c:Ctx,s:ActiveSession,key:string):Promise<Previous|null> {
@@ -194,11 +198,13 @@ employeeCpfPunchRoutes.post('/punch',async c=>{
     'JOIN company_punch_policies pol ON pol.company_id=co.id AND pol.enabled=1',
     'WHERE sess.token_hash=? AND sess.employee_id=? AND sess.company_id=?',
     'AND sess.expires_at>? AND sess.last_seen_at>?',
+    'AND NOT EXISTS (SELECT 1 FROM work_days existing',
+    'WHERE existing.employee_id=e.id AND existing.work_date=?)',
     'ON CONFLICT(employee_id,work_date) DO NOTHING'
   ].join(' ')).bind(
     ctx.day?.id||crypto.randomUUID(),ctx.workDate,ctx.employee.timezone,
     JSON.stringify(ctx.shift),JSON.stringify(ctx.rules),now,
-    s.token_hash,s.employee_id,s.company_id,now,now-3600000
+    s.token_hash,s.employee_id,s.company_id,now,now-3600000,ctx.workDate
   );
   // Subconsulta escalar deve encontrar exatamente o dia da empresa
   // E uma sessao valida. Caso nao encontre, work_day_id NULL falha e
@@ -223,10 +229,17 @@ employeeCpfPunchRoutes.post('/punch',async c=>{
     'WHERE d.employee_id=? AND d.company_id=? AND d.work_date=?',
     'AND sess.token_hash=? AND sess.expires_at>? AND sess.last_seen_at>?',
     'AND d.next_seq=?',
+    'AND (?=1 OR (',
+    '? = (' + CURRENT_ACTIVE_ASSIGNMENT_ID_SQL + ')',
+    'AND ? = (' + CURRENT_ASSIGNMENT_CONFIG_SQL + ')',
+    'AND ? = pol.rules_json',
+    '))',
     '),?,?,?,?,?,?,?)'
   ].join(' ')).bind(
     punchId,s.employee_id,s.company_id,ctx.workDate,
     s.token_hash,now,now-3600000,seq,
+    ctx.day?1:0,ctx.activeAssignmentId,ctx.workDate,
+    ctx.activeScheduleConfigJson,ctx.workDate,ctx.activeAssignmentId,ctx.employee.rules_json,
     s.employee_id,seq,type,now,key,ipHash(c),receipt
   );
 

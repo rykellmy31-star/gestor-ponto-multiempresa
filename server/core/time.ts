@@ -38,7 +38,15 @@ export function shiftBounds(date: string, s: Schedule, zone: string) {
 }
 export function anchorDate(now:number,s:Schedule|null,zone:string) {
   const d=DateTime.fromMillis(now,{zone});
-  if (s && minutesOf(s.end)<minutesOf(s.start) && d.hour*60+d.minute < Math.min(minutesOf(s.end)+240,minutesOf(s.start))) return d.minus({days:1}).toISODate()!;
+  if (s) {
+    // A madrugada pertence ao turno da vespera, inclusive com horario especial.
+    const previousDate=d.minus({days:1}).toISODate()!;
+    const previous=scheduleForDate(s,previousDate);
+    if (minutesOf(previous.end)<minutesOf(previous.start) &&
+        d.hour*60+d.minute < Math.min(minutesOf(previous.end)+240,minutesOf(previous.start))) {
+      return previousDate;
+    }
+  }
   return d.toISODate()!;
 }
 export function fromLocal(input:string,zone:string) {

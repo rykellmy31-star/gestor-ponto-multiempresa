@@ -89,7 +89,7 @@ describe('CR JORNADA - dias e marcacoes por empresa no D1', () => {
 
       expect(rejected(
         "UPDATE work_days SET employee_id='em-a2' WHERE id='day-a'", dir
-      )).toMatch(/work_day_company_mismatch/);
+      )).toMatch(/(?:work_day_company_mismatch|company_started_workday_immutable)/);
       expect(query(
         "SELECT employee_id FROM work_days WHERE id='day-a'", dir
       )).toEqual([{ employee_id: 'em-a' }]);

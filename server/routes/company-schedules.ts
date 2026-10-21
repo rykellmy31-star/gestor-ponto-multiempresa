@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DateTime } from 'luxon';
 import type { App, Schedule } from '../types';
 import { ensure } from '../core/errors';
+import { sha256 } from '../core/crypto';
 import { limit } from '../core/security';
 import { scheduleMinutes } from '../core/time';
 import { scheduleSchema as validatedSchedule, dayOverridesSchema } from '../core/validation';
@@ -79,24 +80,64 @@ companySchedulesRoutes.post('/', async c => {
   ensure(validSchedule(config), 422, 'invalid_schedule',
     'Jornada ou intervalo inválidos.');
 
+  // Clientes legados sem chave continuam suportados. A interface nova envia
+  // o mesmo UUID ao repetir uma tentativa cujo resultado nao chegou.
+  const rawKey = c.req.header('Idempotency-Key');
+  ensure(rawKey === undefined ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawKey),
+    400, 'invalid_idempotency_key', 'Identificador da tentativa inválido.');
+  const requestKey = rawKey?.toLowerCase() ?? null;
+  const fingerprint = sha256(JSON.stringify({ name, ...config }));
   const db = c.get('db');
+  const lookup = () => db.prepare(`
+    SELECT request_fingerprint,schedule_id FROM company_schedule_create_requests
+    WHERE company_id=? AND admin_id=? AND request_key=?
+  `).bind(company.id,adminId,requestKey).first<{
+    request_fingerprint:string;schedule_id:string
+  }>();
+  const replay = async () => {
+    const recorded = await lookup();
+    ensure(recorded,409,'schedule_create_conflict',
+      'Não foi possível confirmar o cadastro. Consulte a lista de escalas.');
+    ensure(recorded.request_fingerprint === fingerprint,409,
+      'idempotency_key_reused','Esta tentativa pertence a uma escala diferente.');
+    return c.json({success:true,id:recorded.schedule_id,
+      company_id:company.id,reused:true},200);
+  };
+  if (requestKey && await lookup()) return replay();
+
   const id = crypto.randomUUID(), now = Date.now();
-  const result = await db.batch([
-    db.prepare([
-      'INSERT INTO schedules(id,name,config_json,created_by,created_at,company_id)',
-      'SELECT ?,?,?,NULL,?,c.id FROM companies c',
-      'WHERE c.id=? AND c.status=\'active\''
-    ].join(' ')).bind(id, name, JSON.stringify(config), now, company.id),
+  const insert = [
+    'INSERT INTO schedules(id,name,config_json,created_by,created_at,company_id)',
+    'SELECT ?,?,?,NULL,?,c.id FROM companies c',
+    'WHERE c.id=? AND c.status=\'active\''
+  ];
+  if (requestKey) insert.push(
+    'AND NOT EXISTS (SELECT 1 FROM company_schedule_create_requests r',
+    'WHERE r.company_id=c.id AND r.admin_id=? AND r.request_key=?)'
+  );
+  const statements = [
+    db.prepare(insert.join(' ')).bind(id,name,JSON.stringify(config),now,company.id,
+      ...(requestKey ? [adminId,requestKey] : [])),
     db.prepare([
       'INSERT INTO company_schedule_audit(',
       'id,company_id,admin_id,action,schedule_id,employee_id,details_json,created_at)',
       'SELECT ?,?,?,\'created\',?,NULL,?,?',
       'WHERE EXISTS(SELECT 1 FROM schedules WHERE id=? AND company_id=?)'
-    ].join(' ')).bind(crypto.randomUUID(), company.id, adminId, id,
-      JSON.stringify({ name }), now, id, company.id)
-  ]);
-
-  ensure(result[0].meta.changes === 1 && result[1].meta.changes === 1,
+    ].join(' ')).bind(crypto.randomUUID(),company.id,adminId,id,
+      JSON.stringify({name}),now,id,company.id)
+  ];
+  if (requestKey) statements.push(db.prepare(`
+    INSERT INTO company_schedule_create_requests
+      (company_id,admin_id,request_key,request_fingerprint,schedule_id,created_at)
+    SELECT ?,?,?,?,?,? WHERE EXISTS (
+      SELECT 1 FROM schedules WHERE id=? AND company_id=?)
+  `).bind(company.id,adminId,requestKey,fingerprint,id,now,id,company.id));
+  // D1.batch executa as instrucões atomicamente: cadastro, auditoria e chave.
+  const result = await db.batch(statements);
+  if (requestKey && result[0].meta.changes === 0) return replay();
+  ensure(result[0].meta.changes === 1 && result[1].meta.changes === 1 &&
+    (!requestKey || result[2].meta.changes === 1),
     409, 'company_inactive', 'Empresa inativa ou cadastro alterado.');
   return c.json({ success: true, id, company_id: company.id }, 201);
 });

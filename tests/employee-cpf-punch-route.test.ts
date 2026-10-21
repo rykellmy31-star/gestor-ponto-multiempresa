@@ -173,7 +173,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
       'token-hash','employee-a','company-a'
     ]);
     const assigned=t.statements.find(x=>x.sql.includes('FROM schedule_assignments a'));
-    expect(assigned?.args.slice(0,2)).toEqual(['company-a','employee-a']);
+    expect(assigned?.args).toEqual(['company-a','2026-10-19','employee-a','2026-10-19']);
   });
 
   it('seleciona a ultima atribuicao vigente com desempate estavel',async()=>{
@@ -185,7 +185,7 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
       'ORDER BY a.effective_from DESC,a.created_at DESC,a.id DESC LIMIT 1'
     );
     expect(selected?.sql).toContain('a.effective_from<=?');
-    expect(selected?.args).toEqual(['company-a','employee-a','2026-10-19']);
+    expect(selected?.args).toEqual(['company-a','2026-10-19','employee-a','2026-10-19']);
   });
 
   it('rejeita empresa sem politica propria ativa ou jornada propria',async()=>{
