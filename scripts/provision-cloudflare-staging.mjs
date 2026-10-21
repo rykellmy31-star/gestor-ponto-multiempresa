@@ -43,8 +43,16 @@ export function createClient({ token, accountId, fetchImpl = fetch }) {
     if (optionalWorker && response.status === 404 && data?.errors?.some(e => e.code === 10007)) return null;
     if (!response.ok || !data?.success) {
       const code = data?.errors?.[0]?.code;
+      const message = data?.errors?.[0]?.message || '';
+      const category = [
+        ['foreign_key', /FOREIGN KEY constraint|foreign key mismatch/i],
+        ['missing_table', /no such table/i], ['unique', /UNIQUE constraint/i],
+        ['parser', /incomplete input|syntax error|unrecognized token/i],
+        ['limit', /too (?:many|long)|exceed|limit/i],
+        ['authorization', /not authorized|permission|authentication/i]
+      ].find(([,pattern]) => pattern.test(message))?.[0] || 'nao_classificado';
       throw new Error('Cloudflare ' + method + ' ' + path.split('?')[0] + ': HTTP ' + response.status +
-        ' (codigo ' + (Number.isSafeInteger(code) ? code : 'indisponivel') + ').');
+        ' (codigo ' + (Number.isSafeInteger(code) ? code : 'indisponivel') + '; ' + category + ').');
     }
     return data;
   };

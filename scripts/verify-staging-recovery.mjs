@@ -125,18 +125,19 @@ try {
   for (const [index, statements] of sections.entries()) {
     // A API de query e usada em vez do importador bulk que reiniciou D1.
     // Tabelas primeiro; dados numa transacao com FKs diferidas; triggers por ultimo.
-    let batch = 'PRAGMA defer_foreign_keys=TRUE;\n';
-    const execute = async sql => {
+    let batch = [{ sql: 'PRAGMA defer_foreign_keys=TRUE;' }];
+    let bytes = 0;
+    const execute = async batch => {
       const restored = await api('/d1/database/' + database.uuid + '/query', {
-        method: 'POST', body: { sql }, databaseId: database.uuid
+        method: 'POST', body: { batch }, databaseId: database.uuid
       });
       assert.ok(Array.isArray(restored.result) && restored.result.every(r => r.success), 'Fase de recuperacao ' + index);
     };
     for (const statement of statements) {
-      if (Buffer.byteLength(batch + statement) > 90000) {
-        await execute(batch); batch = 'PRAGMA defer_foreign_keys=TRUE;\n';
+      if (bytes + Buffer.byteLength(statement) > 90000 || batch.length >= 100) {
+        await execute(batch); batch = [{ sql: 'PRAGMA defer_foreign_keys=TRUE;' }]; bytes = 0;
       }
-      batch += statement + '\n';
+      batch.push({ sql: statement }); bytes += Buffer.byteLength(statement);
     }
     if (statements.length) await execute(batch);
     console.log('Fase de recuperacao aprovada: ' + ['tabelas','dados','indices e triggers'][index]);
