@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type CSSProperties } from 'react';
 import { Building2, CheckCircle2, Clock3, Eye, EyeOff, LogOut, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { EmployeeCpfPointHistory } from './employee-cpf-history';
 import { EmployeeCpfPunch } from './employee-cpf-punch';
@@ -96,6 +96,16 @@ export function EmployeeCpfPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const onSessionExpired=useCallback(()=>{
+    setSession(null);
+    setCompanies([]);
+    setPassword('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setError('Sua sessão expirou. Entre novamente para continuar.');
+  },[]);
 
   async function refreshSession() {
     const data = await requestEmployee<EmployeeSession>('/session');
@@ -282,12 +292,14 @@ export function EmployeeCpfPage() {
               employeeId={session.user.employee_id}
               csrfToken={session.csrf_token}
               timezone={session.company.timezone}
-              onConfirmed={() => setHistoryVersion(v => v + 1)}/>
+              onConfirmed={() => setHistoryVersion(v => v + 1)}
+              onSessionExpired={onSessionExpired}/>
             <EmployeeCpfPointHistory key={session.company.id}
               companyId={session.company.id}
               employeeId={session.user.employee_id}
               timezone={session.company.timezone}
-              refreshVersion={historyVersion}/>
+              refreshVersion={historyVersion}
+              onSessionExpired={onSessionExpired}/>
             <button type="button" style={primary} onClick={logout} disabled={busy}>
               <LogOut size={18}/>{busy ? 'Saindo…' : 'Encerrar sessão'}
             </button>

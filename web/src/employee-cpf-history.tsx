@@ -42,11 +42,12 @@ function formatTime(timestamp: number, zone: string) {
 }
 
 export function EmployeeCpfPointHistory({
-  companyId,employeeId,timezone, refreshVersion = 0
+  companyId,employeeId,timezone, refreshVersion = 0, onSessionExpired
 }: {
   companyId:string;employeeId:string;
   timezone?: 'America/Bahia' | 'America/Sao_Paulo';
   refreshVersion?: number;
+  onSessionExpired?:()=>void;
 }) {
   const [month, setMonth] = useState(currentMonth);
   const [history, setHistory] = useState<HistoryPayload | null>(null);
@@ -66,7 +67,10 @@ export function EmployeeCpfPointHistory({
       signal: ctrl.signal
     }).then(async response => {
       if (!response.ok) {
-        if (response.status === 401) throw new Error('Sua sessão expirou. Entre novamente.');
+        if (response.status === 401) {
+          onSessionExpired?.();
+          throw new Error('Sua sessão expirou. Entre novamente.');
+        }
         if (response.status === 403) throw new Error('Altere sua senha inicial antes de consultar o ponto.');
         throw new Error('O histórico não está disponível. Tente novamente.');
       }
@@ -85,7 +89,7 @@ export function EmployeeCpfPointHistory({
     });
 
     return () => ctrl.abort();
-  }, [month, reload, refreshVersion, companyId, employeeId]);
+  }, [month, reload, refreshVersion, companyId, employeeId, onSessionExpired]);
 
   const zone = timezone || 'America/Bahia';
   const canExport = !loading && !error && history?.month === month &&

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clock3, CheckCircle2, RefreshCw, ShieldCheck } from 'lucide-react';
 import './employee-cpf-punch.css';
 import {nextEmployeePunchAttempt,matchesEmployeePunchConfirmation,
+  checkEmployeePunchPreflight,
   type PendingEmployeePunch} from './employee-cpf-ui-safety';
 
 type PunchType = 'entry'|'break_start'|'break_end'|'exit';
@@ -25,13 +26,15 @@ const descriptions:Record<PunchType,string> = {
 };
 
 export function EmployeeCpfPunch({
-  companyId, employeeId, csrfToken, timezone = 'America/Bahia', onConfirmed
+  companyId, employeeId, csrfToken, timezone = 'America/Bahia',
+  onConfirmed, onSessionExpired
 }: {
   companyId:string;
   employeeId:string;
   csrfToken:string;
   timezone?: 'America/Bahia' | 'America/Sao_Paulo';
   onConfirmed?:()=>void;
+  onSessionExpired?:()=>void;
 }) {
   const [today,setToday]=useState<Today|null>(null);
   const [loading,setLoading]=useState(false);
@@ -52,6 +55,9 @@ export function EmployeeCpfPunch({
       if(response.status===503){
         setToday(null);setDisabled(true);return;
       }
+      if(response.status===401){
+        setToday(null);onSessionExpired?.();return;
+      }
       if(!response.ok){
         throw new Error(response.status===401
           ? 'Sua sessão expirou. Entre novamente.'
@@ -66,7 +72,7 @@ export function EmployeeCpfPunch({
       setToday(null);
       setError(e instanceof Error?e.message:'Falha ao consultar.');
     }finally{setLoading(false);}
-  },[companyId,employeeId]);
+  },[companyId,employeeId,onSessionExpired]);
 
   // Renderiza o modulo mesmo que ainda esteja desligado. A requisicao
   // so acontece depois da autenticacao confirmada do funcionario.
@@ -79,13 +85,30 @@ export function EmployeeCpfPunch({
   async function punch(){
     const type=today?.next_type;
     if(!type||busy||disabled)return;
-    const attempt=nextEmployeePunchAttempt(pendingKey.current,{
-      companyId,employeeId,workDate:today!.work_date,type
-    },()=>crypto.randomUUID());
-    pendingKey.current=attempt;
-    const key=attempt.key;
+    const expected={companyId,employeeId,workDate:today!.work_date,type};
     setBusy(true);setError('');setNotice('');
     try{
+      // Confere a data e a proxima batida diretamente na API: uma tela
+      // deixada aberta durante a noite nao pode criar ponto no dia errado.
+      const check=await fetch('/api/employee/cpf-work/today',{
+        credentials:'same-origin',cache:'no-store'
+      });
+      if(check.status===401){onSessionExpired?.();return;}
+      if(!check.ok)throw new Error('Não foi possível confirmar a jornada atual. Atualize a tela antes de registrar.');
+      const fresh=await check.json() as Today;
+      const verdict=checkEmployeePunchPreflight(expected,fresh,pendingKey.current);
+      if(verdict==='different_identity'){
+        setToday(null);pendingKey.current=null;
+        throw new Error('A sessão mudou de empresa ou funcionário. Entre novamente.');
+      }
+      if(verdict==='changed'){
+        setToday(fresh);pendingKey.current=null;
+        throw new Error('O dia ou a sequência de ponto mudou. Confira o próximo registro antes de continuar.');
+      }
+      const attempt=nextEmployeePunchAttempt(pendingKey.current,expected,
+        ()=>crypto.randomUUID());
+      pendingKey.current=attempt;
+      const key=attempt.key;
       const response=await fetch('/api/employee/cpf-work/punch',{
         method:'POST',credentials:'same-origin',cache:'no-store',
         headers:{
@@ -93,6 +116,7 @@ export function EmployeeCpfPunch({
         },
         body:JSON.stringify({type,idempotency_key:key})
       });
+      if(response.status===401){onSessionExpired?.();return;}
       const data=await response.json().catch(()=>null) as
         {success?:boolean;replayed?:boolean;punch?:Confirmation;
           error?:{message?:string}}|null;

@@ -38,3 +38,28 @@ export function employeeCpfSessionEndpointUnavailable(
     !contentType?.toLowerCase().includes('application/json')
   );
 }
+
+// Uma tela aberta pode permanecer com a data/etapa antiga. Verificamos a
+// etapa atual no servidor imediatamente antes de enviar a marcacao.
+export type EmployeePunchPreflight={
+  company_id:string;employee_id:string;work_date:string;
+  next_type:EmployeePunchType|null
+};
+export function checkEmployeePunchPreflight(
+  expected:EmployeePunchContext,
+  current:EmployeePunchPreflight,
+  pending:PendingEmployeePunch|null
+):'ready'|'retry'|'changed'|'different_identity' {
+  if(current.company_id!==expected.companyId||
+    current.employee_id!==expected.employeeId)return 'different_identity';
+  if(current.work_date!==expected.workDate)return 'changed';
+  if(current.next_type===expected.type)return 'ready';
+  // Se o POST anterior perdeu a resposta, a batida pode ter sido gravada
+  // e a proxima sequencia ja mudou: repetir a mesma chave recupera o
+  // comprovante sem criar outra batida; nunca aceitar replay de outro dia.
+  if(pending&&pending.companyId===expected.companyId&&
+    pending.employeeId===expected.employeeId&&
+    pending.workDate===expected.workDate&&
+    pending.type===expected.type)return 'retry';
+  return 'changed';
+}
