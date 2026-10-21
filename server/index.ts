@@ -186,6 +186,12 @@ app.use('/api/*', async (c, next) => {
     (/^\/api\/company\/employees\/[^/]+\/reset-password$/.test(path) &&
       c.req.method === 'POST');
 
+  // Somente o novo cadastro empresarial; o modulo ainda exige sessao,
+  // CSRF, flag, isolamento SQL e auditoria antes de qualquer gravacao.
+  const isCompanyEmployeeRegistration =
+    path === '/api/company/employees' && c.req.method === 'POST' &&
+    c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION === 'true';
+
   // Autenticacao empresarial obrigatoria; funcao desligada sem flag.
   const isCompanySchedulesRoute =
     path.startsWith('/api/company/schedules/') ||
@@ -213,6 +219,7 @@ app.use('/api/*', async (c, next) => {
     !isPublicSalesRoute &&
     !isCompanyAuthRoute &&
     !isCompanyEmployeesList &&
+    !isCompanyEmployeeRegistration &&
     !isCompanySchedulesRoute &&
     !isEmployeeCpfAuthRoute &&
     !isEmployeeCpfHistoryRoute &&

@@ -17,7 +17,7 @@ const disabled = [
   'ENABLE_SALES_LEADS'
 ];
 
-export function assertStagingTarget(config, accountId, production) {
+export function assertStagingTarget(config, accountId, production, { exerciseFeatures = false } = {}) {
   if (accountId !== CLOUDFLARE_ACCOUNT) {
     throw new Error('Conta Cloudflare de homologacao nao autorizada.');
   }
@@ -41,7 +41,8 @@ export function assertStagingTarget(config, accountId, production) {
     config?.triggers !== undefined || config?.kv_namespaces !== undefined ||
     config?.r2_buckets !== undefined || config?.queues !== undefined ||
     config?.services !== undefined || config?.unsafe !== undefined ||
-    disabled.some(key => config.vars?.[key] !== 'false')) {
+    disabled.some(key => config.vars?.[key] !==
+      (exerciseFeatures && key !== 'ENABLE_SALES_LEADS' ? 'true' : 'false'))) {
     throw new Error('Homologacao herdou vinculacoes ou funcoes proibidas.');
   }
   return databases[0].database_id;

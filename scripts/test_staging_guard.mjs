@@ -79,6 +79,20 @@ test('falha se a configuracao base de producao for alterada indevidamente', () =
   );
 });
 
+test('perfil funcional e opt-in e continua restrito a Worker, origem e D1 staging', () => {
+  const functional = structuredClone(isolated);
+  for (const key of ['ENABLE_COMPANY_SCHEDULES', 'ENABLE_COMPANY_EMPLOYEE_REGISTRATION',
+    'ENABLE_EMPLOYEE_PASSWORD_RECOVERY', 'ENABLE_EMPLOYEE_PUNCHES']) functional.vars[key] = 'true';
+  assert.throws(() => assertStagingTarget(functional, CLOUDFLARE_ACCOUNT, production));
+  assert.equal(assertStagingTarget(functional, CLOUDFLARE_ACCOUNT, production,
+    { exerciseFeatures: true }), isolatedId);
+  for (const modification of [{ name: LIVE_WORKER }, { d1_databases: production.d1_databases },
+    { vars: { ...functional.vars, ENABLE_SALES_LEADS: 'true' } }]) {
+    assert.throws(() => assertStagingTarget({ ...functional, ...modification },
+      CLOUDFLARE_ACCOUNT, production, { exerciseFeatures: true }));
+  }
+});
+
 test('recusa UUID de producao com letras maiusculas ou caixa mista', () => {
   for (const id of [LIVE_D1_ID.toUpperCase(), LIVE_D1_ID.replace('c', 'C')]) {
     assert.throws(() => assertStagingTarget({

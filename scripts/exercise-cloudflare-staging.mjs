@@ -1,0 +1,180 @@
+import assert from 'node:assert/strict';
+import { readFileSync, appendFileSync } from 'node:fs';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createClient, validateStagingDatabase, provisionStaging } from './provision-cloudflare-staging.mjs';
+import { STAGING_DATABASE, STAGING_ORIGIN, STAGING_WORKER } from './staging-guard.mjs';
+
+// Credenciais de QA separadas por finalidade. A derivacao unidirecional permite
+// repetir o teste sem revelar/persistir senha e sem trocar chaves do Worker.
+const infrastructureToken = process.env.CLOUDFLARE_STAGING_TOKEN;
+if (!infrastructureToken) throw new Error('Token staging ausente.');
+const qaPassword = 'Qa!' + createHmac('sha256', infrastructureToken).update('cr-jornada/staging/qa-admin/v1').digest('hex');
+const mask = value => { if (value) console.log('::add-mask::' + value); return value; };
+mask(qaPassword);
+const api = createClient({ token: infrastructureToken, accountId: process.env.CLOUDFLARE_ACCOUNT_ID });
+let checks = 0;
+const verify = (condition, label) => { assert.ok(condition, label); checks++; console.log('APROVADO: ' + label); };
+
+class Client {
+  cookies = new Map();
+  csrf = '';
+  async call(path, { method = 'GET', body, expected = 200, csrf = this.csrf, origin = STAGING_ORIGIN, headers = {} } = {}) {
+    const response = await fetch(STAGING_ORIGIN + path, {
+      method, redirect: 'error', signal: AbortSignal.timeout(30000),
+      headers: { Origin: origin, 'Content-Type': 'application/json',
+        Cookie: [...this.cookies].map(([k,v]) => k + '=' + v).join('; '),
+        ...(csrf ? { 'X-CSRF-Token': csrf } : {}), ...headers },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    });
+    for (const cookie of response.headers.getSetCookie()) {
+      const pair = cookie.split(';')[0], i = pair.indexOf('=');
+      this.cookies.set(pair.slice(0,i), mask(pair.slice(i+1)));
+      if (pair.slice(i+1)) verify(/HttpOnly/i.test(cookie) && /Secure/i.test(cookie) && /SameSite=Strict/i.test(cookie), 'cookie seguro');
+    }
+    const data = await response.json().catch(() => ({}));
+    mask(data.csrf_token); mask(data.temporary_password);
+    assert.equal(response.status, expected, method + ' ' + path + ' (' + (data.error?.code || 'sem codigo') + ')');
+    checks++;
+    if (data.csrf_token) this.csrf = data.csrf_token;
+    return data;
+  }
+}
+
+try {
+  await provisionStaging({ exerciseFeatures: true });
+  const config = JSON.parse(readFileSync('wrangler.staging.jsonc', 'utf8'));
+  const databaseId = validateStagingDatabase({ name: STAGING_DATABASE, uuid: config.d1_databases[0].database_id });
+  const query = async (sql, params = []) => {
+    const data = await api('/d1/database/' + databaseId + '/query', {
+      method: 'POST', body: { sql, params }, databaseId
+    });
+    const result = data.result?.[0];
+    assert.ok(result?.success && Array.isArray(result.results), 'Consulta staging');
+    return result.results;
+  };
+  const admins = await query('SELECT login FROM platform_admins');
+  const root = new Client();
+  if (!admins.length) {
+    const secretPath = '/workers/scripts/' + STAGING_WORKER + '/secrets';
+    const names = (await api(secretPath)).result.map(s => s.name);
+    assert.ok(!names.includes('PLATFORM_BOOTSTRAP_TOKEN'), 'Nao sobrescrever bootstrap existente');
+    const bootstrap = mask(randomBytes(32).toString('hex'));
+    await api(secretPath, { method: 'PUT', body: { name: 'PLATFORM_BOOTSTRAP_TOKEN', text: bootstrap, type: 'secret_text' } });
+    try {
+      // Propagacao de secret pode levar alguns segundos; nenhuma tentativa muda
+      // dados antes de a credencial chegar. Limite abaixo do rate limit da rota.
+      let setup;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await new Promise(r => setTimeout(r, 5000));
+        try {
+          setup = await root.call('/api/platform/setup', { method: 'POST', expected: 201,
+            body: { token: bootstrap, name: 'Superadmin Ficticio QA', login: 'qa-staging', email: '', password: qaPassword } });
+          break;
+        } catch (error) {
+          if (!error.message.includes('invalid_platform_setup') || attempt === 2) throw error;
+        }
+      }
+      assert.ok(setup?.success, 'Configuracao QA inicial');
+    } finally {
+      await api(secretPath + '/PLATFORM_BOOTSTRAP_TOKEN', { method: 'DELETE' });
+    }
+  } else assert.ok(admins.some(a => a.login === 'qa-staging'), 'Staging pertence a outra homologacao; nao modificar contas');
+  await root.call('/api/platform/auth/login', { method: 'POST', body: { login: 'qa-staging', password: qaPassword } });
+  await root.call('/api/platform/auth/session');
+  const anonymous = new Client();
+  await anonymous.call('/api/platform/companies', { expected: 401 });
+  await root.call('/api/platform/companies', { method: 'POST', body: {}, csrf: 'invalid', expected: 403 });
+  await root.call('/api/platform/companies', { method: 'POST', body: {}, origin: 'https://example.invalid', expected: 403 });
+  const tag = randomBytes(5).toString('hex');
+  const initialPassword = mask('QaInicial!' + randomBytes(20).toString('hex'));
+  const finalPassword = mask('QaFinal!' + randomBytes(20).toString('hex'));
+  const companies = [];
+  for (const letter of ['a', 'b']) {
+    const body = { name: 'Empresa Ficticia QA ' + letter, document: '', slug: 'qa-' + tag + '-' + letter, timezone: 'America/Bahia' };
+    const { company } = await root.call('/api/platform/companies', { method: 'POST', body, expected: 201 });
+    await root.call('/api/platform/companies', { method: 'POST', body, expected: 409 });
+    await root.call('/api/platform/companies/' + company.id + '/admins', { method: 'POST', expected: 201,
+      body: { name: 'Gestor Ficticio ' + letter, login: 'gestor', email: '', password: initialPassword } });
+    const client = new Client();
+    await client.call('/api/company/auth/login', { method: 'POST', body: { company: company.slug, login: 'gestor', password: initialPassword } });
+    const firstSession = await client.call('/api/company/auth/session');
+    verify(firstSession.must_change_password === true, 'troca inicial obrigatoria');
+    await client.call('/api/company/employees', { expected: 403 });
+    await client.call('/api/company/auth/change-password', { method: 'POST', body: { current_password: initialPassword, new_password: finalPassword } });
+    await client.call('/api/company/auth/session', { expected: 401 });
+    await client.call('/api/company/auth/login', { method: 'POST', body: { company: company.slug, login: 'gestor', password: finalPassword } });
+    const session = await client.call('/api/company/auth/session');
+    verify(session.company.id === company.id && !session.must_change_password, 'gestor vinculado a empresa correta');
+    companies.push({ ...company, client });
+  }
+  const [a,b] = companies;
+  const cpfBase = Array.from(randomBytes(9), n => n % 10);
+  for (const length of [9,10]) { const sum = cpfBase.reduce((s,n,i) => s+n*(length+1-i),0); cpfBase.push((sum*10)%11%10); }
+  const cpf = cpfBase.join('');
+  const employeePassword = mask('QaFuncionario!' + randomBytes(20).toString('hex'));
+  for (const company of companies) {
+    const payload = { full_name: 'Funcionario Ficticio QA', registration: 'QA001', cpf, job_title: 'Teste', admission_date: '2026-01-01' };
+    const created = await company.client.call('/api/company/employees', { method: 'POST', body: payload, expected: 201 });
+    company.employee = created.employee;
+    await company.client.call('/api/company/employees', { method: 'POST', body: payload, expected: 409 });
+    await company.client.call('/api/company/employees', { method: 'POST', body: { ...payload, company_id: company.id }, expected: 400 });
+    const staff = new Client();
+    await staff.call('/api/employee/cpf-auth/login', { method: 'POST', body: { cpf, password: created.temporary_password } });
+    await staff.call('/api/employee/cpf-auth/session');
+    await staff.call('/api/employee/cpf-auth/password', { method: 'POST', body: { current_password: created.temporary_password, new_password: employeePassword } });
+    await staff.call('/api/employee/cpf-auth/session', { expected: 401 });
+  }
+  for (const [company,other] of [[a,b],[b,a]]) {
+    const list = await company.client.call('/api/company/employees');
+    verify(list.employees.length === 1 && list.employees[0].id === company.employee.id,
+      'listagem de funcionarios isolada');
+    await company.client.call('/api/platform/companies', { expected: 401 });
+    await company.client.call('/api/company/employees/' + other.employee.id + '/reset-password', { method: 'POST', body: { current_password: finalPassword }, expected: 404 });
+  }
+  const morning = { name: 'Manha QA', start: '07:00', break_start: '11:00', break_end: '12:00', end: '16:00', weekdays: [1,2,3,4,5], paid_break: false };
+  const afternoon = { ...morning, name: 'Tarde QA', start: '13:00', break_start: '16:00', break_end: '17:00', end: '22:00',
+    day_overrides: { '3': { start: '07:00', break_start: '11:00', break_end: '12:00', end: '16:00', paid_break: false } } };
+  const headers = { 'Idempotency-Key': randomUUID() };
+  const shift = await a.client.call('/api/company/schedules', { method: 'POST', body: morning, headers, expected: 201 });
+  const replay = await a.client.call('/api/company/schedules', { method: 'POST', body: morning, headers });
+  verify(shift.id === replay.id && replay.reused === true, 'cadastro de jornada idempotente');
+  const shift2 = await a.client.call('/api/company/schedules', { method: 'POST', body: afternoon, expected: 201 });
+  await a.client.call('/api/company/schedules/' + shift.id + '/assign-all', { method: 'POST', body: { effective_from: '2026-10-26' }, expected: 201 });
+  await a.client.call('/api/company/schedules/' + shift.id + '/assign-all', { method: 'POST', body: { effective_from: '2026-10-26' } });
+  await a.client.call('/api/company/schedules/' + shift2.id + '/assign', { method: 'POST', body: { employee_id: a.employee.id, effective_from: '2026-10-27' }, expected: 201 });
+  const week = await a.client.call('/api/company/schedules/employee/' + a.employee.id + '/week?from=2026-10-26');
+  verify(week.days[0].shift.start === '07:00' && week.days[1].shift.start === '13:00' && week.days[2].shift.start === '07:00', 'horarios distintos por dia e historico preservado');
+  await b.client.call('/api/company/schedules/employee/' + a.employee.id + '/week?from=2026-10-26', { expected: 404 });
+  await b.client.call('/api/company/schedules/' + shift.id + '/assign-all', { method: 'POST', body: { effective_from: '2026-10-26' }, expected: 404 });
+  const employeeClients = [];
+  for (const company of companies) {
+    const client = new Client();
+    const decision = await client.call('/api/employee/cpf-auth/login', { method: 'POST', body: { cpf, password: employeePassword } });
+    verify(decision.selection_required && decision.companies.length === 2, 'CPF com dois vinculos exige escolha');
+    await client.call('/api/employee/cpf-auth/select', { method: 'POST', body: { company_id: company.id } });
+    const session = await client.call('/api/employee/cpf-auth/session');
+    verify(session.company.id === company.id && session.user.employee_id === company.employee.id, 'sessao funcionario isolada');
+    const history = await client.call('/api/employee/cpf-work/history?month=2026-10');
+    verify(history.company_id === company.id && history.employee_id === company.employee.id, 'historico vinculado a sessao');
+    employeeClients.push(client);
+  }
+  await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
+  await a.client.call('/api/company/auth/session', { expected: 401 });
+  await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
+  await b.client.call('/api/company/auth/session');
+  await employeeClients[1].call('/api/employee/cpf-auth/session');
+  await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'active' } });
+  await a.client.call('/api/company/auth/session', { expected: 401 });
+  await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
+  const count = await query('SELECT COUNT(*) AS total FROM employees WHERE company_id IN (?,?)', [a.id,b.id]);
+  verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
+  const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
+  verify(assignments[0].total === 2, 'D1 confirma historico de duas atribuicoes');
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas e suspensao.\n';
+  console.log(report);
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
+} catch (error) {
+  // Assertions nao incluem respostas completas, senhas, cookies ou CPF.
+  console.error('Homologacao interrompida: ' + error.message);
+  process.exitCode = 1;
+}

@@ -54,7 +54,7 @@ const employees = [
   }
 ];
 
-function makeEnvironment(scenario: Scenario) {
+function makeEnvironment(scenario: Scenario, registrationFlag?: string) {
   const statements: string[] = [];
 
   const db = {
@@ -149,6 +149,7 @@ function makeEnvironment(scenario: Scenario) {
     AUTH_PEPPER: 'test-pepper'.repeat(5),
     DATA_KEY: 'a'.repeat(64),
     SESSION_HOURS: '8',
+    ENABLE_COMPANY_EMPLOYEE_REGISTRATION: registrationFlag,
     ASSETS: {
       fetch: async () => new Response('asset')
     }
@@ -157,7 +158,8 @@ function makeEnvironment(scenario: Scenario) {
   const request = (
     path: string,
     method = 'GET',
-    authenticated = true
+    authenticated = true,
+    csrf?: string
   ) =>
     server.request(
       path,
@@ -166,7 +168,8 @@ function makeEnvironment(scenario: Scenario) {
         headers: authenticated
           ? {
               Cookie:
-                'cr_jornada_company_dev=' + 'a'.repeat(64)
+                'cr_jornada_company_dev=' + 'a'.repeat(64),
+              ...(csrf ? { 'X-CSRF-Token': csrf } : {})
             }
           : {}
       },
@@ -180,6 +183,23 @@ function makeEnvironment(scenario: Scenario) {
 }
 
 describe('CR JORNADA - protecao das rotas', () => {
+  it('cadastro explicitamente habilitado chega ao modulo seguro sem pular autenticacao ou CSRF', async () => {
+    const anonymous = makeEnvironment('anonymous', 'true');
+    expect((await anonymous.request('/api/company/employees', 'POST')).status).toBe(401);
+    for (const scenario of ['company-a', 'company-b'] as const) {
+      const t = makeEnvironment(scenario, 'true');
+      expect((await t.request('/api/company/employees', 'POST')).status).toBe(403);
+      const response = await t.request('/api/company/employees', 'POST', true, 'csrf-token');
+      expect(response.status).toBe(400);
+      expect((await jsonBody(response)).error.code).toBe('invalid_employee');
+      expect(t.statements.some(sql => /INSERT\s+INTO\s+employees/i.test(sql))).toBe(false);
+    }
+    const wrongFlag = makeEnvironment('company-a', 'TRUE');
+    const blocked = await wrongFlag.request('/api/company/employees', 'POST');
+    expect(blocked.status).toBe(503);
+    expect((await jsonBody(blocked)).error.code).toBe('tenant_isolation_pending');
+  });
+
   it('empresa A acessa somente seus funcionarios', async () => {
     const t = makeEnvironment('company-a');
 

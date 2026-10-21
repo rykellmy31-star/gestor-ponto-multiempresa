@@ -23,6 +23,7 @@ export function assertStagingWrite(method, path, databaseId) {
   const validId = uuid.test(databaseId || '') && databaseId.toLowerCase() !== LIVE_D1_ID.toLowerCase();
   if (validId && method === 'POST' && path === '/d1/database/' + databaseId + '/query') return;
   if (method === 'PUT' && path === '/workers/scripts/' + STAGING_WORKER + '/secrets') return;
+  if (method === 'DELETE' && path === '/workers/scripts/' + STAGING_WORKER + '/secrets/PLATFORM_BOOTSTRAP_TOKEN') return;
   throw new Error('Escrita Cloudflare fora do staging bloqueada.');
 }
 
@@ -57,7 +58,7 @@ export function assertMigrationHistory(rows, expected) {
   if (actual.some((name, i) => name !== expected[i])) throw new Error('Migrations staging fora de sequencia.');
 }
 
-export async function provisionStaging() {
+export async function provisionStaging({ exerciseFeatures = false } = {}) {
   process.umask(0o077);
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const api = createClient({ token: process.env.CLOUDFLARE_STAGING_TOKEN, accountId });
@@ -92,7 +93,11 @@ export async function provisionStaging() {
   }
   const config = createStagingConfig(base, { worker: STAGING_WORKER, database: STAGING_DATABASE,
     databaseId, origin: STAGING_ORIGIN });
-  assertStagingTarget(config, accountId, base);
+  if (exerciseFeatures) {
+    for (const key of ['ENABLE_COMPANY_SCHEDULES', 'ENABLE_COMPANY_EMPLOYEE_REGISTRATION',
+      'ENABLE_EMPLOYEE_PASSWORD_RECOVERY', 'ENABLE_EMPLOYEE_PUNCHES']) config.vars[key] = 'true';
+  }
+  assertStagingTarget(config, accountId, base, { exerciseFeatures });
   writeFileSync('wrangler.staging.jsonc', JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
 
   const query = async sql => {
@@ -113,7 +118,7 @@ export async function provisionStaging() {
     assertMigrationHistory(await query('SELECT name FROM d1_migrations ORDER BY id'), migrations);
   } else if (tables.length) throw new Error('Banco staging contem schema desconhecido.');
   const run = args => {
-    assertStagingTarget(JSON.parse(readFileSync('wrangler.staging.jsonc', 'utf8')), accountId, base);
+    assertStagingTarget(JSON.parse(readFileSync('wrangler.staging.jsonc', 'utf8')), accountId, base, { exerciseFeatures });
     const result = spawnSync(process.execPath, ['node_modules/wrangler/bin/wrangler.js', ...args], {
       encoding: 'utf8', timeout: 300000, maxBuffer: 16 * 1024 * 1024,
       env: { ...process.env, CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_STAGING_TOKEN,
@@ -153,7 +158,7 @@ export async function provisionStaging() {
   }
   if (!healthy) throw new Error('Health check HTTPS staging nao aprovado.');
   const report = 'Staging real publicado: ' + STAGING_ORIGIN + '\nD1 exclusivo: ' + databaseId +
-    '\n38 migrations; HTTPS/health/headers aprovados. Funcionalidades em auditoria continuam desligadas.\n';
+    '\n38 migrations; HTTPS/health/headers aprovados. Perfil: ' + (exerciseFeatures ? 'testes funcionais somente staging' : 'inicial restrito') + '.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 }
