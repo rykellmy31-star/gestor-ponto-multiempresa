@@ -34,6 +34,11 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Verificar sequencia SQL e arquivos sensiveis no Git
+        run: |
+          python3 -B -m unittest discover -s scripts -p 'test_verify_repository_guards.py' -v
+          python3 -B scripts/verify_repository_guards.py
+
       - name: Instalar dependencias
         run: npm ci
 
