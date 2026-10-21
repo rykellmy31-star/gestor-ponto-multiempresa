@@ -110,7 +110,7 @@ jobs:
   # e a variavel de aprovacao exata; nunca faz deploy nem altera outro Worker.
   inicializar-d1-existente:
     name: Inicializar D1 existente — autorizacao explicita
-    if: ${{ github.ref == 'refs/heads/desenvolvimento-cr-jornada' && vars.CLOUDFLARE_D1_INIT_APPROVAL == 'INSTALAR-CR-JORNADA-D1-APOS-BACKUP' }}
+    if: ${{ false }} # Inicialização D1 concluída em 2026-10-21; bloqueia reexecução
     needs: [verificar, d1-local]
     runs-on: ubuntu-latest
     timeout-minutes: 35
