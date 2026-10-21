@@ -201,10 +201,11 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       const sessionsBefore=await db.prepare(
         'SELECT company_id,COUNT(*) AS total FROM company_admin_sessions GROUP BY company_id ORDER BY company_id'
       ).all<any>();
-      expect(sessionsBefore.results).toEqual([
+      expect(sessionsBefore.results).toHaveLength(2);
+      expect(sessionsBefore.results).toEqual(expect.arrayContaining([
         {company_id:companyA.id,total:1},
         {company_id:companyB.id,total:1}
-      ]);
+      ]));
       const suspend=await call('/api/platform/companies/'+companyA.id+'/status',
         'PATCH',{status:'suspended'},superCookie,csrf);
       expect(suspend.status).toBe(200);
