@@ -24,7 +24,7 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = '7e8a6af91edd96a7ee1c9edd7ea25407ec69fbdd'
+EXPECTED_PARENT = '4f51b93bba08ce0b4cc6942eb8681ec4be325751'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
                          'scripts/crj-integrate-v68.py'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'

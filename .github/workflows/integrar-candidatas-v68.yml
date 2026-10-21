@@ -7,7 +7,7 @@ on:
     paths:
       - .github/workflows/integrar-candidatas-v68.yml
 
-# Reexecução de validação após ajuste do teste de integridade de batidas.
+# Reexecução controlada com commit pai ancorado após ajuste do teste D1.
 # Este workflow NÃO acessa D1 remoto nem publica Cloudflare Worker.
 # Só é executado quando o próprio arquivo é adicionado/alterado na branch.
 # Validação dos escopos de ambos os patches auditados v47/v56.
