@@ -62,6 +62,68 @@ export async function cloudflareReadOnlyInventory({ token, targets, fetchImpl = 
   return summarizeReadOnlyResults(targets, [db, subdomain, deployments]);
 }
 
+
+const SCHEMA_NAMES_SQL = "SELECT name FROM sqlite_master WHERE type='table' " +
+  "AND name IN ('rate_limits','platform_admins','platform_sessions','platform_audit_log','d1_migrations')";
+const ADMIN_COUNT_SQL = 'SELECT COUNT(*) AS total FROM platform_admins';
+const MIGRATIONS_COUNT_SQL = 'SELECT COUNT(*) AS total FROM d1_migrations';
+
+// SQL fixo, unicamente SELECT: o token D1 Read nao autoriza DDL/DML.
+// O relatorio publica somente presenca do esquema e contagens agregadas.
+export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fetch }) {
+  if (typeof token !== 'string' || token.length < 10) {
+    throw new Error('Token de auditoria ausente ou invalido.');
+  }
+  const query = async sql => {
+    if (![SCHEMA_NAMES_SQL, ADMIN_COUNT_SQL, MIGRATIONS_COUNT_SQL].includes(sql)) {
+      throw new Error('SQL de auditoria nao autorizado.');
+    }
+    const response = await fetchImpl(
+      targets.apiBase + '/d1/database/' + encodeURIComponent(targets.databaseId) + '/query',
+      {
+        method: 'POST', redirect: 'error',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sql }),
+        signal: AbortSignal.timeout(25000)
+      }
+    );
+    if (!response.ok) throw new Error('Leitura SQL D1 recusada: HTTP ' + response.status);
+    const data = await response.json();
+    const first = data?.result?.[0];
+    if (!data?.success || !first?.success || !Array.isArray(first.results)) {
+      throw new Error('Resposta de leitura SQL D1 invalida.');
+    }
+    if (first.meta?.changed_db === true || Number(first.meta?.rows_written || 0) > 0) {
+      throw new Error('Operacao SQL D1 declarou alteracao inesperada.');
+    }
+    return first.results;
+  };
+  const names = new Set((await query(SCHEMA_NAMES_SQL))
+    .map(row => row.name).filter(name => typeof name === 'string'));
+  const required = ['rate_limits','platform_admins','platform_sessions','platform_audit_log'];
+  const admins = names.has('platform_admins')
+    ? Number((await query(ADMIN_COUNT_SQL))[0]?.total) : null;
+  const migrations = names.has('d1_migrations')
+    ? Number((await query(MIGRATIONS_COUNT_SQL))[0]?.total) : null;
+  if ((admins !== null && (!Number.isSafeInteger(admins) || admins < 0)) ||
+      (migrations !== null && (!Number.isSafeInteger(migrations) || migrations < 0))) {
+    throw new Error('Contagem SQL D1 inesperada.');
+  }
+  return {
+    tabelas_basicas_superadmin_presentes: required.every(name => names.has(name)),
+    tabela_rate_limits: names.has('rate_limits'),
+    tabela_platform_admins: names.has('platform_admins'),
+    tabela_platform_sessions: names.has('platform_sessions'),
+    tabela_platform_audit_log: names.has('platform_audit_log'),
+    migracoes_registradas: migrations,
+    quantidade_superadmins: admins
+  };
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   try {
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -72,6 +134,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     console.log('Inventario de recursos Cloudflare (somente leitura):');
     for (const [name, value] of Object.entries(report)) console.log(name + ': ' + value);
     if (!Object.values(report).every(Boolean)) process.exitCode = 1;
+    const schema = await cloudflareReadOnlySchema({ token, targets });
+    console.log('Verificacao restrita do esquema D1 (sem dados pessoais):');
+    for (const [name, value] of Object.entries(schema)) console.log(name + ': ' + value);
   } catch (error) {
     console.error('Auditoria abortada: ' + (error instanceof Error ? error.message : 'Erro desconhecido.'));
     process.exitCode = 1;
