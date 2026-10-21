@@ -130,7 +130,9 @@ platformSalesRoutes.put('/', async c => {
     session.id, now, expected_revision, expected_revision
   ).run();
 
-  ensure(result.meta.changes === 1, 409, 'sales_page_conflict',
+  // id=1 limita o UPSERT a uma linha. A auditoria da migration 0021
+  // tambem entra em D1.meta.changes; zero continua sendo conflito real.
+  ensure(result.meta.changes >= 1, 409, 'sales_page_conflict',
     'Outra alteração foi salva. Recarregue a configuração antes de tentar novamente.');
 
   const current = await getRow(c);
@@ -165,7 +167,7 @@ platformSalesRoutes.post('/unpublish', async c => {
     session.id, now, parsed.data.expected_revision
   ).run();
 
-  ensure(result.meta.changes === 1, 409, 'sales_page_conflict',
+  ensure(result.meta.changes >= 1, 409, 'sales_page_conflict',
     'A página já foi alterada ou retirada do ar. Recarregue antes de continuar.');
   c.header('Cache-Control', 'no-store');
   return c.json({

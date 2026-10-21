@@ -101,7 +101,9 @@ salesLeadAdminRoutes.patch('/:id', async c => {
   const updated = await c.get('db').prepare(
     'UPDATE sales_leads SET status=?,updated_at=? WHERE id=?'
   ).bind(parsed.data.status, Date.now(), id).run();
-  ensure(updated.meta.changes === 1, 404, 'lead_not_found', 'Solicitação não encontrada.');
+  // A chave primaria seleciona no maximo um contato; a alteracao de status
+  // aciona tambem o trigger de auditoria, contabilizado pelo D1.
+  ensure(updated.meta.changes >= 1, 404, 'lead_not_found', 'Solicitação não encontrada.');
   c.header('Cache-Control', 'private, no-store');
   return c.json({ success: true });
 });

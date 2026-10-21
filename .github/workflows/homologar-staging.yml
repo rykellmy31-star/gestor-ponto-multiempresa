@@ -12,6 +12,8 @@ on:
       - 'scripts/prepare_d1_restore.py'
       - 'scripts/test_prepare_d1_restore.py'
       - 'server/routes/company-schedules.ts'
+      - 'server/routes/platform-sales.ts'
+      - 'server/routes/sales-leads.ts'
       - 'server/index.ts'
   workflow_dispatch:
 
@@ -46,7 +48,7 @@ jobs:
           npm run typecheck
           npm run build:web
       - name: Validar cadastro e isolamento antes de publicar staging
-        run: npx vitest run tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts --maxWorkers=1 --no-file-parallelism
+        run: npx vitest run tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts tests/d1-sales-trigger-routes.test.ts --maxWorkers=1 --no-file-parallelism
       - name: Validar token, identificar recursos e provisionar staging separado
         id: remote
         env:

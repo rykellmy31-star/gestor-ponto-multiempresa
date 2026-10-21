@@ -99,7 +99,23 @@ try {
   writeFileSync(restoreConfig, JSON.stringify({ name: 'cr-jornada-staging-restore',
     compatibility_date: staging.compatibility_date,
     d1_databases: [{ binding: 'RESTORE', database_name: restoreName, database_id: database.uuid }] }), { mode: 0o600 });
-  run('node_modules/wrangler/bin/wrangler.js', ['d1', 'execute', 'RESTORE', '--remote', '--config', restoreConfig, '--file', importSql, '--yes']);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      run('node_modules/wrangler/bin/wrangler.js', ['d1', 'execute', 'RESTORE', '--remote', '--config', restoreConfig, '--file', importSql, '--yes']);
+      break;
+    } catch (error) {
+      if (!error.message.includes('D1_RESET_DO') || attempt === 2) throw error;
+      await new Promise(r => setTimeout(r, 5000));
+      const currentSchema = await query(database.uuid, schemaSql);
+      if (currentSchema.length) {
+        // O servidor pode ter confirmado antes da conexao cair. Nao repetir
+        // inserts nem apagar dados: a verificacao integral abaixo decide.
+        assert.equal(digest(currentSchema), digest(sourceSchema), 'Importacao interrompida deixou schema parcial; nao sobrescrever');
+        break;
+      }
+      console.log('D1 reiniciou durante importacao; destino ainda vazio, repetindo com seguranca.');
+    }
+  }
   const restoredSchema = await query(database.uuid, schemaSql);
   assert.equal(digest(restoredSchema), digest(sourceSchema), 'Schema restaurado identico');
   for (const table of tables) {
