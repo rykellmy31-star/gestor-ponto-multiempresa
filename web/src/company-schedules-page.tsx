@@ -500,7 +500,7 @@ export function CompanySchedulesPage() {
             <button type="button" className="company-schedules-secondary"
               aria-pressed={!editDayByDay}
               onClick={()=>{
-                setForm(prev=>({...prev,...applyStandardShiftToAll(prev)}));
+                setForm(prev=>applyStandardShiftToAll(prev));
                 setEditDayByDay(false);
                 setError('');
               }}>Mesmo horário em todos</button>
@@ -508,7 +508,7 @@ export function CompanySchedulesPage() {
               aria-pressed={editDayByDay}
               onClick={()=>setEditDayByDay(true)}>Editar dia por dia</button>
             <button type="button" className="company-schedules-secondary"
-              onClick={()=>setForm(prev=>({...prev,...applyStandardShiftToAll(prev)}))}>
+              onClick={()=>setForm(prev=>applyStandardShiftToAll(prev))}>
               Aplicar horário principal a todos
             </button>
           </div>

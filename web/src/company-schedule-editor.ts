@@ -35,9 +35,11 @@ export function resetShiftForDay(schedule: Schedule, day: number): Schedule {
   return Object.keys(overrides).length ? {...rest,day_overrides:overrides} : rest;
 }
 
-export function applyStandardShiftToAll(schedule: Schedule): Schedule {
+export function applyStandardShiftToAll<T extends Schedule>(schedule: T): T {
   const {day_overrides: _previous, ...rest} = schedule;
-  return rest;
+  // A configuracao adicional (ex.: nome do formulario) continua intacta,
+  // mas a propriedade opcional day_overrides deve desaparecer de verdade.
+  return rest as T;
 }
 
 export function selectScheduleDays(schedule: Schedule, days: number[]): Schedule {

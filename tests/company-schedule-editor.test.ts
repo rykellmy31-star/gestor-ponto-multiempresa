@@ -55,6 +55,12 @@ describe('CR JORNADA — gestor configura turnos semanais e por funcionário', (
     expect(scheduleSchema.safeParse(uniform).success).toBe(true);
     expect(scheduleForDate(uniform,'2026-10-27').start).toBe('07:00');
     expect(JSON.parse(JSON.stringify(uniform)).day_overrides).toBeUndefined();
+    const named={...personalized,name:'Comercial - modo individual'};
+    const clean=applyStandardShiftToAll(named);
+    expect(clean.name).toBe('Comercial - modo individual');
+    expect(Object.hasOwn(clean,'day_overrides')).toBe(false);
+    expect(JSON.stringify(clean)).not.toContain('day_overrides');
+    expect(scheduleForDate(clean,'2026-10-27').start).toBe('07:00');
   });
   it('desmarcar o dia exclui apenas seu horário especial', () => {
     const schedule=selectScheduleDays(updateShiftForDay(original,2,'start','13:00'),[1,3,4,5]);
