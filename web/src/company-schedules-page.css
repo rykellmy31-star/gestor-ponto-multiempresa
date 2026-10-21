@@ -52,3 +52,9 @@
 .company-schedules-footer{text-align:center;color:#98858b;font-size:11px;line-height:1.6}
 @media(max-width:900px){.company-schedules-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.company-schedules-assign{grid-template-columns:1fr}}
 @media(max-width:550px){.company-schedules-page{padding:17px 10px}.company-schedules-card{padding:17px}.company-schedules-login{padding:23px;margin:6vh auto}.company-schedules-fields{grid-template-columns:1fr}.company-schedules-head{padding:5px}.company-schedules-intro{align-items:flex-start}.company-schedules-bar{align-items:stretch;flex-direction:column}.company-schedules-bar>div:last-child>*{flex:1}}
+
+.company-schedules-daily-list{display:grid;gap:14px}
+.company-schedules-daily{border:1px solid #ead8dd;border-radius:12px;display:grid;gap:13px;padding:18px}
+.company-schedules-daily legend{padding:0 7px;color:#783b4c;font-size:13px;font-weight:800}
+.company-schedules-daily-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:#5b4c53}
+.company-schedules-shortcuts button[aria-pressed="true"]{background:#800000;color:white;border-color:#800000}

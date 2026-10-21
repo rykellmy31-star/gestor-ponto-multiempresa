@@ -7,6 +7,7 @@ import {
   Plus, RefreshCw, ShieldCheck, UsersRound
 } from 'lucide-react';
 import type { Schedule, ScheduleDay } from '../../server/types';
+import { allWeekdays, applyStandardShiftToAll, resetShiftForDay, selectScheduleDays, shiftForDay, updateShiftForDay } from './company-schedule-editor';
 import './company-schedules-page.css';
 
 type CompanySession = {
@@ -28,10 +29,6 @@ const base:FormSchedule={
   name:'',start:'08:00',break_start:'12:00',
   break_end:'13:00',end:'17:00',
   weekdays:[1,2,3,4,5],paid_break:false
-};
-const saturdayDefault:ScheduleDay={
-  start:'07:00',break_start:'10:00',break_end:'10:15',
-  end:'13:00',paid_break:true
 };
 const fields=[
   ['start','Entrada'],['break_start','Início do intervalo'],
@@ -79,6 +76,7 @@ export function CompanySchedulesPage() {
   const [loading,setLoading]=useState(false);
   const [formOpen,setFormOpen]=useState(false);
   const [form,setForm]=useState<FormSchedule>(base);
+  const [editDayByDay,setEditDayByDay]=useState(false);
   const [saving,setSaving]=useState(false);
   const [selectedSchedule,setSelectedSchedule]=useState('');
   const [selectedEmployee,setSelectedEmployee]=useState('');
@@ -183,35 +181,21 @@ export function CompanySchedulesPage() {
     setForm(prev=>({...prev,[key]:value}));setError('');
   }
   function updateWeekday(day:number,checked:boolean){
-    setForm(prev=>{
-      const weekdays=checked?[...new Set([...prev.weekdays,day])].sort():
-        prev.weekdays.filter(d=>d!==day);
-      const day_overrides={...(prev.day_overrides||{})};
-      if(!checked)delete day_overrides[String(day) as keyof typeof day_overrides];
-      if(day===6&&checked&&!day_overrides['6'])day_overrides['6']={...saturdayDefault};
-      return {...prev,weekdays,
-        day_overrides:Object.keys(day_overrides).length?day_overrides:undefined};
-    });
+    setForm(prev=>({...prev,...selectScheduleDays(prev,checked
+      ? [...prev.weekdays,day] : prev.weekdays.filter(d=>d!==day))}));
   }
-  function weekdaysGroup(){
-    setForm(prev=>({
-      ...prev,weekdays:[...new Set([...prev.weekdays,1,2,3,4,5])].sort()
-    }));
+  function setAllDays(days:number[]){
+    setForm(prev=>({...prev,...selectScheduleDays(prev,days)}));
   }
-  function updateSaturday(key:keyof ScheduleDay,value:string|boolean){
-    setForm(prev=>({...prev,day_overrides:{
-      ...(prev.day_overrides||{}),
-      '6':{
-        ...(prev.day_overrides?.['6']||{
-          start:prev.start,break_start:prev.break_start,
-          break_end:prev.break_end,end:prev.end,paid_break:prev.paid_break
-        }),
-        [key]:value
-      }
-    }}));
+  function updateDailyShift(day:number,key:keyof ScheduleDay,value:string|boolean){
+    setForm(prev=>({...prev,...updateShiftForDay(prev,day,key,value)}));
+  }
+  function resetDailyShift(day:number){
+    setForm(prev=>({...prev,...resetShiftForDay(prev,day)}));
   }
   function startNew() {
     setForm({...base,weekdays:[...base.weekdays]});
+    setEditDayByDay(false);
     setFormOpen(true);setError('');setNotice('');
   }
   function duplicate(schedule:CompanySchedule) {
@@ -219,6 +203,7 @@ export function CompanySchedulesPage() {
       weekdays:[...schedule.config.weekdays],
       day_overrides:schedule.config.day_overrides
         ?JSON.parse(JSON.stringify(schedule.config.day_overrides)):undefined});
+    setEditDayByDay(Boolean(schedule.config.day_overrides && Object.keys(schedule.config.day_overrides).length));
     setFormOpen(true);setError('');setNotice('');
   }
   async function save(event:FormEvent<HTMLFormElement>){
@@ -348,10 +333,6 @@ export function CompanySchedulesPage() {
     </section>
   </main>;
 
-  const saturday=form.day_overrides?.['6']||{
-    start:form.start,break_start:form.break_start,
-    break_end:form.break_end,end:form.end,paid_break:form.paid_break
-  };
   const total=weekly(form);
   return <main className="company-schedules-page">
     <div className="company-schedules-shell">
@@ -373,7 +354,7 @@ export function CompanySchedulesPage() {
         <CalendarClock size={25}/>
         <div>
           <h2>Horários por dia da semana</h2>
-          <p>Configure um horário para segunda a sexta e outro para o sábado, sem criar cadastros diferentes para o mesmo funcionário. Escalas antigas continuam preservadas.</p>
+          <p>Defina um horário para todos os dias ou configure cada dia separadamente. Crie modelos por equipe ou funcionário e atribua mudanças de turno por data, preservando o histórico.</p>
         </div>
       </section>
 
@@ -394,12 +375,15 @@ export function CompanySchedulesPage() {
         <div className="company-schedules-list">
           {schedules.length===0&&<p>Nenhuma escala disponível. Crie a primeira jornada da empresa.</p>}
           {schedules.map(item=>{
-            const sat=item.config.day_overrides?.['6'];
+            const special=Object.entries(item.config.day_overrides||{})
+              .filter(([d])=>item.config.weekdays.includes(Number(d)))
+              .sort(([a],[b])=>Number(a)-Number(b));
             return <article key={item.id} className="company-schedules-item">
               <h3>{item.name}</h3>
               <p>Horário padrão: {item.config.start}–{item.config.end}</p>
-              {sat&&item.config.weekdays.includes(6)&&
-                <p>Sábado: {sat.start}–{sat.end} · Pausa {sat.break_start}–{sat.break_end}</p>}
+              {special.map(([day,shift])=><p key={day}>
+                {weekdays[Number(day)]}: {shift.start}–{shift.end} · Pausa {shift.break_start}–{shift.break_end}
+              </p>)}
               <p>Dias: {item.config.weekdays.map(d=>weekdays[d]).join(', ')}</p>
               <strong>{hours(weekly(item.config))} semanais</strong>
               <div>
@@ -417,7 +401,7 @@ export function CompanySchedulesPage() {
       {formOpen&&<section className="company-schedules-card company-schedules-form-panel">
         <div className="company-schedules-bar">
           <div><h2>Configurar escala</h2>
-            <p>Uma única escala para todos os dias selecionados.</p></div>
+            <p>Escolha horários iguais para todos ou personalize cada dia de expediente.</p></div>
           <button className="company-schedules-secondary" type="button"
             onClick={()=>{setFormOpen(false);setError('');}}>Fechar</button>
         </div>
@@ -441,11 +425,11 @@ export function CompanySchedulesPage() {
           </label>
           <div className="company-schedules-shortcuts">
             <button type="button" className="company-schedules-secondary"
-              onClick={weekdaysGroup}>Selecionar segunda a sexta juntos</button>
+              onClick={()=>setAllDays(allWeekdays)}>Selecionar todos os dias</button>
             <button type="button" className="company-schedules-secondary"
-              onClick={()=>updateWeekday(6,!form.weekdays.includes(6))}>
-              {form.weekdays.includes(6)?'Retirar sábado':'Adicionar sábado separado'}
-            </button>
+              onClick={()=>setAllDays([1,2,3,4,5])}>Selecionar segunda a sexta</button>
+            <button type="button" className="company-schedules-secondary"
+              onClick={()=>setAllDays([])}>Desmarcar todos</button>
           </div>
           <fieldset className="company-schedules-weekdays">
             <legend>Dias com expediente</legend>
@@ -454,23 +438,50 @@ export function CompanySchedulesPage() {
                 onChange={e=>updateWeekday(day,e.target.checked)}/>{name}
             </label>)}</div>
           </fieldset>
-          {form.weekdays.includes(6)&&<div className="company-schedules-saturday">
-            <h3>Sábado — horários independentes</h3>
-            <div className="company-schedules-fields">
-              {fields.map(([key,label])=><label key={key}>{label}
-                <input type="time" required value={saturday[key]}
-                  onChange={e=>updateSaturday(key,e.target.value)}/>
-              </label>)}
-            </div>
-            <label className="company-schedules-check">
-              <input type="checkbox" checked={saturday.paid_break}
-                onChange={e=>updateSaturday('paid_break',e.target.checked)}/>
-              Intervalo do sábado remunerado
-            </label>
+          <div className="company-schedules-shortcuts">
+            <button type="button" className="company-schedules-secondary"
+              aria-pressed={!editDayByDay}
+              onClick={()=>setEditDayByDay(false)}>Mesmo horário em todos</button>
+            <button type="button" className="company-schedules-secondary"
+              aria-pressed={editDayByDay}
+              onClick={()=>setEditDayByDay(true)}>Editar dia por dia</button>
+            <button type="button" className="company-schedules-secondary"
+              onClick={()=>setForm(prev=>({...prev,...applyStandardShiftToAll(prev)}))}>
+              Aplicar horário principal a todos
+            </button>
+          </div>
+          {editDayByDay&&<div className="company-schedules-daily-list">
+            {form.weekdays.map(day=>{
+              const shift=shiftForDay(form,day);
+              const custom=Boolean(form.day_overrides?.[
+                String(day) as keyof NonNullable<Schedule['day_overrides']>
+              ]);
+              return <fieldset className="company-schedules-daily" key={day}>
+                <legend>{weekdays[day]} · {custom?'Personalizado':'Horário principal'}</legend>
+                <div className="company-schedules-fields">
+                  {fields.map(([key,label])=><label key={key}>{label}
+                    <input type="time" required value={shift[key]}
+                      onChange={e=>updateDailyShift(day,key,e.target.value)}/>
+                  </label>)}
+                </div>
+                <label className="company-schedules-check">
+                  <input type="checkbox" checked={shift.paid_break}
+                    onChange={e=>updateDailyShift(day,'paid_break',e.target.checked)}/>
+                  Intervalo remunerado
+                </label>
+                <div className="company-schedules-daily-footer">
+                  <span>Carga diária: {hours(count(shift))}</span>
+                  <button type="button" className="company-schedules-secondary"
+                    disabled={!custom} onClick={()=>resetDailyShift(day)}>
+                    Usar horário principal
+                  </button>
+                </div>
+              </fieldset>;
+            })}
           </div>}
           <div className="company-schedules-total">
             <span>Horário principal: {hours(count(form))}</span>
-            {form.weekdays.includes(6)&&<span>Sábado: {hours(count(saturday))}</span>}
+            <span>Dias selecionados: {form.weekdays.length}</span>
             <strong>Total da semana: {hours(total)}</strong>
           </div>
           {total>2640&&<p className="company-schedules-alert" role="status">
@@ -478,8 +489,9 @@ export function CompanySchedulesPage() {
             aplicáveis e as horas excedentes antes de atribuí-la.
           </p>}
           <p className="company-schedules-hint">
-            Ao mudar uma escala já atribuída, crie uma nova versão e atribua-a com
-            a data de início desejada. O cadastro anterior permanece para histórico.
+            Para turnos diferentes por funcionário, crie modelos de escala e atribua o modelo
+            adequado com a data de início. Ex.: João recebe turno das 07h hoje e turno das 13h amanhã.
+            A mudança vale a partir da data atribuída; os registros anteriores permanecem no histórico.
           </p>
           <button type="submit" disabled={saving||!form.weekdays.length}>
             {saving?'Salvando…':'Salvar nova escala'}
@@ -490,7 +502,8 @@ export function CompanySchedulesPage() {
       <section id="company-schedules-assignment" className="company-schedules-card">
         <div className="company-schedules-intro">
           <UsersRound size={23}/><div><h2>Atribuir escala ao funcionário</h2>
-          <p>Somente escalas e funcionários da empresa autenticada aparecem nesta área.</p></div>
+          <p>Escolha o modelo e o funcionário. Para alternar o turno de João amanhã,
+          atribua outra escala com a data de amanhã; o turno anterior continua no histórico.</p></div>
         </div>
         <form onSubmit={assign} className="company-schedules-assign">
           <label>Escala

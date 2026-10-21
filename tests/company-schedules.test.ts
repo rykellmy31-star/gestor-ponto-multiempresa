@@ -185,6 +185,21 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect(result.status).toBe(201);
     expect(t.batches).toHaveLength(1);
   });
+  it('salva um turno diferente para terça sem alterar a segunda', async () => {
+    const t=makeApp();
+    const response=await t.request('', 'POST', {
+      ...schedule,
+      day_overrides:{
+        '2':{start:'13:00',break_start:'16:00',
+          break_end:'17:00',end:'22:00',paid_break:false}
+      }
+    },{csrf:'csrf-a'});
+    expect(response.status).toBe(201);
+    const insert=t.batches[0][0] as {params:unknown[]};
+    expect(JSON.parse(insert.params[2] as string).day_overrides['2'].start)
+      .toBe('13:00');
+  });
+
   it('rejeita horario especial de dia nao trabalhado', async () => {
     const t=makeApp();
     const response=await t.request('', 'POST', {
