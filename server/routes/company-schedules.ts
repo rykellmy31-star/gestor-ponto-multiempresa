@@ -8,6 +8,7 @@ import { limit } from '../core/security';
 import { scheduleMinutes } from '../core/time';
 import { scheduleSchema as validatedSchedule, dayOverridesSchema } from '../core/validation';
 import { requireCompanyAdmin } from './company-auth';
+import { VALID_COMPANY_ADMIN_WRITE_SQL, companyAdminWriteParams } from '../core/company-admin-write-guard';
 
 export const companySchedulesRoutes = new Hono<App>();
 companySchedulesRoutes.use('*', requireCompanyAdmin);
@@ -68,7 +69,8 @@ companySchedulesRoutes.get('/', async c => {
 
 companySchedulesRoutes.post('/', async c => {
   const company = c.get('company'), adminId = c.get('companyAdminId');
-  ensure(company && adminId, 401, 'unauthenticated', 'Empresa não autenticada.');
+  const adminToken = c.get('companyAdminTokenHash');
+  ensure(company && adminId && adminToken, 401, 'unauthenticated', 'Empresa não autenticada.');
   await limit(c, 'company-schedule-create:' + company.id + ':' + adminId,
     30, 60 * 60000);
   const parsed = scheduleSchema.safeParse(
@@ -110,7 +112,8 @@ companySchedulesRoutes.post('/', async c => {
   const insert = [
     'INSERT INTO schedules(id,name,config_json,created_by,created_at,company_id)',
     'SELECT ?,?,?,NULL,?,c.id FROM companies c',
-    'WHERE c.id=? AND c.status=\'active\''
+    'WHERE c.id=? AND c.status=\'active\'',
+    'AND ' + VALID_COMPANY_ADMIN_WRITE_SQL
   ];
   if (requestKey) insert.push(
     'AND NOT EXISTS (SELECT 1 FROM company_schedule_create_requests r',
@@ -118,6 +121,7 @@ companySchedulesRoutes.post('/', async c => {
   );
   const statements = [
     db.prepare(insert.join(' ')).bind(id,name,JSON.stringify(config),now,company.id,
+      ...companyAdminWriteParams(adminToken,adminId,company.id,now),
       ...(requestKey ? [adminId,requestKey] : [])),
     db.prepare([
       'INSERT INTO company_schedule_audit(',
@@ -144,7 +148,8 @@ companySchedulesRoutes.post('/', async c => {
 
 companySchedulesRoutes.post('/:id/assign', async c => {
   const company = c.get('company'), adminId = c.get('companyAdminId');
-  ensure(company && adminId, 401, 'unauthenticated', 'Empresa não autenticada.');
+  const adminToken = c.get('companyAdminTokenHash');
+  ensure(company && adminId && adminToken, 401, 'unauthenticated', 'Empresa não autenticada.');
   await limit(c, 'company-schedule-assign:' + company.id + ':' + adminId,
     60, 60 * 60000);
 
@@ -173,9 +178,11 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       'AND NOT EXISTS (SELECT 1 FROM schedule_assignments existing',
       'WHERE existing.employee_id=e.id AND existing.effective_from=?',
       'AND NOT EXISTS (SELECT 1 FROM schedule_assignment_cancellations cancelled',
-      'WHERE cancelled.assignment_id=existing.id))'
+      'WHERE cancelled.assignment_id=existing.id))',
+      'AND ' + VALID_COMPANY_ADMIN_WRITE_SQL
     ].join(' ')).bind(assignmentId, effective_from, now, id,
-      employee_id, company.id, effective_from),
+      employee_id, company.id, effective_from,
+      ...companyAdminWriteParams(adminToken,adminId,company.id,now)),
     db.prepare([
       'INSERT INTO company_schedule_audit(',
       'id,company_id,admin_id,action,schedule_id,employee_id,details_json,created_at)',

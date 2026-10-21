@@ -153,6 +153,12 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect((await jsonBody(result)).company_id).toBe('company-a');
     expect(t.batches).toHaveLength(1);
     expect(t.batches[0]).toHaveLength(2);
+    const insert = t.batches[0][0] as {sql:string;params:unknown[]};
+    expect(insert.sql).toContain('cas.auth_version=ca.auth_version');
+    expect(insert.sql).toContain('ca.active=1 AND ca.must_change_password=0');
+    expect(insert.params).toContain('admin-a');
+    expect(insert.params).toContain('company-a');
+    expect(insert.params).toContain('b'.repeat(64));
   });
 
   it('bloqueia jornada invalida mesmo com sessao empresarial', async () => {
@@ -213,6 +219,8 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const firstStatement = t.batches[0][0] as { sql: string };
     expect(firstStatement.sql).toContain('s.company_id=e.company_id');
     expect(firstStatement.sql).toContain('s.deleted_at IS NULL');
+    expect(firstStatement.sql).toContain('cas.auth_version=ca.auth_version');
+    expect(firstStatement.sql).toContain('ca.active=1 AND ca.must_change_password=0');
   });
 
   it('repetição exata devolve confirmação sem nova auditoria', async () => {
@@ -241,6 +249,24 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     }, { csrf: 'csrf-a' });
     expect(response.status).toBe(409);
     expect((await jsonBody(response)).error.code).toBe('schedule_date_conflict');
+  });
+
+  it('revalida a sessão do mesmo gestor e empresa na escrita', async () => {
+    const t = makeApp();
+    const response = await t.request('/schedule-a/assign', 'POST', {
+      employee_id: 'employee-a', effective_from: '2026-11-02'
+    }, { csrf: 'csrf-a' });
+    expect(response.status).toBe(201);
+    const insert = t.batches[0][0] as {sql:string;params:unknown[]};
+    expect(insert.sql).toContain('cas.token_hash=? AND cas.admin_id=? AND cas.company_id=?');
+    expect(insert.sql).toContain('cas.expires_at>? AND cas.last_seen_at>?');
+    const keyIndex = insert.params.indexOf('b'.repeat(64));
+    expect(insert.params.slice(keyIndex, keyIndex+3)).toEqual([
+      'b'.repeat(64), 'admin-a', 'company-a'
+    ]);
+    expect(typeof insert.params[keyIndex+3]).toBe('number');
+    expect((insert.params[keyIndex+3] as number) -
+      (insert.params[keyIndex+4] as number)).toBe(30*60000);
   });
 
   it('rejeita data inexistente antes de gravar atribuicao', async () => {
