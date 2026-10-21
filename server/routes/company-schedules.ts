@@ -160,7 +160,8 @@ companySchedulesRoutes.post('/:id/assign', async c => {
     'Informe funcionário e data válidos.');
   const { employee_id, effective_from } = parsed.data;
   const date = DateTime.fromISO(effective_from, { zone: 'utc' });
-  ensure(date.isValid && date.toISODate() === effective_from,
+  ensure(date.isValid && date.toISODate() === effective_from &&
+    effective_from >= '1900-01-01' && effective_from <= '2100-12-31',
     400, 'invalid_assignment', 'Data inválida.');
 
   const db = c.get('db'), id = c.req.param('id');

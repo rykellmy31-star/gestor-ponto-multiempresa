@@ -278,6 +278,17 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     expect(t.batches).toHaveLength(0);
   });
 
+  it.each(['1899-12-31', '2101-01-01'])(
+    'rejeita atribuição fora dos limites de datas: %s', async effective_from => {
+      const t = makeApp();
+      const response = await t.request('/schedule-a/assign', 'POST', {
+        employee_id: 'employee-a', effective_from
+      }, { csrf: 'csrf-a' });
+      expect(response.status).toBe(400);
+      expect(t.batches).toHaveLength(0);
+    }
+  );
+
   it('rejeita campos extras na atribuicao para impedir troca de empresa pelo cliente', async () => {
     const t = makeApp();
     const result = await t.request('/schedule-a/assign', 'POST', {

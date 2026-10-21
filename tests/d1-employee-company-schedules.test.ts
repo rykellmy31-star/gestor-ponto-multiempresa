@@ -43,6 +43,7 @@ describe('CR JORNADA - propriedade empresarial de jornadas no D1 local', () => {
       const statements = [
         "INSERT INTO companies(id,name,document,slug,created_at,updated_at) VALUES('co-a','Empresa A','a','empresa-a',1760000000000,1760000000000)",
         "INSERT INTO companies(id,name,document,slug,created_at,updated_at) VALUES('co-b','Empresa B','b','empresa-b',1760000000000,1760000000000)",
+        "INSERT INTO users(id,login,display_name,password_hash,role,created_at,updated_at) VALUES('u-admin-a','sched-admin-a','Gestor A','fixture-hash','admin',1760000000000,1760000000000)",
         "INSERT INTO employees(id,company_id,full_name,registration,admission_date,status,notes,created_at,updated_at) VALUES('em-a','co-a','Pessoa A','100','2026-01-01','active','',1760000000000,1760000000000)",
         "INSERT INTO employees(id,company_id,full_name,registration,admission_date,status,notes,created_at,updated_at) VALUES('em-b','co-b','Pessoa B','200','2026-01-01','active','',1760000000000,1760000000000)",
         "INSERT INTO schedules(id,company_id,name,config_json,created_at) VALUES('sc-a','co-a','Horario A','" + config + "',1760000000000)",
@@ -95,6 +96,33 @@ describe('CR JORNADA - propriedade empresarial de jornadas no D1 local', () => {
       expect(query(
         "SELECT employee_id FROM schedule_assignments WHERE schedule_id='sc-a'", dir
       )).toEqual([{ employee_id: 'em-a' }]);
+
+      // The DB rejects a second ACTIVE assignment, preserving the original.
+      expect(reject(
+        "INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('asg-duplicate','em-a','sc-a','2026-01-01',1760000000001)", dir
+      )).toMatch(/schedule_date_conflict/);
+      expect(query(
+        "SELECT id FROM schedule_assignments WHERE employee_id='em-a' ORDER BY id", dir
+      )).toEqual([{ id:'asg-a' }]);
+
+      // A cancellation is an append-only event; then the same date may be
+      // assigned again, but a third active assignment must fail.
+      query(
+        "INSERT INTO schedule_assignment_cancellations(assignment_id,cancelled_at,cancelled_by,reason) VALUES('asg-a',1760000001000,'u-admin-a','Troca de escala autorizada')", dir
+      );
+      query(
+        "INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('asg-reassigned','em-a','sc-a','2026-01-01',1760000002000)", dir
+      );
+      expect(reject(
+        "INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('asg-third','em-a','sc-a','2026-01-01',1760000003000)", dir
+      )).toMatch(/schedule_date_conflict/);
+      expect(query(
+        "SELECT id FROM schedule_assignments WHERE employee_id='em-a' ORDER BY id", dir
+      )).toEqual([{ id:'asg-a' }, { id:'asg-reassigned' }]);
+      expect(query(
+        "SELECT assignment_id,cancelled_by FROM schedule_assignment_cancellations", dir
+      )).toEqual([{ assignment_id:'asg-a', cancelled_by:'u-admin-a' }]);
+      expect(query('PRAGMA foreign_key_check',dir)).toHaveLength(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
