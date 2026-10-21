@@ -24,7 +24,7 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = 'dc144de49f0ee358c5a3fe025194ea328b855c7d'
+EXPECTED_PARENT = '7e8a6af91edd96a7ee1c9edd7ea25407ec69fbdd'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
                          'scripts/crj-integrate-v68.py'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
@@ -223,6 +223,43 @@ def stage_historical_schedule_regression_tests(source: Path, dest: Path) -> None
         raise RuntimeError('Unapproved staged test inventory')
 
 
+
+def stage_d1_trigger_message_regressions(dest: Path) -> None:
+    """Accept only the new, stricter immutable-state rejection errors.
+
+    Both operations must still fail. Pin exact original files and exact lines
+    to prevent accidental relaxation of D1 authorization expectations.
+    """
+    corrections = {
+        'tests/d1-employee-company-workdays.test.ts': (
+            '''"UPDATE work_days SET employee_id='em-a2' WHERE id='day-a'", dir
+      )).toMatch(/work_day_company_mismatch/);''',
+            '''"UPDATE work_days SET employee_id='em-a2' WHERE id='day-a'", dir
+      )).toMatch(/(?:work_day_company_mismatch|company_started_workday_immutable)/);''',
+        ),
+        'tests/d1-employee-punch-policy.test.ts': (
+            '.toMatch(/invalid_sequence/);',
+            '.toMatch(/(?:invalid_sequence|raw_punch_immutable)/);',
+        ),
+    }
+    for relative, (before, after) in corrections.items():
+        target = dest / relative
+        baseline = subprocess.check_output(
+            ['git', 'show', f'{BASE_SHA}:{relative}'], cwd=dest
+        )
+        if not target.is_file() or target.is_symlink() or target.read_bytes() != baseline:
+            raise RuntimeError(f'D1 regression fixture diverged: {relative}')
+        content = target.read_text(encoding='utf-8')
+        if content.count(before) != 1:
+            raise RuntimeError(f'D1 error assertion anchor missing or duplicated: {relative}')
+        target.write_text(content.replace(before, after), encoding='utf-8')
+    run('git', 'add', '--', *sorted(corrections), cwd=dest)
+    staged = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
+    if len(staged) != 21 or not set(corrections).issubset(staged):
+        raise RuntimeError('Unexpected D1 fixture integration scope')
+    run('git', 'diff', '--cached', '--check', cwd=dest)
+
+
 def main() -> None:
     repo = Path(os.environ.get('GITHUB_WORKSPACE', '.')).resolve()
     if not (repo / '.git').exists():
@@ -281,7 +318,8 @@ def main() -> None:
         print('INTEGRATION: 20 approved paths reconstructed from exact pinned sources',flush=True)
         written = check_and_transfer(source, repo, changed)
         stage_historical_schedule_regression_tests(source, repo)
-        print(f'INTEGRATION: {len(written)} candidate paths staged safely; no deploy',flush=True)
+        stage_d1_trigger_message_regressions(repo)
+        print(f'INTEGRATION: {len(written)} candidate paths + 3 pinned test fixes staged safely; no deploy',flush=True)
     # The workflow runs all required checks and may commit/push only after they pass.
 
 
