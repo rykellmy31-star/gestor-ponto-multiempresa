@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import type { App } from '../server/types';
 import { ApiError } from '../server/core/errors';
 import { companyEmployeesRoutes } from '../server/routes/company-employees';
 import { companySchedulesRoutes } from '../server/routes/company-schedules';
+import { employeeCpfAuthRoutes } from '../server/routes/employee-cpf-auth';
+import { employeeCpfPunchRoutes } from '../server/routes/employee-cpf-punch';
+import { employeeCpfHistoryRoutes } from '../server/routes/employee-cpf-history';
 import { employeeCpfLookupKey } from '../server/core/employee-cpf';
 import { sha256, verifyPassword } from '../server/core/crypto';
 
@@ -14,6 +17,7 @@ const dataKey='a'.repeat(64);
 const tokenA='a'.repeat(64);
 const tokenB='b'.repeat(64);
 const cpf='52998224725';
+const at=(hour:number,minute=0)=>Date.UTC(2026,9,26,hour+3,minute);
 
 const payload=(name:string,registration='001',cpfValue=cpf)=>({
   full_name:name,registration,cpf:cpfValue,
@@ -21,7 +25,9 @@ const payload=(name:string,registration='001',cpfValue=cpf)=>({
 });
 
 describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
+  afterEach(()=>vi.restoreAllMocks());
   it('duas empresas criam funcionários, isolam CPF/matrícula e protegem acessos',async()=>{
+    vi.spyOn(Date,'now').mockReturnValue(at(7));
     const mf=new Miniflare(convertV4MiniflareOptions({
       workers:[{name:'test',modules:true,
         script:'export default { fetch() { return new Response("ok") } }',
@@ -30,12 +36,17 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
     try{
       const binding=await mf.getD1Database('DB');
       const db=binding.withSession() as unknown as D1DatabaseSession;
+      const rules=JSON.stringify({
+        mark_tolerance:5,daily_tolerance:10,rounding_step:1,
+        rounding_mode:'floor',auto_approve_overtime:false,
+        compensation:'review',max_shift_hours:24
+      });
       await db.batch([
-        db.prepare("CREATE TABLE companies(id TEXT PRIMARY KEY,slug TEXT,status TEXT NOT NULL)"),
+        db.prepare("CREATE TABLE companies(id TEXT PRIMARY KEY,slug TEXT,status TEXT NOT NULL,name TEXT,timezone TEXT)"),
         db.prepare("CREATE TABLE company_admins(id TEXT PRIMARY KEY,company_id TEXT,login TEXT,display_name TEXT,active INTEGER,auth_version INTEGER,must_change_password INTEGER,temporary_password_expires_at INTEGER)"),
         db.prepare("CREATE TABLE company_admin_sessions(token_hash TEXT PRIMARY KEY,admin_id TEXT,company_id TEXT,csrf_token TEXT,expires_at INTEGER,last_seen_at INTEGER,auth_version INTEGER)"),
         db.prepare("CREATE TABLE employees(id TEXT PRIMARY KEY,full_name TEXT,registration TEXT UNIQUE,company_registration TEXT,cpf_encrypted TEXT,cpf_last4 TEXT,job_title TEXT,admission_date TEXT,employment_end TEXT,status TEXT,notes TEXT,created_at INTEGER,updated_at INTEGER,company_id TEXT,deleted_at INTEGER,UNIQUE(company_id,company_registration))"),
-        db.prepare("CREATE TABLE users(id TEXT PRIMARY KEY,login TEXT UNIQUE,email TEXT,display_name TEXT,password_hash TEXT,role TEXT,employee_id TEXT,active INTEGER,must_change_password INTEGER,employee_temporary_password_expires_at INTEGER,created_at INTEGER,updated_at INTEGER)"),
+        db.prepare("CREATE TABLE users(id TEXT PRIMARY KEY,login TEXT UNIQUE,email TEXT,display_name TEXT,password_hash TEXT,role TEXT,employee_id TEXT,active INTEGER,must_change_password INTEGER,employee_temporary_password_expires_at INTEGER,created_at INTEGER,updated_at INTEGER,auth_version INTEGER NOT NULL DEFAULT 1)"),
         db.prepare("CREATE TABLE employee_cpf_links(employee_id TEXT PRIMARY KEY,company_id TEXT,cpf_lookup_key TEXT,created_at INTEGER,updated_at INTEGER,UNIQUE(company_id,cpf_lookup_key))"),
         db.prepare("CREATE TABLE company_employee_registration_audit(id TEXT PRIMARY KEY,company_id TEXT,employee_id TEXT,admin_id TEXT,action TEXT,created_at INTEGER)"),
         db.prepare("CREATE TABLE company_employee_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CHECK(affected_rows=1))"),
@@ -45,18 +56,31 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         db.prepare('CREATE TABLE schedule_assignment_cancellations(assignment_id TEXT PRIMARY KEY)'),
         db.prepare('CREATE TABLE company_schedule_audit(id TEXT PRIMARY KEY,company_id TEXT,admin_id TEXT,action TEXT,schedule_id TEXT,employee_id TEXT,details_json TEXT,created_at INTEGER)'),
         db.prepare('CREATE TABLE company_schedule_create_requests(company_id TEXT,admin_id TEXT,request_key TEXT,request_fingerprint TEXT,schedule_id TEXT,created_at INTEGER,PRIMARY KEY(company_id,admin_id,request_key))'),
+        db.prepare('CREATE TABLE employee_company_sessions(token_hash TEXT PRIMARY KEY,user_id TEXT,employee_id TEXT,company_id TEXT,csrf_token TEXT,created_at INTEGER,expires_at INTEGER,last_seen_at INTEGER,auth_version INTEGER)'),
+        db.prepare('CREATE TABLE company_punch_policies(company_id TEXT PRIMARY KEY,enabled INTEGER,rules_json TEXT)'),
+        db.prepare('CREATE TABLE work_days(id TEXT PRIMARY KEY,employee_id TEXT,work_date TEXT,timezone TEXT,schedule_json TEXT,rules_json TEXT,next_seq INTEGER NOT NULL DEFAULT 0,created_at INTEGER,last_at INTEGER,company_id TEXT,UNIQUE(employee_id,work_date))'),
+        db.prepare('CREATE TABLE punches(id TEXT PRIMARY KEY,work_day_id TEXT NOT NULL,employee_id TEXT,seq INTEGER,type TEXT,recorded_at INTEGER,idempotency_key TEXT,ip_hash TEXT,receipt_hash TEXT,UNIQUE(work_day_id,seq),UNIQUE(employee_id,idempotency_key))'),
+        db.prepare("CREATE TRIGGER punch_sequence BEFORE INSERT ON punches BEGIN SELECT CASE WHEN NEW.employee_id != (SELECT employee_id FROM work_days WHERE id=NEW.work_day_id) OR NEW.seq != (SELECT next_seq FROM work_days WHERE id=NEW.work_day_id) OR NEW.type != (CASE NEW.seq WHEN 0 THEN 'entry' WHEN 1 THEN 'break_start' WHEN 2 THEN 'break_end' ELSE 'exit' END) THEN RAISE(ABORT,'invalid_sequence') END; END"),
+        db.prepare('CREATE TRIGGER punch_advance AFTER INSERT ON punches BEGIN UPDATE work_days SET next_seq=NEW.seq+1,last_at=NEW.recorded_at WHERE id=NEW.work_day_id; END'),
+        db.prepare('CREATE TABLE company_admin_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CHECK(affected_rows=1))'),
+        db.prepare('CREATE TABLE company_employee_security_events(id TEXT PRIMARY KEY,company_id TEXT,employee_id TEXT,user_id TEXT,admin_id TEXT,action TEXT,created_at INTEGER)'),
         db.prepare("CREATE TABLE rate_limits(key TEXT PRIMARY KEY,count INTEGER,reset_at INTEGER)"),
-        db.prepare("INSERT INTO companies VALUES ('co-a','empresa-a','active'),('co-b','empresa-b','active')"),
+        db.prepare("INSERT INTO companies VALUES ('co-a','empresa-a','active','Empresa A','America/Bahia'),('co-b','empresa-b','active','Empresa B','America/Bahia')"),
         db.prepare("INSERT INTO company_admins VALUES('admin-a','co-a','gestor-a','Gestor A',1,1,0,NULL),('admin-b','co-b','gestor-b','Gestor B',1,1,0,NULL)"),
         db.prepare("INSERT INTO company_admin_sessions VALUES (?,?,?,?,?,?,1)")
           .bind(sha256(tokenA),'admin-a','co-a','csrf-a',Date.now()+600000,Date.now()),
         db.prepare("INSERT INTO company_admin_sessions VALUES (?,?,?,?,?,?,1)")
-          .bind(sha256(tokenB),'admin-b','co-b','csrf-b',Date.now()+600000,Date.now())
+          .bind(sha256(tokenB),'admin-b','co-b','csrf-b',Date.now()+600000,Date.now()),
+        db.prepare('INSERT INTO company_punch_policies VALUES (?,1,?),(?,0,?)')
+          .bind('co-a',rules,'co-b',rules)
       ]);
       const app=new Hono<App>();
       app.use('*',async(c,next)=>{c.set('db',db);await next();});
       app.route('/api/company/employees',companyEmployeesRoutes);
       app.route('/api/company/schedules',companySchedulesRoutes);
+      app.route('/api/employee/cpf-auth',employeeCpfAuthRoutes);
+      app.route('/api/employee/cpf-work',employeeCpfPunchRoutes);
+      app.route('/api/employee/cpf-work',employeeCpfHistoryRoutes);
       app.onError((e,c)=>e instanceof ApiError
         ?c.json({error:{code:e.code,message:e.message}},e.status as any)
         :c.json({error:{code:'internal_error',message:String(e)}},500));
@@ -64,6 +88,7 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         ENVIRONMENT:'development' as const,
         ENABLE_COMPANY_EMPLOYEE_REGISTRATION:'true',
         ENABLE_COMPANY_SCHEDULES:'true',
+        ENABLE_EMPLOYEE_PUNCHES:'true',SESSION_HOURS:'12',
         AUTH_PEPPER:pepper,CPF_LOOKUP_SECRET:cpfSecret,DATA_KEY:dataKey
       } as App['Bindings'];
       const post=(token:string,csrf:string,body:object)=>
@@ -276,7 +301,140 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         {company_id:'co-a',employee_id:ana.employee.id,admin_id:'admin-a',action:'created'},
         {company_id:'co-b',employee_id:b.employee.id,admin_id:'admin-b',action:'created'}
       ]));
-      const guards=await db.prepare('SELECT COUNT(*) AS total FROM company_employee_write_guards').first<{total:number}>();
+
+      // Ana acaba de ser cadastrada pelo gestor e recebeu a jornada
+      // coletiva de 07:00. Não existe funcionário nem escala pré-carregados
+      // para o registro de ponto: todas as IDs vêm dos formulários anteriores.
+      const employeeRequest=(path:string,body?:object,cookie?:string,csrf?:string)=>
+        app.request(path,{
+          method:body?'POST':'GET',
+          headers:{
+            ...(body?{'Content-Type':'application/json'}:{}),
+            ...(cookie?{Cookie:cookie}:{}),
+            ...(csrf?{'X-CSRF-Token':csrf}:{})
+          },
+          ...(body?{body:JSON.stringify(body)}:{})
+        },env);
+      const loginAna=async(password:string)=>{
+        const response=await employeeRequest('/api/employee/cpf-auth/login',{
+          cpf:'11144477735',password
+        });
+        const data=await response.json() as any;
+        return {response,data,cookie:response.headers.get('set-cookie')?.split(';')[0]||''};
+      };
+      let anaLogin=await loginAna(ana.temporary_password);
+      expect(anaLogin.response.status).toBe(200);
+      expect(anaLogin.data.selection_required).toBe(false);
+      const firstSession=await employeeRequest(
+        '/api/employee/cpf-auth/session',undefined,anaLogin.cookie
+      );
+      expect(firstSession.status).toBe(200);
+      const firstData=await firstSession.json() as any;
+      expect(firstData.user.employee_id).toBe(ana.employee.id);
+      expect(firstData.company.id).toBe('co-a');
+      expect(firstData.user.must_change_password).toBe(true);
+      expect((await employeeRequest('/api/employee/cpf-work/today',
+        undefined,anaLogin.cookie)).status).toBe(403);
+      const newPassword='SenhaDefinitivaAna2026!';
+      const changePassword=await employeeRequest(
+        '/api/employee/cpf-auth/password',{
+          current_password:ana.temporary_password,new_password:newPassword
+        },anaLogin.cookie,firstData.csrf_token
+      );
+      expect(changePassword.status).toBe(200);
+      expect((await employeeRequest('/api/employee/cpf-auth/session',
+        undefined,anaLogin.cookie)).status).toBe(401);
+      expect((await loginAna(ana.temporary_password)).response.status).toBe(401);
+      anaLogin=await loginAna(newPassword);
+      expect(anaLogin.response.status).toBe(200);
+      const types=['entry','break_start','break_end','exit'] as const;
+      const marks=[at(7),at(11),at(12),at(16)];
+      const keys=[
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222',
+        '33333333-3333-4333-8333-333333333333',
+        '44444444-4444-4444-8444-444444444444'
+      ];
+      const receipts:string[]=[];
+      let renewals=0;
+      const session=await employeeRequest(
+        '/api/employee/cpf-auth/session',undefined,anaLogin.cookie
+      );
+      expect(session.status).toBe(200);
+      let csrfEmployee=(await session.json() as any).csrf_token as string;
+      for(let i=0;i<4;i++){
+        vi.mocked(Date.now).mockReturnValue(marks[i]);
+        let today=await employeeRequest(
+          '/api/employee/cpf-work/today',undefined,anaLogin.cookie
+        );
+        if(today.status===401){
+          renewals++;
+          anaLogin=await loginAna(newPassword);
+          expect(anaLogin.response.status).toBe(200);
+          const renewed=await employeeRequest(
+            '/api/employee/cpf-auth/session',undefined,anaLogin.cookie
+          );
+          expect(renewed.status).toBe(200);
+          csrfEmployee=(await renewed.json() as any).csrf_token;
+          today=await employeeRequest(
+            '/api/employee/cpf-work/today',undefined,anaLogin.cookie
+          );
+        }
+        expect(today.status).toBe(200);
+        expect(await today.json()).toMatchObject({
+          company_id:'co-a',employee_id:ana.employee.id,
+          work_date:'2026-10-26',next_seq:i,next_type:types[i]
+        });
+        const punch=await employeeRequest('/api/employee/cpf-work/punch',{
+          type:types[i],idempotency_key:keys[i]
+        },anaLogin.cookie,csrfEmployee);
+        const confirmed=await punch.json() as any;
+        expect(punch.status,JSON.stringify(confirmed)).toBe(201);
+        expect(confirmed.punch.type).toBe(types[i]);
+        expect(confirmed.punch.recorded_at).toBe(marks[i]);
+        receipts.push(confirmed.punch.receipt_hash);
+        const retry=await employeeRequest('/api/employee/cpf-work/punch',{
+          type:types[i],idempotency_key:keys[i]
+        },anaLogin.cookie,csrfEmployee);
+        expect(retry.status).toBe(200);
+        expect((await retry.json() as any).replayed).toBe(true);
+      }
+      expect(renewals).toBeGreaterThanOrEqual(2);
+      const punches=await db.prepare(
+        'SELECT employee_id,seq,type,receipt_hash FROM punches ORDER BY seq'
+      ).all<any>();
+      expect(punches.results).toEqual([
+        {employee_id:ana.employee.id,seq:0,type:'entry',receipt_hash:receipts[0]},
+        {employee_id:ana.employee.id,seq:1,type:'break_start',receipt_hash:receipts[1]},
+        {employee_id:ana.employee.id,seq:2,type:'break_end',receipt_hash:receipts[2]},
+        {employee_id:ana.employee.id,seq:3,type:'exit',receipt_hash:receipts[3]}
+      ]);
+      expect(new Set(receipts).size).toBe(4);
+      expect((await db.prepare('SELECT company_id,employee_id,work_date,next_seq FROM work_days')
+        .first<any>())).toEqual({
+        company_id:'co-a',employee_id:ana.employee.id,work_date:'2026-10-26',next_seq:4
+      });
+      const history=await employeeRequest(
+        '/api/employee/cpf-work/history?month=2026-10&company_id=co-b',
+        undefined,anaLogin.cookie
+      );
+      expect(history.status).toBe(200);
+      expect(await history.json()).toMatchObject({
+        company_id:'co-a',employee_id:ana.employee.id,
+        days:[{date:'2026-10-26',punches:expect.arrayContaining([
+          expect.objectContaining({type:'entry'}),
+          expect.objectContaining({type:'exit'})
+        ])}]
+      });
+      const tooMany=await employeeRequest('/api/employee/cpf-work/punch',{
+        type:'entry',idempotency_key:'55555555-5555-4555-8555-555555555555'
+      },anaLogin.cookie,csrfEmployee);
+      expect(tooMany.status).toBe(409);
+      expect((await db.prepare('SELECT COUNT(*) AS total FROM punches')
+        .first<{total:number}>())?.total).toBe(4);
+      expect((await db.prepare('SELECT COUNT(*) AS total FROM company_admin_write_guards')
+        .first<{total:number}>())?.total).toBe(0);
+            const guards=await db.prepare('SELECT COUNT(*) AS total FROM company_employee_write_guards').first<{total:number}>();
       expect(guards?.total).toBe(0);
       expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toHaveLength(0);
     }finally{
