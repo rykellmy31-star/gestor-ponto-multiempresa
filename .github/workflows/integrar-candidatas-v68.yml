@@ -1,0 +1,83 @@
+name: Integrar candidatas auditadas CR JORNADA v68
+
+on:
+  push:
+    branches:
+      - desenvolvimento-cr-jornada
+    paths:
+      - .github/workflows/integrar-candidatas-v68.yml
+
+# Este workflow NÃO acessa D1 remoto nem publica Cloudflare Worker.
+# Só é executado quando o próprio arquivo é adicionado/alterado na branch.
+permissions:
+  contents: write
+
+concurrency:
+  group: cr-jornada-v68-integracao-controlada
+  cancel-in-progress: false
+
+jobs:
+  integrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Obter checkout completo da branch de desenvolvimento
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Preparar Node.js padrão gratuito
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependências existentes
+        run: npm ci
+
+      - name: Testar as proteções do integrador
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s scripts -p 'test_crj_integrate_v68.py' -v
+
+      - name: Integrar pacote auditado em checkout isolado
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export PATH="$GITHUB_WORKSPACE/node_modules/.bin:$PATH"
+          python3 -I -B scripts/crj-integrate-v68.py
+
+      - name: Auditar dependências
+        run: npm audit --audit-level=moderate
+
+      - name: Verificar TypeScript da aplicação
+        run: npm run typecheck
+
+      - name: Verificar TypeScript dos testes
+        run: npm run typecheck:tests
+
+      - name: Executar testes de lógica, rotas e permissões
+        run: npx vitest run --exclude 'tests/d1-*.test.ts' --no-file-parallelism --maxWorkers=2
+
+      - name: Compilar frontend React
+        run: npm run build:web
+
+      - name: Conferir bundle Cloudflare sem deploy
+        run: npx wrangler deploy --dry-run --outdir .worker-bundle
+
+      - name: Executar integração D1 exclusivamente local
+        run: npx vitest run tests/d1- --no-file-parallelism --maxWorkers=1
+
+      - name: Confirmar escopo e enviar alterações aprovadas
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = 'desenvolvimento-cr-jornada'
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 17
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: integrar correções auditadas v68 e migrações 0030-0038'
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push origin HEAD:refs/heads/desenvolvimento-cr-jornada

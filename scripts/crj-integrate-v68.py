@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Stage reviewed CR JORNADA v68 in CI; no deploy and no remote DB operations.
+
+On success, the workflow may commit ONLY previously reviewed integration paths
+onto desenvolvimento-cr-jornada. All work before the final git push is local.
+"""
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import urllib.request
+import zipfile
+
+REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
+BRANCH = 'desenvolvimento-cr-jornada'
+BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
+EXPECTED_PARENT = 'd90fdd3a54eb31b8354d8385ca9488b38d87247c'
+EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
+                         'scripts/crj-integrate-v68.py',
+                         'scripts/test_crj_integrate_v68.py'}
+ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
+ARCHIVE_SHA256 = 'dedb2f75488838c789a6cfcacd19934dda0a3ff6dd1fff4d50b9b2f05686f67c'
+ARCHIVE_BYTES = 607804
+ARCHIVE_ROOT = 'CR-JORNADA-v68-integracao-unificada'
+ALREADY_COMMITTED = {
+    'migrations/0028_company_admin_identity_immutable.sql',
+    'migrations/0029_tenant_login_alias_policy.sql',
+}
+
+
+def run(*args: str, cwd: Path, timeout=600) -> str:
+    p = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+                       env={**os.environ, 'GIT_TERMINAL_PROMPT': '0',
+                            'PYTHONDONTWRITEBYTECODE': '1'})
+    if p.returncode:
+        raise RuntimeError(f'Command failed ({args[0]} {args[1] if len(args)>1 else ""}): '
+                           f'{p.stderr[-4000:]} {p.stdout[-2000:]}')
+    return p.stdout.strip()
+
+
+def download_pinned_zip(token: str) -> bytes:
+    if not token:
+        raise RuntimeError('GitHub read token missing')
+    endpoint = f'https://api.github.com/repos/{REPO}/git/blobs/{ARCHIVE_BLOB}'
+    req = urllib.request.Request(endpoint, headers={
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'cr-jornada-safe-ci',
+    })
+    with urllib.request.urlopen(req, timeout=60) as response:
+        doc = json.load(response)
+    if doc.get('sha') != ARCHIVE_BLOB or doc.get('encoding') != 'base64':
+        raise RuntimeError('Wrong Git blob object returned')
+    raw = base64.b64decode(doc['content'], validate=False)
+    digest = hashlib.sha256(raw).hexdigest()
+    if len(raw) != ARCHIVE_BYTES or digest != ARCHIVE_SHA256:
+        raise RuntimeError('Package digest/size differs from approved v68')
+    return raw
+
+
+def safe_unpack(payload: bytes, output: Path) -> Path:
+    import io
+    with zipfile.ZipFile(io.BytesIO(payload)) as z:
+        if z.testzip() is not None:
+            raise RuntimeError('Corrupt ZIP')
+        paths: set[str] = set()
+        for entry in z.infolist():
+            path = PurePosixPath(entry.filename)
+            if not path.parts or path.parts[0] != ARCHIVE_ROOT:
+                raise RuntimeError('Unapproved ZIP root')
+            if (path.is_absolute() or '\\' in entry.filename or
+                    '..' in path.parts or entry.filename in paths):
+                raise RuntimeError('Unsafe ZIP member')
+            paths.add(entry.filename)
+            mode = (entry.external_attr >> 16) & 0o170000
+            if mode not in (0, stat.S_IFREG, stat.S_IFDIR):
+                raise RuntimeError('Unapproved ZIP object type')
+            target = output.joinpath(*path.parts)
+            if entry.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(entry, 'r') as src, target.open('xb') as dst:
+                    shutil.copyfileobj(src, dst)
+    result = output / ARCHIVE_ROOT
+    if not (result / 'crj_v68.py').is_file():
+        raise RuntimeError('Missing v68 integrator entrypoint')
+    return result
+
+
+def status_paths(repo: Path) -> set[str]:
+    return (set(filter(None, run('git', 'diff', '--name-only', 'HEAD', cwd=repo).splitlines())) |
+            set(filter(None, run('git', 'ls-files', '--others', '--exclude-standard', cwd=repo).splitlines())))
+
+
+def verify_launch_commit(repo: Path) -> None:
+    head = run('git', 'rev-parse', 'HEAD', cwd=repo)
+    if os.environ.get('GITHUB_SHA') != head:
+        raise RuntimeError('GitHub workflow SHA does not match checkout')
+    parent = run('git', 'rev-parse', 'HEAD^', cwd=repo)
+    if parent != EXPECTED_PARENT:
+        raise RuntimeError('Launch commit has unexpected parent')
+    changed = set(run('git', 'diff', '--name-only', EXPECTED_PARENT, 'HEAD', cwd=repo).splitlines())
+    if changed != EXPECTED_LAUNCH_FILES:
+        raise RuntimeError('Launch commit contains unexpected source files')
+
+
+def check_and_transfer(source: Path, dest: Path, paths: set[str]) -> list[str]:
+    if len(paths) != 19 or not ALREADY_COMMITTED.issubset(paths):
+        raise RuntimeError(f'Expected 19 pinned changes, got {len(paths)}')
+    if run('git', 'status', '--porcelain', cwd=dest):
+        raise RuntimeError('Checkout was not clean')
+    verify_launch_commit(dest)
+    if run('git', 'branch', '--show-current', cwd=dest) != BRANCH:
+        raise RuntimeError('Refusing integration outside development branch')
+    staged = []
+    for name in sorted(paths):
+        target = dest / name
+        fresh = source / name
+        if not fresh.is_file() or fresh.is_symlink():
+            raise RuntimeError(f'Candidate missing or unsafe: {name}')
+        parent = target.parent
+        if parent.is_symlink() or not parent.is_dir():
+            raise RuntimeError(f'Unsafe destination parent: {name}')
+        expected = fresh.read_bytes()
+        if name in ALREADY_COMMITTED:
+            if not target.is_file() or target.read_bytes() != expected:
+                raise RuntimeError(f'Previously committed migration differs: {name}')
+            continue
+        # Never overwrite a source file that changed after the audited base.
+        original = run('git', 'ls-tree', BASE_SHA, '--', name, cwd=dest)
+        if original:
+            baseline = subprocess.check_output(['git', 'show', f'{BASE_SHA}:{name}'], cwd=dest)
+            if not target.is_file() or target.is_symlink() or target.read_bytes() != baseline:
+                raise RuntimeError(f'Concurrent modification of {name}; manual review required')
+        elif target.exists() or target.is_symlink():
+            raise RuntimeError(f'Unexpected new path exists: {name}')
+        target.write_bytes(expected)
+        staged.append(name)
+    if len(staged) != 17:
+        raise RuntimeError(f'Expected 17 new/updated files, got {len(staged)}')
+    run('git', 'add', '--', *staged, cwd=dest)
+    index_paths = set(filter(None, run('git', 'diff', '--cached', '--name-only', cwd=dest).splitlines()))
+    if index_paths != set(staged):
+        raise RuntimeError('Unexpected Git staged inventory')
+    run('git', 'diff', '--cached', '--check', cwd=dest)
+    return staged
+
+
+def main() -> None:
+    repo = Path(os.environ.get('GITHUB_WORKSPACE', '.')).resolve()
+    if not (repo / '.git').exists():
+        raise RuntimeError('Expected full GitHub Actions checkout')
+    verify_launch_commit(repo)
+    with tempfile.TemporaryDirectory(prefix='crj-v68-ci-') as td:
+        tmp = Path(td)
+        z = download_pinned_zip(os.environ.get('GH_TOKEN', ''))
+        bundle = safe_unpack(z, tmp / 'bundle')
+        script = bundle / 'crj_v68.py'
+        print('INTEGRATION: verifying package', flush=True)
+        print(run(sys.executable, '-I', '-B', str(script), 'verify', cwd=bundle, timeout=120),flush=True)
+        print('INTEGRATION: testing package', flush=True)
+        print(run(sys.executable, '-I', '-B', str(script), 'self-test', cwd=bundle, timeout=900),flush=True)
+        source = tmp / 'source'
+        run('git', 'clone', '-q', '--no-hardlinks', str(repo), str(source), cwd=tmp)
+        run('git', 'checkout', '-q', '-B', BRANCH, BASE_SHA, cwd=source)
+        run('git', 'remote', 'set-url', 'origin', f'https://github.com/{REPO}.git', cwd=source)
+        print('INTEGRATION: safe dry-run against pinned baseline', flush=True)
+        print(run(sys.executable, '-I', '-B', str(script), 'dry-run', str(source),
+                  cwd=bundle, timeout=1200), flush=True)
+        print('INTEGRATION: apply and inspect approved local candidate', flush=True)
+        print(run(sys.executable, '-I', '-B', str(script), 'apply-local', str(source),
+                  '--confirm-local-only', cwd=bundle, timeout=1200),flush=True)
+        print(run(sys.executable, '-I', '-B', str(script), 'inspect', str(source),
+                  cwd=bundle, timeout=1200),flush=True)
+        changed = status_paths(source)
+        written = check_and_transfer(source, repo, changed)
+        print(f'INTEGRATION: {len(written)} candidate paths staged safely; no deploy',flush=True)
+    # The workflow runs all required checks and may commit/push only after they pass.
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        print(f'INTEGRATION BLOCKED: {e}',file=sys.stderr,flush=True)
+        raise SystemExit(2)
