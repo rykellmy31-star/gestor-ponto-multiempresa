@@ -389,6 +389,17 @@ platformCompaniesRoutes.patch('/:id/status', async c => {
     'Uma empresa arquivada não pode ser alterada.'
   );
 
+  // Repetir a mesma transição não modifica updated_at, não produz um
+  // evento fictício de status_changed e não mexe nas sessões.
+  if (existing.status === parsed.data.status) {
+    c.header('Cache-Control', 'private, no-store');
+    return c.json({
+      success: true,
+      status: existing.status,
+      unchanged: true
+    });
+  }
+
   const now = Date.now();
 
   // Uma empresa suspensa nao pode recuperar sessoes antigas ao ser
@@ -428,6 +439,7 @@ platformCompaniesRoutes.patch('/:id/status', async c => {
   ));
   await companyAdminWrite(db, statements, 'company_status_conflict');
 
+  c.header('Cache-Control', 'private, no-store');
   return c.json({
     success: true,
     status: parsed.data.status

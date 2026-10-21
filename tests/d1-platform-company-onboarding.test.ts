@@ -259,9 +259,37 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         'SELECT COUNT(*) AS total FROM company_admin_write_guards'
       ).first<{total:number}>();
       expect(guardsAfterSuspend?.total).toBe(0);
+      // Repetir a suspensão não cria um falso evento nem muda updated_at.
+      const suspendedRow=await db.prepare(
+        'SELECT updated_at FROM companies WHERE id=?'
+      ).bind(companyA.id).first<{updated_at:number}>();
+      const repeatSuspend=await call('/api/platform/companies/'+companyA.id+'/status',
+        'PATCH',{status:'suspended'},superCookie,csrf);
+      expect(repeatSuspend.status).toBe(200);
+      expect(repeatSuspend.headers.get('cache-control')).toContain('no-store');
+      expect(await repeatSuspend.json()).toMatchObject({
+        success:true,status:'suspended',unchanged:true
+      });
+      const sameSuspendedRow=await db.prepare(
+        'SELECT updated_at FROM companies WHERE id=?'
+      ).bind(companyA.id).first<{updated_at:number}>();
+      expect(sameSuspendedRow?.updated_at).toBe(suspendedRow?.updated_at);
       const resume=await call('/api/platform/companies/'+companyA.id+'/status',
         'PATCH',{status:'active'},superCookie,csrf);
       expect(resume.status).toBe(200);
+      const activeRow=await db.prepare(
+        'SELECT updated_at FROM companies WHERE id=?'
+      ).bind(companyA.id).first<{updated_at:number}>();
+      const repeatResume=await call('/api/platform/companies/'+companyA.id+'/status',
+        'PATCH',{status:'active'},superCookie,csrf);
+      expect(repeatResume.status).toBe(200);
+      expect(await repeatResume.json()).toMatchObject({
+        success:true,status:'active',unchanged:true
+      });
+      const sameActiveRow=await db.prepare(
+        'SELECT updated_at FROM companies WHERE id=?'
+      ).bind(companyA.id).first<{updated_at:number}>();
+      expect(sameActiveRow?.updated_at).toBe(activeRow?.updated_at);
       // Reativar a empresa NAO restaura os cookies emitidos antes
       // da suspensao. Os gestores precisam entrar novamente.
       expect((await call('/api/company/auth/session','GET',undefined,changedCookie)).status)
