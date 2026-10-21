@@ -4,6 +4,15 @@
  * may have committed the transaction before the network connection failed.
  * Never instruct an administrator to blindly retry a write.
  */
+export class CompanyRequestError extends Error {
+  constructor(message:string,readonly status:number){
+    super(message);
+    this.name='CompanyRequestError';
+  }
+}
+export function isExpiredCompanySession(error:unknown):boolean {
+  return error instanceof CompanyRequestError&&error.status===401;
+}
 export async function jsonRequest<T>(path:string,options?:RequestInit):Promise<T> {
   const method=(options?.method||'GET').toUpperCase();
   const mutation=method!=='GET'&&method!=='HEAD';
@@ -20,14 +29,16 @@ export async function jsonRequest<T>(path:string,options?:RequestInit):Promise<T
   const data=await response.json().catch(()=>null) as
     ({error?:{message?:string}}&T)|null;
   if(!response.ok) {
-    if(response.status===503)throw new Error(
-      'As escalas da empresa estão indisponíveis ou ainda em homologação. Verifique antes de repetir a operação.'
-    );
-    throw new Error(data?.error?.message||
-      (response.status===401?'Sessão encerrada. Entre novamente.':
-      mutation
-        ? 'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.'
-        : 'Não foi possível carregar os dados. Tente novamente.'));
+    const message=response.status===401
+      ? 'Sessão encerrada. Entre novamente.'
+      : response.status===503
+      ? 'As escalas da empresa estão indisponíveis ou ainda em homologação. Verifique antes de repetir a operação.'
+      : data?.error?.message||(
+        mutation
+          ? 'Não foi possível confirmar a operação. Atualize os dados antes de tentar novamente.'
+          : 'Não foi possível carregar os dados. Tente novamente.'
+      );
+    throw new CompanyRequestError(message,response.status);
   }
   if(!data)throw new Error(mutation
     ? 'Resposta inesperada do servidor. A operação pode ter sido registrada. Atualize os dados antes de tentar novamente.'

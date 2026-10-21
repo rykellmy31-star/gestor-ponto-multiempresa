@@ -44,6 +44,18 @@ describe('CR JORNADA — gestor configura turnos semanais e por funcionário', (
     expect(shiftForDay(schedule,3).start).toBe('14:00');
     expect(applyStandardShiftToAll(schedule).day_overrides).toBeUndefined();
   });
+  it('modo uniforme limpa turnos especiais antes de persistir escala',()=>{
+    let personalized=updateShiftForDay(original,2,'start','13:00');
+    personalized=updateShiftForDay(personalized,2,'break_start','16:00');
+    personalized=updateShiftForDay(personalized,2,'break_end','17:00');
+    personalized=updateShiftForDay(personalized,2,'end','22:00');
+    const uniform=applyStandardShiftToAll(personalized);
+    expect(uniform.day_overrides).toBeUndefined();
+    expect(uniform.weekdays).toEqual([1,2,3,4,5]);
+    expect(scheduleSchema.safeParse(uniform).success).toBe(true);
+    expect(scheduleForDate(uniform,'2026-10-27').start).toBe('07:00');
+    expect(JSON.parse(JSON.stringify(uniform)).day_overrides).toBeUndefined();
+  });
   it('desmarcar o dia exclui apenas seu horário especial', () => {
     const schedule=selectScheduleDays(updateShiftForDay(original,2,'start','13:00'),[1,3,4,5]);
     expect(schedule.weekdays).toEqual([1,3,4,5]);

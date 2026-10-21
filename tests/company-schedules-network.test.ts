@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {jsonRequest} from '../web/src/company-schedules-network';
+import {jsonRequest,CompanyRequestError,isExpiredCompanySession} from '../web/src/company-schedules-network';
 
 afterEach(()=>vi.unstubAllGlobals());
 
@@ -35,6 +35,23 @@ describe('CR JORNADA — estado incerto de operações empresariais',()=>{
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{}',{status:401})));
     await expect(jsonRequest('/company/schedules'))
       .rejects.toThrow('Sessão encerrada. Entre novamente.');
+  });
+  it('401 e logout obrigatório, mas 403 ou rede não revogam a sessão visual',async()=>{
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{}',{status:401})));
+    let error:unknown;
+    try {await jsonRequest('/company/employees');}catch(e){error=e;}
+    expect(error).toBeInstanceOf(CompanyRequestError);
+    expect((error as CompanyRequestError).status).toBe(401);
+    expect(isExpiredCompanySession(error)).toBe(true);
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({error:{message:'Sem permissão'}}),{status:403}
+    )));
+    try {await jsonRequest('/company/schedules',{method:'POST'});}catch(e){error=e;}
+    expect(error).toMatchObject({status:403,message:'Sem permissão'});
+    expect(isExpiredCompanySession(error)).toBe(false);
+    vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new TypeError('network')));
+    try {await jsonRequest('/company/schedules');}catch(e){error=e;}
+    expect(isExpiredCompanySession(error)).toBe(false);
   });
   it('não afirma que uma solicitação 503 não alterou dados',async()=>{
     vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('{}',{status:503})));

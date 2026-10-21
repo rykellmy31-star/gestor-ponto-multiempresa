@@ -24,8 +24,11 @@ const recoverySchema=z.object({company_id:z.string(),employee_id:z.string(),
   temporary_password:z.string().regex(/^[a-f0-9]{24}$/),expires_at:z.number().int().positive()});
 type Recovery=z.infer<typeof recoverySchema>;
 
-export function CompanyEmployeeAccess({companyId,csrf,onEmployeeCreated}:{
-  companyId:string;csrf:string;onEmployeeCreated?:()=>void
+export function CompanyEmployeeAccess({
+  companyId,csrf,onEmployeeCreated,onSessionExpired
+}:{
+  companyId:string;csrf:string;onEmployeeCreated?:()=>void;
+  onSessionExpired?:()=>void
 }) {
   const [data,setData]=useState<Result|null>(null);
   const [error,setError]=useState('');
@@ -42,13 +45,14 @@ export function CompanyEmployeeAccess({companyId,csrf,onEmployeeCreated}:{
     const ctrl=new AbortController();
     fetch('/api/company/employees',{credentials:'same-origin',cache:'no-store',signal:ctrl.signal})
       .then(async response=>{
+        if(response.status===401){onSessionExpired?.();return;}
         if(!response.ok)throw new Error('Não foi possível consultar os acessos. Entre novamente ou tente mais tarde.');
         const payload=await response.json() as Result;
         if(payload.company_id!==companyId)throw new Error('A empresa da sessão mudou. Entre novamente.');
         if(active.current)setData(payload);
       }).catch(err=>{if(active.current&&!ctrl.signal.aborted)setError(err.message);});
     return ()=>{active.current=false;ctrl.abort();};
-  },[companyId]);
+  },[companyId,onSessionExpired]);
 
   async function registerEmployee(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,6 +64,7 @@ export function CompanyEmployeeAccess({companyId,csrf,onEmployeeCreated}:{
         headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
         body:JSON.stringify(newEmployee)
       });
+      if(response.status===401){onSessionExpired?.();return;}
       const payload=await response.json().catch(()=>null);
       if(!response.ok){
         const failure=z.object({error:z.object({message:z.string()})}).safeParse(payload);
@@ -93,6 +98,7 @@ export function CompanyEmployeeAccess({companyId,csrf,onEmployeeCreated}:{
         headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
         body:JSON.stringify({current_password:password})
       });
+      if(response.status===401){onSessionExpired?.();return;}
       const payload=await response.json().catch(()=>null);
       if(!response.ok) {
         const failure=z.object({error:z.object({message:z.string()})}).safeParse(payload);

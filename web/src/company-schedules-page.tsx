@@ -1,5 +1,5 @@
 import { CompanyEmployeeAccess } from './company-employee-access';
-import { jsonRequest } from './company-schedules-network';
+import { jsonRequest,isExpiredCompanySession } from './company-schedules-network';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
@@ -88,6 +88,22 @@ export function CompanySchedulesPage() {
     date:string;assignment_id:string|null;shift:Schedule|null;
   }> | null>(null);
 
+  const onSessionExpired=useCallback(()=>{
+    pendingScheduleCreate.current=null;
+    setSession(null);
+    setSchedules([]);
+    setEmployees([]);
+    setWeekPreview(null);
+    setError('Sua sessão empresarial expirou. Entre novamente.');
+  },[]);
+  const handleRequestError=useCallback((err:unknown,fallback:string)=>{
+    if(isExpiredCompanySession(err)){
+      onSessionExpired();
+      return;
+    }
+    setError(err instanceof Error?err.message:fallback);
+  },[onSessionExpired]);
+
   const check=useCallback(async()=>{
     try{
       const data=await jsonRequest<CompanySession>('/company/auth/session');
@@ -113,9 +129,9 @@ export function CompanySchedulesPage() {
       setEmployees(b.employees);
     }catch(err){
       setSchedules([]);setEmployees([]);
-      setError(err instanceof Error?err.message:'Erro ao consultar a empresa.');
+      handleRequestError(err,'Erro ao consultar a empresa.');
     }finally{setLoading(false);}
-  },[session]);
+  },[session,handleRequestError]);
   useEffect(()=>{void load();},[load]);
 
   async function signIn(event:FormEvent<HTMLFormElement>) {
@@ -166,7 +182,7 @@ export function CompanySchedulesPage() {
       setSchedules([]);setEmployees([]);
       setNotice('Senha alterada. Entre novamente com a nova senha para acessar as escalas.');
     }catch(err){
-      setError(err instanceof Error?err.message:'Falha na troca de senha.');
+      handleRequestError(err,'Falha na troca de senha.');
     }finally{
       setCurrentPassword('');setNewPassword('');setConfirmPassword('');
       setChangingPassword(false);
@@ -180,7 +196,7 @@ export function CompanySchedulesPage() {
       });
       setSession(null);setSchedules([]);setEmployees([]);
       setNotice('Você saiu da área empresarial.');
-    } catch(err) {setError(err instanceof Error?err.message:'Não foi possível sair.');}
+    } catch(err) {handleRequestError(err,'Não foi possível sair.');}
   }
   function update(key:keyof FormSchedule,value:unknown) {
     setForm(prev=>({...prev,[key]:value}));setError('');
@@ -238,7 +254,7 @@ export function CompanySchedulesPage() {
         :'Escala criada. Selecione um funcionário e atribua a nova escala.');
       setSelectedSchedule(response.id);
       await load();
-    }catch(err){setError(err instanceof Error?err.message:'Falha ao salvar.');}
+    }catch(err){handleRequestError(err,'Falha ao salvar.');}
     finally{setSaving(false);}
   }
   async function previewWeek(){
@@ -256,7 +272,7 @@ export function CompanySchedulesPage() {
       setWeekPreview(response.days);
     }catch(err){
       setWeekPreview(null);
-      setError(err instanceof Error?err.message:'Erro ao consultar a escala.');
+      handleRequestError(err,'Erro ao consultar a escala.');
     }finally{setPreviewing(false);}
   }
   async function assign(event:FormEvent<HTMLFormElement>){
@@ -294,7 +310,7 @@ export function CompanySchedulesPage() {
           : 'Escala atribuída com sucesso. Datas e jornadas anteriores serão preservadas conforme o histórico do sistema.');
       }
       setWeekPreview(null);
-    }catch(err){setError(err instanceof Error?err.message:'Falha ao atribuir.');}
+    }catch(err){handleRequestError(err,'Falha ao atribuir.');}
     finally{setAssigning(false);}
   }
 
@@ -389,7 +405,8 @@ export function CompanySchedulesPage() {
 
       <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} csrf={session.csrf_token}
-        onEmployeeCreated={()=>void load()}/>
+        onEmployeeCreated={()=>void load()}
+        onSessionExpired={onSessionExpired}/>
 
       <section className="company-schedules-card company-schedules-intro">
         <CalendarClock size={25}/>
@@ -482,7 +499,11 @@ export function CompanySchedulesPage() {
           <div className="company-schedules-shortcuts">
             <button type="button" className="company-schedules-secondary"
               aria-pressed={!editDayByDay}
-              onClick={()=>setEditDayByDay(false)}>Mesmo horário em todos</button>
+              onClick={()=>{
+                setForm(prev=>({...prev,...applyStandardShiftToAll(prev)}));
+                setEditDayByDay(false);
+                setError('');
+              }}>Mesmo horário em todos</button>
             <button type="button" className="company-schedules-secondary"
               aria-pressed={editDayByDay}
               onClick={()=>setEditDayByDay(true)}>Editar dia por dia</button>
