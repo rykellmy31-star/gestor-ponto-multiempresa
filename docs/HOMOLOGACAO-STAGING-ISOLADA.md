@@ -2,6 +2,14 @@
 
 O banco de producao **cr-jornada-db** ja recebeu 38 migrations em 2026-10-21. A instalacao foi encerrada e o job remoto de inicializacao foi desativado. **Nao recriar ou aplicar migrations no banco de producao durante a homologacao.**
 
+## Estado atual — políticas pelo painel
+
+Actions `39671265454`, código `9808e88d5b1848902e816cba4a52d5d64df8c091`: **sucesso integral**, 202 verificações HTTP/navegador, políticas de ponto configuradas pela interface nas duas empresas, controle de revisão, auditoria e preservação das regras congeladas após alteração durante o dia. Não há mais fixture SQL para criar políticas neste teste.
+
+O mesmo Worker e o mesmo D1 staging agora têm **39 migrations**. Produção conserva **38**. As migrations 0001–0038 não foram editadas. A nova 0039 é aditiva e permanece pendente de revisão/autorização para produção.
+
+Recuperação também aprovada na rodada: 52 tabelas de aplicação/migrations, schema e hashes de conteúdo idênticos, integridade referencial e AES-256-GCM/SHA256/adulteração aprovados. Destino separado: `cr-jornada-staging-restore-f0d50ccd371c`, ID `d42feab3-ffa3-4ff3-822b-336fec9adb94`. Produção não foi exportada nem restaurada. Detalhes em `POLITICAS-PONTO-EMPRESARIAIS.md`.
+
 ## Homologacao remota executada em 2026-10-21
 
 - Worker: `gestor-ponto-multiempresa-staging`.
@@ -15,7 +23,7 @@ O banco de producao **cr-jornada-db** ja recebeu 38 migrations em 2026-10-21. A 
 
 `scripts/exercise-cloudflare-staging.mjs` exercita Superadmin, duas empresas ficticias, administradores com troca inicial de senha, cadastro de funcionarios, CPF com dois vinculos, isolamento de listas/historico, jornadas por dia, atribuicao em lote, repeticao idempotente, quatro batidas de ponto por funcionario e revogacao de sessoes ao suspender/reativar uma empresa.
 
-As politicas de ponto das duas empresas sao fixtures inseridas diretamente no D1 staging pelo teste. Isso **nao comprova configuracao de politica pelo painel**. A rodada complementar abaixo homologa o login empresarial e o relatório de marcações com CSV pelo navegador. Os demais fluxos de interface, cálculos empresariais e rotas legadas ainda precisam de validação própria; não confundir cobertura HTTP com homologação visual.
+Nas rodadas históricas até `39669565281`, as políticas eram fixtures SQL. A rodada atual `39671265454` substituiu essa preparação pela configuração no painel real. A rodada complementar abaixo homologa o login empresarial e o relatório de marcações com CSV pelo navegador. Os demais fluxos de interface, cálculos empresariais e rotas legadas ainda precisam de validação própria; não confundir cobertura HTTP com homologação visual.
 
 O teste configura um Superadmin ficticio `qa-staging`. Sua senha e derivada unidirecionalmente do segredo staging, com contexto exclusivo de QA, somente dentro do executor; nao aparece em codigo, artefatos ou logs. A troca desse token exige revisar o acesso QA, sem substituir automaticamente contas existentes. O segredo temporario de bootstrap e removido apos a instalacao QA. Nenhum Superadmin de producao e criado por esses scripts.
 
@@ -25,7 +33,7 @@ Actions `39669565281`, commit `b8894153b0b106a550538bbed32b09b7b4de8021`: **suce
 
 A recuperação da mesma rodada também passou: clone separado `cr-jornada-staging-restore-c1625a77e900`, ID `54214342-1417-47c2-8949-017e816297d3`; 51 tabelas, schema e hashes de conteúdo idênticos, SHA256/AES-256-GCM/adulteração e integridade referencial aprovados. Não foi produzido backup operacional de produção.
 
-Detalhes, controles e limites em `RELATORIO-MARCACOES-EMPRESARIAL.md`. Este relatório de marcações não substitui o cálculo de folha, faltas, atrasos ou saldo. A homologação visual dos demais fluxos e a configuração de políticas pelo painel continuam pendentes.
+Detalhes, controles e limites em `RELATORIO-MARCACOES-EMPRESARIAL.md`. Este relatório de marcações não substitui o cálculo de folha, faltas, atrasos ou saldo. A configuração de políticas pelo painel foi homologada na rodada atual acima. A homologação visual dos demais fluxos continua pendente.
 
 ## Compilacao preventiva preservada
 
@@ -37,7 +45,7 @@ A configuracao staging e construida por lista positiva. Bindings remotos extras,
 
 1. Auditar integralmente tenant isolation das rotas habilitadas, dos endpoints legados e triggers SQL. Os testes existentes ainda nao substituem revisao e testes de penetracao.
 2. Manter a prova de recuperacao aprovada: `recuperar-staging.yml` permite repetir o ensaio sem executar novamente os fluxos HTTP. Destinos existentes so sao reutilizados quando comprovadamente vazios; nunca limpar ou sobrescrever uma restauracao parcial/completa automaticamente.
-3. Homologar interfaces, relatorios/exportacoes e configuracao de politicas sem fixtures SQL, alem dos fluxos HTTP aprovados.
+3. Homologar os demais formulários de todos os perfis e os cálculos empresariais completos. Login empresarial, políticas e relatório de marcações/CSV já passaram pelo navegador real.
 4. Definir guarda operacional das chaves, retencao e backup de producao. O teste usa chave efemera e nao produz um backup operacional duradouro.
 5. Obter aprovacao especifica antes de publicar em producao e definir as credenciais do primeiro Superadmin com o proprietario.
 

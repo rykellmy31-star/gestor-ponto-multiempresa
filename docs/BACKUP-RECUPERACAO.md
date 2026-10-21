@@ -134,3 +134,7 @@ Não há senha de emergência padrão ou conta secreta. Se a própria conta Clou
 ## 7. Manutenção de dados temporários
 
 Pontos e auditoria não devem ser apagados pelo uso normal. Sessões, tokens de reset e baldes de rate limit expirados podem ser limpos pelo operador após revisar a política de retenção; a aplicação já os considera inválidos por prazo/versão, mesmo enquanto a linha existir. Não foi instalado um cron de limpeza automática. Monitore crescimento, quotas, falhas de backup e logs sem registrar corpos de login, cookies ou links de reset.
+
+## Ensaio após política empresarial versionada
+
+Actions `39671265454`, código `9808e88d5b1848902e816cba4a52d5d64df8c091`: recuperação remota aprovada após aplicar a migration 0039 somente no staging. Foram 52 tabelas de aplicação/migrations, incluindo a nova auditoria de políticas; schema e hashes de conteúdo idênticos; integridade referencial, AES-256-GCM, SHA256 e rejeição de adulteração aprovados. Clone separado `cr-jornada-staging-restore-f0d50ccd371c`, ID `d42feab3-ffa3-4ff3-822b-336fec9adb94`. Produção preservada com 38 migrations, sem exportação ou restauração. O ensaio continua usando chave efêmera e não substitui backup operacional.
