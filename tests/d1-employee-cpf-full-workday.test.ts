@@ -151,8 +151,11 @@ describe('CR JORNADA — funcionário completa quatro pontos após login CPF',()
         const confirmed=await request(url+'/punch',{
           type:types[i],idempotency_key:keys[i]
         },auth.cookie,csrf);
-        expect(confirmed.status).toBe(201);
         const data=await confirmed.json() as any;
+        expect(confirmed.status,
+          'Nova batida '+(i+1)+' '+types[i]+' (chave '+keys[i]+') retornou '+
+          JSON.stringify(data)
+        ).toBe(201);
         expect(data.replayed).toBe(false);
         expect(data.punch.type).toBe(types[i]);
         expect(data.punch.recorded_at).toBe(times[i]);
