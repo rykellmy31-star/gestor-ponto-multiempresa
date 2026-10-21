@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { ensure } from '../core/errors';
-import { hashPassword, randomToken, verifyPassword } from '../core/crypto';
+import { encryptPersonal, hashPassword, randomToken, verifyPassword } from '../core/crypto';
+import { ApiError } from '../core/errors';
+import { date } from '../core/validation';
+import { normalizeEmployeeCpf, employeeCpfLookupKey } from '../core/employee-cpf';
+import { VALID_COMPANY_ADMIN_WRITE_SQL, companyAdminWriteParams } from '../core/company-admin-write-guard';
 import { ipHash, limit } from '../core/security';
 import { atomicIdentityWrite } from '../core/atomic-identity-write';
 
@@ -13,6 +17,119 @@ export const companyEmployeesRoutes = new Hono<App>();
 // Todas as rotas deste modulo exigem
 // uma sessao empresarial autenticada.
 companyEmployeesRoutes.use('*', requireCompanyAdmin);
+
+const registrationSchema=z.object({
+  full_name:z.string().trim().min(3).max(140),
+  registration:z.string().trim().min(1).max(40)
+    .regex(/^[\p{L}\p{N}._-]+$/u),
+  cpf:z.string().trim().min(11).max(14),
+  job_title:z.string().trim().max(100),
+  admission_date:date
+}).strict();
+
+// Feature-flagged until the full company onboarding is approved in staging.
+// The public response never contains raw CPF, a hash or an encrypted secret.
+companyEmployeesRoutes.post('/', async c=>{
+  ensure(c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION==='true',503,
+    'employee_registration_unavailable','O cadastro está em homologação.');
+  const company=c.get('company'),adminId=c.get('companyAdminId');
+  const adminToken=c.get('companyAdminTokenHash');
+  ensure(company&&adminId&&adminToken,401,'unauthenticated','Entre novamente.');
+  await limit(c,'employee-register:'+company.id+':'+adminId,30,3600000);
+  await limit(c,'employee-register-ip:'+ipHash(c),60,3600000);
+  const parsed=registrationSchema.safeParse(await c.req.json().catch(()=>null));
+  ensure(parsed.success,400,'invalid_employee','Confira os dados do funcionário.');
+  const input=parsed.data;
+  ensure(typeof c.env.CPF_LOOKUP_SECRET==='string'&&
+    c.env.CPF_LOOKUP_SECRET.length>=32&&
+    /^[0-9a-f]{64}$/i.test(c.env.DATA_KEY||'')&&
+    typeof c.env.AUTH_PEPPER==='string'&&c.env.AUTH_PEPPER.length>=32,
+    503,'employee_registration_unconfigured','Cadastro ainda não configurado.');
+  let cpf:string,cpfKey:string;
+  try {
+    cpf=normalizeEmployeeCpf(input.cpf);
+    cpfKey=employeeCpfLookupKey(cpf,c.env.CPF_LOOKUP_SECRET);
+  }catch{
+    throw new ApiError(400,'invalid_cpf','Informe um CPF válido.');
+  }
+  const db=c.get('db');
+  const [duplicateRegistration,duplicateCpf]=await Promise.all([
+    db.prepare([
+      'SELECT id FROM employees WHERE company_id=? AND deleted_at IS NULL',
+      'AND COALESCE(company_registration,registration)=? COLLATE NOCASE'
+    ].join(' ')).bind(company.id,input.registration).first(),
+    db.prepare('SELECT employee_id FROM employee_cpf_links WHERE company_id=? AND cpf_lookup_key=?')
+      .bind(company.id,cpfKey).first()
+  ]);
+  ensure(!duplicateRegistration&&!duplicateCpf,409,'duplicate_employee',
+    'CPF ou matrícula já está cadastrado nesta empresa.');
+  const employeeId=crypto.randomUUID(),userId=crypto.randomUUID(),now=Date.now();
+  const expiresAt=now+24*3600000;
+  const temporaryPassword=randomToken().slice(0,24);
+  const [passwordHash,cpfEncrypted]=await Promise.all([
+    hashPassword(temporaryPassword,c.env.AUTH_PEPPER),
+    encryptPersonal(cpf,c.env.DATA_KEY)
+  ]);
+  const batch=[
+    db.prepare([
+      'INSERT INTO employees(',
+      'id,full_name,registration,company_registration,cpf_encrypted,cpf_last4,',
+      'job_title,admission_date,employment_end,status,notes,created_at,updated_at,company_id)',
+      'SELECT ?,?,?,?,?,?,?,?,NULL,\\'active\\',\\'\\',?,?,co.id FROM companies co',
+      'WHERE co.id=? AND co.status=\\'active\\'',
+      'AND '+VALID_COMPANY_ADMIN_WRITE_SQL
+    ].join(' ')).bind(
+      employeeId,input.full_name,'emp-'+employeeId,input.registration,
+      cpfEncrypted,cpf.slice(-4),input.job_title,input.admission_date,now,now,
+      company.id,...companyAdminWriteParams(adminToken,adminId,company.id,now)
+    ),
+    db.prepare('INSERT INTO company_employee_write_guards(id,affected_rows) VALUES (?,changes())')
+      .bind(crypto.randomUUID()),
+    // The CHECK-as-guard above aborts the entire transaction if auth changed.
+    db.prepare('DELETE FROM company_employee_write_guards'),
+    db.prepare([
+      'INSERT INTO users(id,login,email,display_name,password_hash,',
+      'role,employee_id,active,must_change_password,',
+      'employee_temporary_password_expires_at,created_at,updated_at)',
+      'VALUES (?,?,NULL,?,?,\\'employee\\',?,1,1,?,?,?)'
+    ].join(' ')).bind(userId,'cpf-'+employeeId,input.full_name,
+      passwordHash,employeeId,expiresAt,now,now),
+    db.prepare([
+      'INSERT INTO employee_cpf_links(',
+      'employee_id,company_id,cpf_lookup_key,created_at,updated_at)',
+      'VALUES(?,?,?,?,?)'
+    ].join(' ')).bind(employeeId,company.id,cpfKey,now,now),
+    db.prepare([
+      'INSERT INTO company_employee_registration_audit(',
+      'id,company_id,employee_id,admin_id,action,created_at)',
+      'VALUES(?,?,?,?,\\'created\\',?)'
+    ].join(' ')).bind(crypto.randomUUID(),company.id,employeeId,adminId,now)
+  ];
+  try {
+    await db.batch(batch);
+  }catch(error){
+    const message=error instanceof Error?error.message:String(error);
+    if(message.includes('company_employee_write_conflict')){
+      throw new ApiError(409,'employee_registration_conflict',
+        'A sessão ou a empresa foi alterada. Entre novamente.');
+    }
+    if(message.includes('UNIQUE constraint failed')||
+       message.includes('constraint failed: UNIQUE')){
+      throw new ApiError(409,'duplicate_employee',
+        'CPF ou matrícula já está cadastrado nesta empresa.');
+    }
+    throw error;
+  }
+  c.header('Cache-Control','private, no-store');
+  c.header('Pragma','no-cache');
+  return c.json({
+    success:true,company_id:company.id,
+    employee:{id:employeeId,full_name:input.full_name,
+      registration:input.registration,status:'active'},
+    temporary_password:temporaryPassword,expires_at:expiresAt,
+    must_change_password:true
+  },201);
+});
 
 // Lista exclusivamente os funcionarios
 // pertencentes a empresa autenticada.
@@ -36,7 +153,7 @@ companyEmployeesRoutes.get('/', async (c) => {
       SELECT
         id,
         full_name,
-        registration,
+        COALESCE(company_registration,registration) AS registration,
         job_title,
         admission_date,
         employment_end,
@@ -55,7 +172,8 @@ companyEmployeesRoutes.get('/', async (c) => {
     success: true,
     company_id: company.id,
     employees: result.results ?? [],
-    recovery_available: c.env.ENABLE_EMPLOYEE_PASSWORD_RECOVERY === 'true'
+    recovery_available: c.env.ENABLE_EMPLOYEE_PASSWORD_RECOVERY === 'true',
+    registration_available: c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION === 'true'
   });
 });
 
