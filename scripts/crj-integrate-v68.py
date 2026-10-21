@@ -24,7 +24,7 @@ import zipfile
 REPO = 'rykellmy31-star/gestor-ponto-multiempresa'
 BRANCH = 'desenvolvimento-cr-jornada'
 BASE_SHA = '6d2b932d0231ded02650cb367665d907cfbeff8b'
-EXPECTED_PARENT = '39f0f7916804005f2b1259f9e71636ed66e31200'
+EXPECTED_PARENT = 'bf8c2162e908883bc3c60ab2bb6afa1a59a61d03'
 EXPECTED_LAUNCH_FILES = {'.github/workflows/integrar-candidatas-v68.yml',
                          'scripts/crj-integrate-v68.py'}
 ARCHIVE_BLOB = '3bf07159b7c3a3163a06e320ce3ea217c043ea17'
@@ -117,12 +117,17 @@ def verify_launch_commit(repo: Path) -> None:
 
 @contextlib.contextmanager
 def allow_pinned_v57_tree_changes(v52_root: Path):
-    """Let the old v45 filesystem guard recognize exactly two pinned v57 edits.
+    """Let the old v45 filesystem guard recognize five pinned v47/v56 edits.
 
-    v58 independently validates these approved time-calculation source edits.
+    v58 verifies the v47 calculation patch; v59 verifies the v56 UI patch.
     The original verifier is restored after this temporary, narrow scope fix.
     """
-    paths = {'server/core/time.ts', 'tests/calculations.test.ts'}
+    paths = {
+        'server/core/time.ts', 'tests/calculations.test.ts',
+        'web/src/company-schedules-page.tsx',
+        'web/src/company-schedules-network.ts',
+        'tests/company-schedules-network.test.ts',
+    }
     source = str(v52_root.absolute())
     sys.path.insert(0, source)
     try:

@@ -9,6 +9,7 @@ on:
 
 # Este workflow NÃO acessa D1 remoto nem publica Cloudflare Worker.
 # Só é executado quando o próprio arquivo é adicionado/alterado na branch.
+# Validação dos escopos de ambos os patches auditados v47/v56.
 permissions:
   contents: write
 
