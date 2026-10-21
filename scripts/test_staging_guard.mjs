@@ -78,3 +78,12 @@ test('falha se a configuracao base de producao for alterada indevidamente', () =
     /D1 nao corresponde/
   );
 });
+
+test('recusa UUID de producao com letras maiusculas ou caixa mista', () => {
+  for (const id of [LIVE_D1_ID.toUpperCase(), LIVE_D1_ID.replace('c', 'C')]) {
+    assert.throws(() => assertStagingTarget({
+      ...isolated,
+      d1_databases: [{ ...isolated.d1_databases[0], database_id: id }]
+    }, CLOUDFLARE_ACCOUNT, production), /Destino staging/);
+  }
+});

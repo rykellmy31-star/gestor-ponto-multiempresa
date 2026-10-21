@@ -33,7 +33,7 @@ export function assertStagingTarget(config, accountId, production) {
     databases[0].database_name !== STAGING_DATABASE ||
     databases[0].database_name === LIVE_D1_NAME ||
     !uuid.test(databases[0].database_id || '') ||
-    databases[0].database_id === LIVE_D1_ID) {
+    databases[0].database_id.toLowerCase() === LIVE_D1_ID.toLowerCase()) {
     throw new Error('Destino staging invalido ou coincidente com producao.');
   }
   if (config?.assets?.run_worker_first !== true ||
