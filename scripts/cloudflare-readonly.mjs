@@ -21,10 +21,12 @@ export function auditTargets(config, accountId, workerName = CLOUDFLARE_AUDIT_WO
 }
 
 export function summarizeReadOnlyResults(targets, responses) {
-  const [database, workerSubdomain, workerDeployments] = responses;
+  const [database, workerSubdomain, workerDeployments, workerSettings] = responses;
   const rawDeployments = workerDeployments?.result?.deployments ??
     (Array.isArray(workerDeployments?.result) ? workerDeployments.result : []);
+  const dbBinding = workerSettings?.result?.bindings?.find(b => b.type === 'd1' && b.name === 'DB');
   return {
+    worker_db_vinculado_ao_d1_correto: (dbBinding?.database_id || dbBinding?.id) === targets.databaseId,
     worker_encontrado: Boolean(workerSubdomain?.success),
     worker_url_publica_ativa: workerSubdomain?.result?.enabled === true,
     worker_tem_implantacao: Array.isArray(rawDeployments) && rawDeployments.length > 0,
@@ -54,18 +56,20 @@ export async function cloudflareReadOnlyInventory({ token, targets, fetchImpl = 
     }
     return data;
   };
-  const [db, subdomain, deployments] = await Promise.all([
+  const [db, subdomain, deployments, settings] = await Promise.all([
     request('/d1/database/' + encodeURIComponent(targets.databaseId)),
     request('/workers/scripts/' + encodeURIComponent(targets.workerName) + '/subdomain'),
-    request('/workers/scripts/' + encodeURIComponent(targets.workerName) + '/deployments?per_page=1')
+    request('/workers/scripts/' + encodeURIComponent(targets.workerName) + '/deployments?per_page=1'),
+    request('/workers/scripts/' + encodeURIComponent(targets.workerName) + '/settings')
   ]);
-  return summarizeReadOnlyResults(targets, [db, subdomain, deployments]);
+  return summarizeReadOnlyResults(targets, [db, subdomain, deployments, settings]);
 }
 
 
 const SCHEMA_NAMES_SQL = "SELECT name FROM sqlite_master WHERE type='table' " +
   "AND name IN ('rate_limits','platform_admins','platform_sessions','platform_audit_log','d1_migrations')";
 const ADMIN_COUNT_SQL = 'SELECT COUNT(*) AS total FROM platform_admins';
+const TABLE_COUNT_SQL = "SELECT COUNT(*) AS total FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
 const MIGRATIONS_COUNT_SQL = 'SELECT COUNT(*) AS total FROM d1_migrations';
 
 // SQL fixo, unicamente SELECT: o token D1 Read nao autoriza DDL/DML.
@@ -75,7 +79,7 @@ export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fet
     throw new Error('Token de auditoria ausente ou invalido.');
   }
   const query = async sql => {
-    if (![SCHEMA_NAMES_SQL, ADMIN_COUNT_SQL, MIGRATIONS_COUNT_SQL].includes(sql)) {
+    if (![SCHEMA_NAMES_SQL, ADMIN_COUNT_SQL, MIGRATIONS_COUNT_SQL, TABLE_COUNT_SQL].includes(sql)) {
       throw new Error('SQL de auditoria nao autorizado.');
     }
     const response = await fetchImpl(
@@ -105,6 +109,8 @@ export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fet
   const names = new Set((await query(SCHEMA_NAMES_SQL))
     .map(row => row.name).filter(name => typeof name === 'string'));
   const required = ['rate_limits','platform_admins','platform_sessions','platform_audit_log'];
+  const tableCount = Number((await query(TABLE_COUNT_SQL))[0]?.total);
+  if (!Number.isSafeInteger(tableCount) || tableCount < 0) throw new Error('Contagem de tabelas invalida.');
   const admins = names.has('platform_admins')
     ? Number((await query(ADMIN_COUNT_SQL))[0]?.total) : null;
   const migrations = names.has('d1_migrations')
@@ -115,6 +121,7 @@ export async function cloudflareReadOnlySchema({ token, targets, fetchImpl = fet
   }
   return {
     tabelas_basicas_superadmin_presentes: required.every(name => names.has(name)),
+    total_tabelas_nao_internas: tableCount,
     tabela_rate_limits: names.has('rate_limits'),
     tabela_platform_admins: names.has('platform_admins'),
     tabela_platform_sessions: names.has('platform_sessions'),
