@@ -24,3 +24,12 @@ test('exigir bookmark de recuperacao antes de alterar D1',async()=>{
  assert.equal(method,'GET');
  await assert.rejects(()=>confirmD1RecoveryBookmark({token:'token-ficticio-somente-teste',targets,fetchImpl:async()=>({ok:true,json:async()=>({success:true,result:{}})})}),/Bookmark/);
 });
+
+// Garante que uma instalação parcial nunca é tratada como banco novo.
+test('recusar instalacao parcial com tabelas de autenticação já criadas',()=>{
+ assert.throws(()=>assertFirstInstallSafe({config,inventory,schema:{
+   ...schema,total_tabelas_nao_internas:2,
+   nomes_das_tabelas_sem_dados:['_cf_KV','platform_admins'],
+   tabela_platform_admins:true,quantidade_superadmins:0
+ }}),/estado inicial/);
+});
