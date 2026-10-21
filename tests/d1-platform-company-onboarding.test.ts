@@ -243,7 +243,70 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         .toBe(401);
       expect((await db.prepare('SELECT COUNT(*) AS total FROM employee_company_sessions WHERE company_id=?')
         .bind(companyA.id).first<{total:number}>())?.total).toBe(0);
-      expect((await loginManager(companyA.slug,managerNew)).status).toBe(200);
+      // Recuperação assistida com D1 real: a senha provisória deve
+      // invalidar todas as sessões antigas do gestor, sem tocar na empresa B.
+      const reactivatedLogin=await loginManager(companyA.slug,managerNew);
+      expect(reactivatedLogin.status).toBe(200);
+      const reactivatedCookie=reactivatedLogin.headers.get('set-cookie')?.split(';')[0]||'';
+      const crossCompanyReset=await call(
+        '/api/platform/companies/'+companyB.id+'/admins/'+dataA.id+'/reset-password',
+        'POST',undefined,superCookie,csrf
+      );
+      expect(crossCompanyReset.status).toBe(404);
+      expect((await crossCompanyReset.json() as any).error.code)
+        .toBe('company_admin_not_found');
+      const reset=await call(
+        '/api/platform/companies/'+companyA.id+'/admins/'+dataA.id+'/reset-password',
+        'POST',undefined,superCookie,csrf
+      );
+      expect(reset.status).toBe(200);
+      expect(reset.headers.get('cache-control')).toContain('no-store');
+      const resetData=await reset.json() as any;
+      expect(resetData.success).toBe(true);
+      expect(resetData.must_change_password).toBe(true);
+      expect(resetData.temporary_password).toMatch(/^[a-f0-9]{24}$/);
+      expect(resetData.expires_at).toBeGreaterThan(Date.now()+23*3600000);
+      expect(resetData.expires_at).toBeLessThanOrEqual(Date.now()+24*3600000);
+      const storedReset=await db.prepare(
+        'SELECT password_hash,must_change_password,temporary_password_expires_at '+
+        'FROM company_admins WHERE id=? AND company_id=?'
+      ).bind(dataA.id,companyA.id).first<any>();
+      expect(storedReset.must_change_password).toBe(1);
+      expect(storedReset.temporary_password_expires_at).toBe(resetData.expires_at);
+      expect(await verifyPassword(
+        resetData.temporary_password,storedReset.password_hash,pepper
+      )).toBe(true);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,reactivatedCookie)).status).toBe(401);
+      expect((await loginManager(companyA.slug,managerNew)).status).toBe(401);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,cookieB)).status).toBe(200);
+      const tempLogin=await loginManager(companyA.slug,resetData.temporary_password);
+      expect(tempLogin.status).toBe(200);
+      const tempCookie=tempLogin.headers.get('set-cookie')?.split(';')[0]||'';
+      const tempSession=await call('/api/company/auth/session','GET',undefined,tempCookie);
+      expect(tempSession.status).toBe(200);
+      expect((await tempSession.json() as any).must_change_password).toBe(true);
+      // Trocar a senha temporária pelo gestor invalida também o cookie da
+      // senha provisória; o próximo acesso usa apenas a senha definitiva.
+      const tempData=await call('/api/company/auth/session','GET',undefined,tempCookie);
+      const tempCsrf=(await tempData.json() as any).csrf_token;
+      const finalPassword='GestorRenovado-2026!';
+      const finalChange=await call('/api/company/auth/change-password','POST',{
+        current_password:resetData.temporary_password,new_password:finalPassword
+      },tempCookie,tempCsrf);
+      expect(finalChange.status).toBe(200);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,tempCookie)).status).toBe(401);
+      expect((await loginManager(companyA.slug,resetData.temporary_password)).status)
+        .toBe(401);
+      const finalLogin=await loginManager(companyA.slug,finalPassword);
+      expect(finalLogin.status).toBe(200);
+      const finalCookie=finalLogin.headers.get('set-cookie')?.split(';')[0]||'';
+      expect((await call('/api/company/auth/session','GET',
+        undefined,finalCookie)).status).toBe(200);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,cookieB)).status).toBe(200);
       expect((await call('/api/platform/companies/'+companyA.id+'/admins','GET',
         undefined,superCookie)).status).toBe(200);
       expect((await call('/api/platform/companies/'+companyB.id+'/admins','GET',
@@ -271,9 +334,12 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(actions?.filter(x=>x==='company.created')).toHaveLength(2);
       expect(actions?.filter(x=>x==='company.updated')).toHaveLength(1);
       expect(actions?.filter(x=>x==='company_admin.created')).toHaveLength(4);
+      expect(actions?.filter(x=>x==='company_admin.password_reset')).toHaveLength(1);
       expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(2);
       expect(JSON.stringify(events.results)).not.toContain(managerPass);
       expect(JSON.stringify(events.results)).not.toContain(managerNew);
+      expect(JSON.stringify(events.results)).not.toContain(resetData.temporary_password);
+      expect(JSON.stringify(events.results)).not.toContain(finalPassword);
       expect((await db.prepare('PRAGMA foreign_key_check').all()).results).toHaveLength(0);
     }finally{
       await mf.dispose();
