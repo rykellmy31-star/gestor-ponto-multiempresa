@@ -47,6 +47,8 @@ jobs:
 
       - name: Validar gerador seguro de ambiente staging
         run: node --test scripts/test_prepare_cloudflare_staging.mjs
+      - name: Testar backup cifrado, restauracao local e adulteracao (sem dados reais)
+        run: node --test scripts/test_backup_roundtrip.mjs
 
       - name: Confirmar alvo de producao sem publicar
         run: |
