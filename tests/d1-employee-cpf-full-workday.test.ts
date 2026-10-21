@@ -136,13 +136,29 @@ describe('CR JORNADA — funcionário completa quatro pontos após login CPF',()
       const activeSession=await active.json() as any;
       expect(activeSession.user.must_change_password).toBe(false);
       expect(activeSession.company.id).toBe('co-a');
-      const csrf=activeSession.csrf_token;
+      let csrf=activeSession.csrf_token;
       const url='/api/employee/cpf-work';
       const times=[at(7),at(11),at(12),at(16)];
       const receipts:string[]=[];
+      let reauthentications=0;
       for(let i=0;i<types.length;i++){
         vi.mocked(Date.now).mockReturnValue(times[i]);
-        const before=await request(url+'/today',undefined,auth.cookie);
+        let before=await request(url+'/today',undefined,auth.cookie);
+        if(before.status===401){
+          // A sessão é intencionalmente limitada a 60 minutos sem uso.
+          // Não afrouxar essa proteção só porque a jornada dura oito horas:
+          // simular o login normal do funcionário antes da próxima batida.
+          reauthentications++;
+          auth=await login('NovaSenhaSeguraJoao2026!');
+          expect(auth.result.status).toBe(200);
+          expect(auth.data.selection_required).toBe(false);
+          const renewed=await request('/api/employee/cpf-auth/session',undefined,auth.cookie);
+          expect(renewed.status).toBe(200);
+          const renewedData=await renewed.json() as any;
+          expect(renewedData.company.id).toBe('co-a');
+          csrf=renewedData.csrf_token;
+          before=await request(url+'/today',undefined,auth.cookie);
+        }
         expect(before.status).toBe(200);
         expect(await before.json()).toMatchObject({
           company_id:'co-a',employee_id:'joao',
@@ -166,6 +182,7 @@ describe('CR JORNADA — funcionário completa quatro pontos após login CPF',()
         expect(retry.status).toBe(200);
         expect((await retry.json() as any).replayed).toBe(true);
       }
+      expect(reauthentications).toBeGreaterThanOrEqual(2);
       const finished=await request(url+'/today',undefined,auth.cookie);
       expect(finished.status).toBe(200);
       expect(await finished.json()).toMatchObject({next_seq:4,next_type:null,completed:true});
