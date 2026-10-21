@@ -24,7 +24,9 @@ const recoverySchema=z.object({company_id:z.string(),employee_id:z.string(),
   temporary_password:z.string().regex(/^[a-f0-9]{24}$/),expires_at:z.number().int().positive()});
 type Recovery=z.infer<typeof recoverySchema>;
 
-export function CompanyEmployeeAccess({companyId,csrf}:{companyId:string;csrf:string}) {
+export function CompanyEmployeeAccess({companyId,csrf,onEmployeeCreated}:{
+  companyId:string;csrf:string;onEmployeeCreated?:()=>void
+}) {
   const [data,setData]=useState<Result|null>(null);
   const [error,setError]=useState('');
   const [selected,setSelected]=useState<Employee|null>(null);
@@ -72,6 +74,7 @@ export function CompanyEmployeeAccess({companyId,csrf}:{companyId:string;csrf:st
         setCreated(result);
         setData(prev=>prev?{...prev,employees:[...prev.employees,result.employee]}:prev);
         setNewEmployee(emptyNewEmployee);
+        onEmployeeCreated?.();
       }
     }catch(err){
       if(active.current)setError(err instanceof Error?err.message:

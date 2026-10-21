@@ -72,3 +72,9 @@
 .company-employee-initial-access{display:grid;gap:10px;background:#f1f9f2;border:1px solid #b8d6bf;border-radius:12px;padding:16px;font-size:13px}
 .company-employee-initial-access code{font-size:20px;overflow-wrap:anywhere;user-select:all}
 @media(max-width:600px){.company-employee-registration-form{grid-template-columns:1fr}}
+
+.company-schedules-assign .company-schedules-all-option{
+  grid-column:1/-1;display:flex!important;align-items:center;gap:9px;
+  cursor:pointer;font-size:13px;font-weight:750;
+}
+.company-schedules-all-option input{accent-color:#800000;width:18px;height:18px}

@@ -80,6 +80,7 @@ export function CompanySchedulesPage() {
   const [saving,setSaving]=useState(false);
   const [selectedSchedule,setSelectedSchedule]=useState('');
   const [selectedEmployee,setSelectedEmployee]=useState('');
+  const [assignAll,setAssignAll]=useState(false);
   const [effective,setEffective]=useState('');
   const [assigning,setAssigning]=useState(false);
   const [previewing,setPreviewing]=useState(false);
@@ -260,21 +261,38 @@ export function CompanySchedulesPage() {
   }
   async function assign(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
-    if(!session||assigning||!selectedSchedule||!selectedEmployee||!effective)return;
-    if(!window.confirm('Confirmar esta escala para o funcionário selecionado a partir de '+effective.split('-').reverse().join('/')+'?'))return;
+    if(!session||assigning||!selectedSchedule||(!assignAll&&!selectedEmployee)||!effective)return;
+    const text=assignAll?'TODOS os funcionários ativos da empresa':'o funcionário selecionado';
+    if(!window.confirm('Confirmar esta escala para '+text+' a partir de '+
+      effective.split('-').reverse().join('/')+
+      '? A operação em lote não será parcial.'))return;
     setAssigning(true);setError('');
     try {
-      const response=await jsonRequest<{success:boolean;company_id:string;reused?:boolean}>(
-        '/company/schedules/'+encodeURIComponent(selectedSchedule)+'/assign',{
-          method:'POST',headers:{'Content-Type':'application/json',
-            'X-CSRF-Token':session.csrf_token},
-          body:JSON.stringify({employee_id:selectedEmployee,effective_from:effective})
-        });
-      if(response.company_id!==session.company.id)
-        throw new Error('A empresa retornada não corresponde à sessão.');
-      setNotice(response.reused
-        ? 'Atribuição já confirmada. Nenhum registro duplicado foi criado.'
-        : 'Escala atribuída com sucesso. Datas e jornadas anteriores serão preservadas conforme o histórico do sistema.');
+      if(assignAll){
+        const response=await jsonRequest<{success:boolean;company_id:string;
+          assigned_count:number;reused_count:number}>(
+          '/company/schedules/'+encodeURIComponent(selectedSchedule)+'/assign-all',{
+            method:'POST',headers:{'Content-Type':'application/json',
+              'X-CSRF-Token':session.csrf_token},
+            body:JSON.stringify({effective_from:effective})
+          });
+        if(response.company_id!==session.company.id)
+          throw new Error('A empresa retornada não corresponde à sessão.');
+        setNotice('Escala aplicada: '+response.assigned_count+' funcionário(s) atualizado(s), '+
+          response.reused_count+' já possuíam esta jornada. Histórico preservado.');
+      }else{
+        const response=await jsonRequest<{success:boolean;company_id:string;reused?:boolean}>(
+          '/company/schedules/'+encodeURIComponent(selectedSchedule)+'/assign',{
+            method:'POST',headers:{'Content-Type':'application/json',
+              'X-CSRF-Token':session.csrf_token},
+            body:JSON.stringify({employee_id:selectedEmployee,effective_from:effective})
+          });
+        if(response.company_id!==session.company.id)
+          throw new Error('A empresa retornada não corresponde à sessão.');
+        setNotice(response.reused
+          ? 'Atribuição já confirmada. Nenhum registro duplicado foi criado.'
+          : 'Escala atribuída com sucesso. Datas e jornadas anteriores serão preservadas conforme o histórico do sistema.');
+      }
       setWeekPreview(null);
     }catch(err){setError(err instanceof Error?err.message:'Falha ao atribuir.');}
     finally{setAssigning(false);}
@@ -370,7 +388,8 @@ export function CompanySchedulesPage() {
       </header>
 
       <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
-        companyId={session.company.id} csrf={session.csrf_token}/>
+        companyId={session.company.id} csrf={session.csrf_token}
+        onEmployeeCreated={()=>void load()}/>
 
       <section className="company-schedules-card company-schedules-intro">
         <CalendarClock size={25}/>
@@ -524,8 +543,8 @@ export function CompanySchedulesPage() {
       <section id="company-schedules-assignment" className="company-schedules-card">
         <div className="company-schedules-intro">
           <UsersRound size={23}/><div><h2>Atribuir escala ao funcionário</h2>
-          <p>Escolha o modelo e o funcionário. Para alternar o turno de João amanhã,
-          atribua outra escala com a data de amanhã; o turno anterior continua no histórico.</p></div>
+          <p>Atribua uma jornada a um funcionário ou a todos os ativos de uma vez.
+          Para alterar o turno de João amanhã, atribua outra escala com a data de amanhã.</p></div>
         </div>
         <form onSubmit={assign} className="company-schedules-assign">
           <label>Escala
@@ -535,8 +554,13 @@ export function CompanySchedulesPage() {
               {schedules.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}
             </select>
           </label>
+          <label className="company-schedules-all-option">
+            <input type="checkbox" checked={assignAll}
+              onChange={e=>{setAssignAll(e.target.checked);setWeekPreview(null);}}/>
+            Atribuir a todos os funcionários ativos
+          </label>
           <label>Funcionário
-            <select required value={selectedEmployee}
+            <select required={!assignAll} disabled={assignAll} value={selectedEmployee}
               onChange={e=>{setSelectedEmployee(e.target.value);setWeekPreview(null);}}>
               <option value="">Selecione um funcionário</option>
               {employees.filter(e=>e.status==='active').map(e=>
@@ -547,11 +571,11 @@ export function CompanySchedulesPage() {
             <input type="date" required value={effective}
               onChange={e=>{setEffective(e.target.value);setWeekPreview(null);}}/>
           </label>
-          <button disabled={assigning||!selectedSchedule||!selectedEmployee||!effective}>
-            {assigning?'Atribuindo…':'Confirmar atribuição'}
+          <button disabled={assigning||!selectedSchedule||(!assignAll&&!selectedEmployee)||!effective}>
+            {assigning?'Atribuindo…':assignAll?'Atribuir a todos os ativos':'Confirmar atribuição'}
           </button>
           <button type="button" className="company-schedules-secondary"
-            disabled={previewing||!selectedEmployee||!effective}
+            disabled={previewing||assignAll||!selectedEmployee||!effective}
             onClick={()=>void previewWeek()}>
             {previewing?'Consultando…':'Pré-visualizar os próximos 7 dias'}
           </button>
