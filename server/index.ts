@@ -46,6 +46,7 @@ import {
   companyEmployeesRoutes
 } from './routes/company-employees';
 import { companyPunchPolicyRoutes } from './routes/company-punch-policy';
+import { companyCalculationsRoutes } from './routes/company-calculations';
 import { companyAttendanceRoutes } from './routes/company-attendance';
 import { companySchedulesRoutes } from './routes/company-schedules';
 import { salesPublicRoutes, platformSalesRoutes } from './routes/platform-sales';
@@ -203,7 +204,7 @@ app.use('/api/*', async (c, next) => {
     path === '/api/company/punch-policy' && ['GET','PUT'].includes(c.req.method);
 
   const isCompanyAttendanceRoute =
-    path === '/api/company/reports/attendance' && c.req.method === 'GET';
+    ['/api/company/reports/attendance','/api/company/reports/calculations'].includes(path) && c.req.method === 'GET';
 
   const isHealthRoute =
     path === '/api/health';
@@ -275,6 +276,7 @@ app.route('/api/platform/sales-page', platformSalesRoutes);
 // CR JORNADA - Autenticacao empresarial
 app.route('/api/company/auth', companyAuthRoutes);
 app.route('/api/company/reports', companyAttendanceRoutes);
+app.route('/api/company/reports', companyCalculationsRoutes);
 app.route('/api/company/punch-policy', companyPunchPolicyRoutes);
 
 // CR JORNADA - Listagem de funcionarios da empresa

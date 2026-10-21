@@ -263,6 +263,22 @@ try {
     verify(csv.includes('Comprovante') && report.rows.every(row => csv.includes(row.receipt_hash)),
       'CSV real preserva os quatro comprovantes');
   }
+  for (const [index,company] of companies.entries()) {
+    const path='/api/company/reports/calculations?employee_id='+company.employee.id+'&month='+today.slice(0,7);
+    const calculation=await company.client.call(path);
+    const day=calculation.days.find(row=>row.date===today);
+    verify(calculation.company_id===company.id && calculation.employee.id===company.employee.id &&
+      calculation.provisional && day.source==='snapshot' && day.result.rules.mark_tolerance===5 &&
+      day.result.expected_minutes===1320 && day.result.status==='completed',
+      'apuracao real usa horarios e regras congelados do dia');
+    verify(calculation.days.filter(row=>row.state==='needs_review').every(row=>row.result===null),
+      'apuracao nao presume faltas sem historico comprovado');
+    await company.client.call('/api/company/reports/calculations?employee_id='+companies[1-index].employee.id+'&month='+today.slice(0,7),{expected:404});
+    await company.client.call(path+'&company_id='+companies[1-index].id,{expected:400});
+    const csv=await company.client.call(path+'&format=csv',{text:true});
+    verify(csv.includes('provisória') && csv.includes('Saldo bruto (min)'),
+      'CSV de apuracao identifica valores provisorios');
+  }
   // Real browser against the deployed staging UI, including its login form.
   // Only masked fictitious QA credentials are used; no production credentials.
   const browser = await chromium.launch({headless:true});
@@ -296,11 +312,30 @@ try {
         const contents = readFileSync(await download.path(),'utf8');
         verify(contents.includes('Comprovante') && contents.split('\r\n').length === 6,
           'CSV baixado pelo navegador contem cabecalho e quatro registros');
+        const calculation=page.locator('section').filter({has:page.getByRole('heading',{
+          name:'Apuração de jornadas',exact:true
+        })});
+        await calculation.getByLabel('Funcionário',{exact:true}).selectOption(company.employee.id);
+        await calculation.getByLabel('Mês',{exact:true}).fill(today.slice(0,7));
+        await calculation.getByRole('button',{name:'Apurar jornadas',exact:true}).click();
+        await calculation.getByRole('link',{name:'Exportar apuração CSV',exact:true}).waitFor();
+        const parts=today.split('-').map(Number);
+        verify(await calculation.locator('tbody tr').count()===new Date(Date.UTC(parts[0],parts[1],0)).getUTCDate(),
+          'painel real apresenta apuracao para todos os dias do mes');
+        const calculationDownloaded=page.waitForEvent('download');
+        await calculation.getByRole('link',{name:'Exportar apuração CSV',exact:true}).click();
+        const calculationDownload=await calculationDownloaded;
+        verify(await calculationDownload.failure()===null && calculationDownload.suggestedFilename()===
+          'apuracao-'+today.slice(0,7)+'.csv','painel real exporta apuracao autenticada');
+        verify(readFileSync(await calculationDownload.path(),'utf8').includes('provisória'),
+          'download de apuracao mantem identificacao de conferencia');
+
       } finally {await context.close();}
     }
   } finally {await browser.close();}
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
   await a.client.call('/api/company/reports/attendance?employee_id=' + a.employee.id + '&month=' + today.slice(0,7), {expected:401});
+  await a.client.call('/api/company/reports/calculations?employee_id='+a.employee.id+'&month='+today.slice(0,7),{expected:401});
   await a.client.call('/api/company/auth/session', { expected: 401 });
   await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
   await b.client.call('/api/company/auth/session');
@@ -312,7 +347,7 @@ try {
   verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
   const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
   verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, apuracao provisoria com snapshots e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {
