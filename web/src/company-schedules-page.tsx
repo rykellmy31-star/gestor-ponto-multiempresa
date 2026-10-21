@@ -257,7 +257,7 @@ export function CompanySchedulesPage() {
     if(!window.confirm('Confirmar esta escala para o funcionário selecionado a partir de '+effective.split('-').reverse().join('/')+'?'))return;
     setAssigning(true);setError('');
     try {
-      const response=await jsonRequest<{success:boolean;company_id:string}>(
+      const response=await jsonRequest<{success:boolean;company_id:string;reused?:boolean}>(
         '/company/schedules/'+encodeURIComponent(selectedSchedule)+'/assign',{
           method:'POST',headers:{'Content-Type':'application/json',
             'X-CSRF-Token':session.csrf_token},
@@ -265,7 +265,9 @@ export function CompanySchedulesPage() {
         });
       if(response.company_id!==session.company.id)
         throw new Error('A empresa retornada não corresponde à sessão.');
-      setNotice('Escala atribuída com sucesso. Datas e jornadas anteriores serão preservadas conforme o histórico do sistema.');
+      setNotice(response.reused
+        ? 'Atribuição já confirmada. Nenhum registro duplicado foi criado.'
+        : 'Escala atribuída com sucesso. Datas e jornadas anteriores serão preservadas conforme o histórico do sistema.');
       setSelectedEmployee('');
     }catch(err){setError(err instanceof Error?err.message:'Falha ao atribuir.');}
     finally{setAssigning(false);}

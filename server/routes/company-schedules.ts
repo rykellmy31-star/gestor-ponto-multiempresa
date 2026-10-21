@@ -169,9 +169,13 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       'JOIN companies co ON co.id=e.company_id',
       'WHERE e.id=? AND e.company_id=?',
       'AND e.deleted_at IS NULL AND e.status=\'active\'',
-      'AND co.status=\'active\''
+      'AND co.status=\'active\'',
+      'AND NOT EXISTS (SELECT 1 FROM schedule_assignments existing',
+      'WHERE existing.employee_id=e.id AND existing.effective_from=?',
+      'AND NOT EXISTS (SELECT 1 FROM schedule_assignment_cancellations cancelled',
+      'WHERE cancelled.assignment_id=existing.id))'
     ].join(' ')).bind(assignmentId, effective_from, now, id,
-      employee_id, company.id),
+      employee_id, company.id, effective_from),
     db.prepare([
       'INSERT INTO company_schedule_audit(',
       'id,company_id,admin_id,action,schedule_id,employee_id,details_json,created_at)',
@@ -184,6 +188,29 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       assignmentId, company.id)
   ]);
 
+  // Repeating a request after a lost response must not create a new
+  // assignment or another audit entry. A different active schedule on the
+  // same date remains a conflict. Cancelled assignments may be replaced.
+  if (result[0].meta.changes === 0) {
+    const existing = await db.prepare([
+      'SELECT a.id,a.schedule_id FROM schedule_assignments a',
+      'JOIN employees e ON e.id=a.employee_id',
+      'JOIN companies co ON co.id=e.company_id AND co.status=\'active\'',
+      'JOIN schedules s ON s.id=a.schedule_id',
+      'AND s.company_id=e.company_id AND s.deleted_at IS NULL',
+      'WHERE e.id=? AND e.company_id=? AND e.deleted_at IS NULL',
+      'AND e.status=\'active\' AND a.effective_from=?',
+      'AND NOT EXISTS (SELECT 1 FROM schedule_assignment_cancellations cancelled',
+      'WHERE cancelled.assignment_id=a.id)',
+      'ORDER BY a.created_at DESC,a.id DESC LIMIT 1'
+    ].join(' ')).bind(employee_id, company.id, effective_from)
+      .first<{ id:string; schedule_id:string }>();
+    if (existing) {
+      ensure(existing.schedule_id === id, 409, 'schedule_date_conflict',
+        'Já existe outra jornada ativa nessa data para o funcionário.');
+      return c.json({ success:true, company_id:company.id, reused:true }, 200);
+    }
+  }
   ensure(result[0].meta.changes === 1 && result[1].meta.changes === 1,
     404, 'invalid_company_assignment',
     'Funcionário ou jornada não pertence à empresa.');

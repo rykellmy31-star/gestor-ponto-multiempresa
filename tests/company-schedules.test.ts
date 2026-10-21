@@ -14,7 +14,7 @@ vi.mock('../server/core/crypto', () => ({
   safeEqual: (a: string, b: string) => a === b
 }));
 
-type Mode = 'active' | 'anonymous' | 'invalid-target';
+type Mode = 'active' | 'anonymous' | 'invalid-target' | 'assignment-replay' | 'assignment-conflict';
 const schedule = {
   name: 'Turno comercial',
   start: '09:00', break_start: '12:00',
@@ -33,6 +33,14 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
         bind(...args: unknown[]) { params = args; return st; },
         async first() {
           sqls.push({ sql, params: [...params] });
+          if (sql.includes('FROM schedule_assignments a')) {
+            if (mode === 'assignment-replay') return {
+              id: 'assignment-original', schedule_id: 'schedule-a'
+            };
+            if (mode === 'assignment-conflict') return {
+              id: 'assignment-other', schedule_id: 'schedule-b'
+            };
+          }
           if (!sql.includes('FROM company_admin_sessions s')) return null;
           if (mode === 'anonymous') return null;
           return {
@@ -65,8 +73,8 @@ function makeApp(mode: Mode = 'active', flag = 'true') {
     async batch(stmts: unknown[]) {
       batches.push(stmts);
       return [
-        { meta: { changes: mode === 'invalid-target' ? 0 : 1 } },
-        { meta: { changes: mode === 'invalid-target' ? 0 : 1 } }
+        { meta: { changes: ['invalid-target','assignment-replay','assignment-conflict'].includes(mode) ? 0 : 1 } },
+        { meta: { changes: ['invalid-target','assignment-replay','assignment-conflict'].includes(mode) ? 0 : 1 } }
       ];
     }
   };
@@ -204,6 +212,34 @@ describe('CR JORNADA - administracao de jornadas por empresa', () => {
     const firstStatement = t.batches[0][0] as { sql: string };
     expect(firstStatement.sql).toContain('s.company_id=e.company_id');
     expect(firstStatement.sql).toContain('s.deleted_at IS NULL');
+  });
+
+  it('repetição exata devolve confirmação sem nova auditoria', async () => {
+    const t = makeApp('assignment-replay');
+    const response = await t.request('/schedule-a/assign', 'POST', {
+      employee_id: 'employee-a', effective_from: '2026-11-02'
+    }, { csrf: 'csrf-a' });
+    expect(response.status).toBe(200);
+    expect(await jsonBody(response)).toMatchObject({
+      company_id: 'company-a', reused: true, success: true
+    });
+    expect(t.batches).toHaveLength(1);
+    const insert = t.batches[0][0] as {sql:string;params:unknown[]};
+    expect(insert.sql).toContain('NOT EXISTS (SELECT 1 FROM schedule_assignments existing');
+    expect(insert.sql).toContain('cancelled.assignment_id=existing.id');
+    expect(insert.params.at(-1)).toBe('2026-11-02');
+    const lookup = t.sqls.find(x => x.sql.includes('FROM schedule_assignments a'));
+    expect(lookup?.params).toEqual(['employee-a', 'company-a', '2026-11-02']);
+    expect(lookup?.sql).toContain('co.status=\'active\'');
+  });
+
+  it('repetição com jornada diferente preserva conflito 409', async () => {
+    const t = makeApp('assignment-conflict');
+    const response = await t.request('/schedule-a/assign', 'POST', {
+      employee_id: 'employee-a', effective_from: '2026-11-02'
+    }, { csrf: 'csrf-a' });
+    expect(response.status).toBe(409);
+    expect((await jsonBody(response)).error.code).toBe('schedule_date_conflict');
   });
 
   it('rejeita data inexistente antes de gravar atribuicao', async () => {
