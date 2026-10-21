@@ -1,14 +1,15 @@
 # CR JORNADA — auditoria de isolamento e travas de homologacao
 
 **Data:** 2026-10-21. **Branch:** `desenvolvimento-cr-jornada`.
-**Escopo:** verificacao de codigo + CI e auditoria Cloudflare somente leitura. Isto **nao e** laudo de pentest, homologacao remota ou auditoria de backups de producao.
+**Escopo:** verificacao de codigo + CI, auditoria de producao somente leitura, 158 verificacoes HTTP em staging real e recuperacao remota de dados ficticios. Isto **nao e** laudo de pentest nem auditoria de backups operacionais de producao.
 
 ## Evidencias confirmadas
 
 - Banco existente `cr-jornada-db`: **38 de 38** migracoes registradas e **52 tabelas nao internas**, lidas via auditoria remota. Nao ha Superadmin criado automaticamente. Job de primeira instalacao desativado.
 - Worker publico existente `gestor-ponto-multiempresa` com binding `DB` correspondente. `wrangler.jsonc` corrigido para esse mesmo nome/origem; `scripts/verify-production-target.mjs` valida o destino localmente antes de uma futura publicacao.
 - GitHub Actions: build React, dry-run do Worker de producao, simulacao do Worker staging sem credenciais, testes TypeScript, testes de rotas e verificacoes de segurança.
-- Backup: teste automatizado usa SQLite **local e ficticio** para cifrar em AES-256-GCM, descriptografar, restaurar os registros, recusar senha incorreta e detectar adulteracao. **Nao comprova** backup remoto da Cloudflare.
+- Staging real: Worker `gestor-ponto-multiempresa-staging`, D1 `41604781-5fbf-4287-beca-64e20ce1ee1f`, 38 migrations e Secrets exclusivos; 158 verificacoes HTTP de autenticacao, empresas, funcionarios, CPF, jornadas, ponto, suspensao e pagina comercial aprovadas.
+- Backup: AES-256-GCM, SHA256 e adulteracao testados; restauracao remota aprovada no Actions `39666007053` em outro D1, com 51 tabelas, schema e hashes identicos e integridade referencial aprovada. Dados ficticios; backup operacional de producao permanece pendente.
 - `scripts/preflight.mjs` continua bloqueando o deploy de producao. Nao remover o bloqueio para contornar homologacao.
 
 ## Isolamento por modulo (auditoria parcial)
@@ -27,14 +28,14 @@
 | `/api/public/*` / pagina comercial | Pagina publica fornece apenas versao publicada; leads dependem de flag e consentimento | `platform-sales`, `sales-leads`, `d1-platform-sales-leads` |
 | Rotas antigas `/api/admin/*`, `/api/employee/*`, `/api/auth/*` | Middleware central retorna `tenant_isolation_pending` e nao chama a logica antiga | `company-routing` e matriz adicional para empresas A/B |
 
-*Status acima descreve **controles observados**, nao uma certificacao de que cada combinacao de sessao, empresa, corrida e SQL seja segura.*
+*A tabela registra a base da auditoria. As validacoes remotas que estavam pendentes para os fluxos centrais foram executadas conforme `HOMOLOGACAO-STAGING-ISOLADA.md`. Isso nao certifica toda combinacao de sessao, empresa, corrida e SQL. Flags foram habilitadas somente no perfil funcional de staging; producao e rotas legadas mantem as travas.*
 
 ## Travas ainda abertas para liberar producao
 
 1. Auditar **todas** as rotas e triggers de D1, inclusive mutacoes pouco usadas, execucoes concorrentes, CPF repetido em duas empresas e autorizacao apos suspensao/arquivamento.
-2. Provar testes ponta a ponta com **duas empresas ficticias em um Worker e D1 staging reais e separados**, incluindo CSRF, expiracao/revogacao de sessoes, cadastros, horarios distintos por dia, atribuicao em lote, registro de ponto e relatorios.
-3. Confirmar secrets exclusivos do staging sem copiar chaves de producao; liberar flags uma por vez, mediante resultados medidos.
-4. Criar backup externo cifrado do D1 correspondente, verificar manifesto e restaurar em **outro** banco isolado com verificacao de integridade. Nunca executar restauracao destrutiva em producao.
+2. Completar validacao de interface, relatorios/exportacoes e configuracao das politicas de ponto pelo painel. Os fluxos HTTP centrais com duas empresas passaram; politicas de ponto foram fixtures SQL de staging, nao configuradas pela interface.
+3. Manter os Secrets exclusivos e revisar cada flag antes de qualquer futura liberacao produtiva. Nenhuma chave de producao foi copiada.
+4. Definir backup operacional cifrado de producao com cofre, retencao e janela aprovada. O ensaio de restauracao remota de staging ja passou; ele nao substitui a copia operacional. Nunca restaurar destrutivamente em producao.
 5. Publicar versao revisada apenas apos remover a trava de preflight **por justificativa tecnica sustentada por evidencias** e aprovacao do proprietario. O nome/origem do Worker ja foram conciliados, mas ainda nao foi feito deploy.
 6. Configurar primeiro Superadmin com segredo temporario exclusivo, sem enviar chave/senha em logs, e concluir homologacao de perfis reais.
 

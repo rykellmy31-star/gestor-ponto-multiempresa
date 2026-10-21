@@ -8,7 +8,7 @@ Mantenha em locais separados:
 
 1. Backup `.jdb` cifrado e seu `.manifest.json`, em armazenamento com controle de acesso e cópia externa.
 2. Frase forte de proteção do backup, em cofre, **não junto do arquivo**.
-3. `AUTH_PEPPER` e `DATA_KEY` originais, no cofre. A restauração do SQL não recupera Secrets do Worker.
+3. `AUTH_PEPPER`, `DATA_KEY` e `CPF_LOOKUP_SECRET` originais, no cofre. A restauração do SQL não recupera Secrets do Worker.
 4. Código/lockfile/migrations correspondentes à versão, configuração do domínio e identificador do D1.
 
 Perder `AUTH_PEPPER` impede verificar senhas existentes. Perder `DATA_KEY` impede recuperar CPFs cifrados. Não “resolva” recriando chaves sem planejamento de migração/recuperação de contas.
@@ -82,7 +82,11 @@ SELECT name FROM sqlite_master WHERE type='trigger';
 8. Em recuperação de incidente de segurança, revogue sessões e links restaurados antes da reabertura. Na conta autorizada e no banco correto: `DELETE FROM sessions; DELETE FROM password_reset_tokens;`. O operador deve registrar externamente o incidente/procedimento, preservando auditoria e evidências.
 9. Elimine o SQL temporário de forma compatível com o meio de armazenamento; não o envie por e-mail, não o coloque no repositório e não o deixe na pasta de downloads compartilhada.
 
-**Validação realizada na entrega:** exportação local real, cifra, descriptografia, restauração em SQLite separado, `foreign_key_check` sem erros, presença de pontos/triggers e recusa de frase errada. **A restauração em D1 remoto não foi executada** e é obrigatória como ensaio antes do uso produtivo.
+**Validação remota em 2026-10-21:** Actions `39666007053`, commit `7c47180043fa5be736f37cc8b931ebe3481e09e2`: exportacao exclusivamente de `cr-jornada-staging-db`, cifra AES-256-GCM, verificacao SHA256, descriptografia autenticada, rejeicao de adulteracao e restauracao em `cr-jornada-staging-restore-e37bdead2e50` (`f2f2decd-0cea-47eb-90b0-640cd9b69e9c`). As 51 tabelas tiveram schema e hashes de conteudo comparados; `foreign_key_check` nao encontrou violacoes. Dados sao ficticios. Producao nao foi exportada nem restaurada.
+
+O ensaio usa `scripts/verify-staging-recovery.mjs` e `scripts/prepare_d1_restore.py`: cria tabelas e indices UNIQUE antes dos dados, respeita dependencias preenchidas, preserva contadores e instala triggers depois dos registros. Lotes estruturados da API D1 sao limitados por tamanho e quantidade. A importacao bulk encontrou `D1_RESET_DO`; a restauracao aprovada usou a API estruturada. Uma falha parcial nunca autoriza apagar tabelas nem repetir inserts sobre dados existentes.
+
+O arquivo cifrado deste ensaio e temporario e sua chave e efemera. **O ensaio aprovado nao e um backup operacional duradouro de producao.** Guardar backups, chave de cifra e os tres Secrets em cofres separados, definir retencao e aprovar a janela de exportacao produtiva continuam pendentes.
 
 ## 4. Time Travel nativo do D1
 
