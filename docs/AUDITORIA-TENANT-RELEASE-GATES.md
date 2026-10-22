@@ -1,7 +1,9 @@
 # CR JORNADA — auditoria de isolamento e travas de homologacao
 
 **Data:** 2026-10-21. **Branch:** `desenvolvimento-cr-jornada`.
-**Escopo:** verificacao de codigo + CI, auditoria de producao somente leitura, 230 verificacoes de fluxo HTTP/navegador em staging real e recuperacao remota de dados ficticios. Isto **nao e** laudo de pentest nem auditoria de backups operacionais de producao.
+**Escopo:** verificacao de codigo + CI, auditoria de producao somente leitura, 263 verificacoes de fluxo HTTP/navegador em staging real e recuperacao remota de dados ficticios. Isto **nao e** laudo de pentest nem auditoria de backups operacionais de producao.
+
+Atualização: código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, staging `39702861660` e CI `39702861726` aprovados. A edição de nome/cargo e o ciclo do vínculo têm auditoria atômica; bloqueio e desligamento revogam acesso apenas daquele funcionário/empresa. Reativação exige novo login. Desligamento com dia aberto, data incompatível ou legado sem empresa comprovada é recusado. A revisão integral das demais operações continua pendente. Progresso estimado em `CRITERIOS-HOMOLOGACAO.md`.
 
 ## Evidencias confirmadas
 

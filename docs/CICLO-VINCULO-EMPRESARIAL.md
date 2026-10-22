@@ -9,3 +9,7 @@ Uma transação compara a versão do funcionário, revalida o gestor e sua senha
 Bloquear permite suspender o acesso mesmo com dia aberto, que deverá ser completado após reativação. Desligar não apaga ou altera punches, work_days, jornadas e configurações congeladas. A reativação exige novo login. Não altera senha, CPF, matrícula ou admissão.
 
 Testes D1 locais incluem A/B, CSRF, senha incorreta, concorrência, sessão antiga após reativação, data futura/retroativa, dia aberto, legado sem empresa e rollback da auditoria. O roteiro remoto testa bloqueio/reativação/desligamento pelo painel, novo login CPF e preservação dos pontos, com dados fictícios apenas no staging. Não houve nova migration.
+
+Homologação real aprovada: Actions `39702861660`, código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, 263 verificações. O painel confirmou os três estados, a API confirmou a data de desligamento e o D1 confirmou três eventos de auditoria e os quatro pontos preservados. A empresa B manteve seu acesso. Staging permanece com 39 migrations; nenhuma operação em produção.
+
+CI `39702861726` também aprovado: tipos, build, testes gerais e três grupos D1. O ensaio anterior `39702418917` falhou no seletor visual; o rótulo foi associado explicitamente ao select e a rodada acima validou o fluxo completo.

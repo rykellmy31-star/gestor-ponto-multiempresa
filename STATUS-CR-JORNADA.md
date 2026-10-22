@@ -1,8 +1,10 @@
 # CR JORNADA — estado real do desenvolvimento
 
-Estado atual: staging real em funcionamento, 39 migrations, produção preservada com 38. A edição de nome/cargo foi homologada com 240 verificações reais e CI integral aprovado. O ciclo de bloqueio, reativação e desligamento está em validação.
+Estado atual: staging real em funcionamento, 39 migrations, produção preservada com 38. A edição de nome/cargo foi homologada; o ciclo de bloqueio, reativação e desligamento passou no navegador e no D1 real, em uma rodada com 263 verificações aprovadas.
 
-Progresso por checklist: **75,00% (15/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). Publicação de produção ainda bloqueada: ocorrências/feriados/ajustes, fechamento, auditoria integral e preparação operacional permanecem pendentes.
+Evidência atual: código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, homologação `39702861660` e CI geral `39702861726`, ambos aprovados.
+
+Progresso por checklist: **80,00% (16/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). Publicação de produção ainda bloqueada: ocorrências/feriados/ajustes, fechamento, auditoria integral e preparação operacional permanecem pendentes.
 
 ## Registro histórico — 19/10/2026
 
