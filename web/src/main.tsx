@@ -4,6 +4,7 @@ import {createRoot} from 'react-dom/client';
 import {BrowserRouter, Routes, Route, Navigate, Link} from 'react-router-dom';
 import '@fontsource-variable/inter';
 import './styles.css';
+import './cr-original-interface.css';
 
 import {ForgotPage, ResetPage, SetupPage} from './auth-pages';
 import {ProtectedLayout, HelpPage} from './layout';
