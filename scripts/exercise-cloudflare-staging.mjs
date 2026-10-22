@@ -716,6 +716,10 @@ try {
       await page.getByLabel('Usuário',{exact:true}).fill('qa-staging');
       await page.getByLabel('Senha',{exact:true}).fill(qaPassword);
       await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      verify(await page.getByRole('navigation',{name:'Navegação Superadmin',exact:true}).isVisible(),
+        'painel real apresenta a navegacao lateral Superadmin');
+      verify(await page.getByRole('heading',{name:'Visão geral multiempresa',exact:true}).isVisible(),
+        'painel real apresenta a visao geral multiempresa');
       await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
       const row=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
       const registeredMetric=page.locator('.platform-stat').filter({hasText:'Empresas cadastradas'});

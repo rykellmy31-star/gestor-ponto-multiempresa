@@ -21,10 +21,12 @@ import {
   CircleAlert,
   Clock3,
   Edit3,
+  LayoutDashboard,
   LogOut,
   Plus,
   RefreshCw,
   Search,
+  ShoppingBag,
   ShieldCheck,
   X
 } from 'lucide-react';
@@ -781,31 +783,44 @@ export function PlatformPage() {
 
   return (
     <main className="platform-dashboard">
-      <header className="platform-header">
-        <div className="platform-brand">
-          <div className="platform-logo">CR</div>
-          <div>
-            <h1>CR JORNADA</h1>
-            <p>Painel Superadministrador</p>
-          </div>
+      <aside className="platform-sidebar">
+        <Link to="/superadmin" className="platform-sidebar-brand" aria-label="Jornada — painel Superadmin">
+          <span className="platform-sidebar-mark">J</span><span>jornada<span className="platform-brand-dot">.</span></span>
+        </Link>
+        <p className="platform-sidebar-label">SUPERADMINISTRADOR</p>
+        <nav className="platform-sidebar-nav" aria-label="Navegação Superadmin">
+          <Link to="/superadmin" className={location.pathname === '/superadmin' ? 'active' : ''}>
+            <LayoutDashboard size={18}/> Visão geral
+          </Link>
+          <a href="/superadmin#companies"><Building2 size={18}/> Empresas</a>
+          <a href="/superadmin#companies"><ShieldCheck size={18}/> Administradores
+          </a>
+          <Link to="/superadmin/vendas" className={location.pathname === '/superadmin/vendas' ? 'active' : ''}>
+            <ShoppingBag size={18}/> Página comercial
+          </Link>
+        </nav>
+        <div className="platform-sidebar-spacer"/>
+        <div className="platform-sidebar-note">
+          <ShieldCheck size={17}/>
+          <div><strong>Ambiente protegido</strong><small>Empresas e registros permanecem isolados.</small></div>
         </div>
+        <div className="platform-sidebar-user">
+          <span className="platform-user-avatar">{session.user.name.slice(0,1).toUpperCase()}</span>
+          <span><strong>{session.user.name}</strong><small>Super Administrador</small></span>
+          <button type="button" className="platform-user-logout" onClick={handleLogout} aria-label="Sair da conta"><LogOut size={17}/></button>
+        </div>
+      </aside>
 
+      <div className="platform-main">
+      <header className="platform-header">
+        <div className="platform-breadcrumb"><Building2 size={16}/><span>Super administrador</span><span aria-hidden="true">›</span><strong>{location.pathname === '/superadmin/vendas' ? 'Página comercial' : 'Visão geral'}</strong></div>
         <div className="platform-header-actions">
-          <Link to="/superadmin" className="platform-header-link">
-            Empresas
-          </Link>
-          <Link to="/superadmin/vendas" className="platform-header-link">
-            Página de vendas
-          </Link>
+          <span className={'platform-env-badge ' + (window.location.hostname.includes('staging') ? 'staging' : 'production')}>
+            <i/>{window.location.hostname.includes('staging') ? 'HOMOLOGAÇÃO' : ['localhost','127.0.0.1'].includes(window.location.hostname) ? 'DESENVOLVIMENTO' : 'PRODUÇÃO'}
+          </span>
+          <time>{new Intl.DateTimeFormat('pt-BR',{day:'numeric',month:'long',year:'numeric',timeZone:'America/Bahia'}).format(new Date())}</time>
+          <button type="button" className="platform-logout" onClick={handleLogout} aria-label="Sair da conta"><LogOut size={16}/><span>Sair</span></button>
         </div>
-        <button
-          type="button"
-          className="platform-logout"
-          onClick={handleLogout}
-        >
-          <LogOut size={16} />
-          {' '}Sair
-        </button>
       </header>
 
       <div className="platform-content">
@@ -813,12 +828,9 @@ export function PlatformPage() {
           ? <SalesPageEditor csrfToken={session.csrf_token}/>
           : <>
         <div className="platform-welcome">
-          <p>Bem-vindo à plataforma</p>
-          <h2>{session.user.name}</h2>
-          <span>
-            Controle as empresas cadastradas
-            no CR JORNADA.
-          </span>
+          <div><p>PAINEL SUPER ADMIN</p><h2>Visão geral multiempresa</h2>
+          <span>Gerencie empresas e administradores da plataforma em um só lugar.</span></div>
+          <button type="button" className="platform-button platform-welcome-action" onClick={openCreate}><Plus size={17}/> Nova empresa</button>
         </div>
 
         {error && (
@@ -848,6 +860,7 @@ export function PlatformPage() {
           </p>
         )}
 
+        <div className="platform-overview-row">
         <div className="platform-grid">
           <article className="platform-stat">
             <span>Empresas cadastradas</span>
@@ -878,8 +891,22 @@ export function PlatformPage() {
             <small>Arquivadas com dados preservados</small>
           </article>
         </div>
+        <aside className="platform-overview-rail">
+          <section className="platform-section platform-quick-actions">
+            <h3><Plus size={17}/> Ações rápidas</h3>
+            <button type="button" onClick={openCreate}><Plus size={16}/> Cadastrar empresa</button>
+            <a href="/superadmin#companies"><Building2 size={16}/> Gerenciar empresas</a>
+            <Link to="/superadmin/vendas"><ShoppingBag size={16}/> Página comercial</Link>
+            <button type="button" onClick={()=>{setCompanyView('archived');document.getElementById('companies')?.scrollIntoView({behavior:'smooth'});}}><ShieldCheck size={16}/> Ver excluídas</button>
+          </section>
+          <section className="platform-section platform-data-note">
+            <h3><ShieldCheck size={17}/> Dados preservados</h3>
+            <p>Empresas excluídas saem dos cadastros operacionais. Funcionários e históricos ficam disponíveis na visão “Excluídas / arquivadas”.</p>
+          </section>
+        </aside>
+        </div>
 
-        <section className="platform-section">
+        <section className="platform-section" id="companies">
           <div
             style={{
               display: 'flex',
@@ -919,7 +946,7 @@ export function PlatformPage() {
               }}
             >
               <Plus size={18} />
-              Nova empresa
+              Adicionar empresa
             </button>
           </div>
 
@@ -1048,15 +1075,11 @@ export function PlatformPage() {
             )}
 
           {filteredCompanies.length > 0 && (
-            <div
-              style={{
-                display: 'grid',
-                gap: 12
-              }}
-            >
+            <div className="platform-company-list">
               {filteredCompanies.map(company => (
                 <article
                   key={company.id}
+                  className="platform-company-row"
                   style={{
                     border: '1px solid #e2e8f0',
                     borderRadius: 16,
@@ -1229,18 +1252,15 @@ export function PlatformPage() {
                 marginRight: 8
               }}
             />
-            Administração da plataforma
+            Segurança da plataforma
           </h3>
 
           <p>
-            O cadastro de empresas e de seus administradores está
-            integrado às APIs da plataforma. O acesso real da empresa
-            e o registro de ponto continuam sujeitos à homologação
-            e às verificações de isolamento multiempresa.
+            Cada empresa tem seu próprio cadastro e administradores vinculados. Suspender ou excluir encerra as sessões da empresa, preservando registros e trilhas de auditoria.
           </p>
 
           <span className="platform-pending">
-            Integração multiempresa em desenvolvimento
+            Isolamento por empresa ativo
           </span>
         </section>
 
@@ -1540,6 +1560,7 @@ export function PlatformPage() {
         </div>
       )}
       </>}
+      </div>
       </div>
     </main>
   );

@@ -288,3 +288,60 @@ a:hover {
 .platform-company-admin-button{display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border-radius:9px;background:#fff7f8;border:1px solid #e6ccd2;color:#800000;font-size:12px;font-weight:750;cursor:pointer}
 .platform-company-admin-button:disabled{opacity:.45;cursor:not-allowed}
 .platform-company-admin-button:hover:not(:disabled){background:#fbe9ed}
+
+/* Painel real do Superadmin — layout inspirado na referência Jornada. */
+.platform-dashboard{display:grid;grid-template-columns:248px minmax(0,1fr);background:#f5f7fa;color:#1b2636}
+.platform-sidebar{position:sticky;top:0;height:100dvh;box-sizing:border-box;display:flex;flex-direction:column;padding:24px 16px 14px;background:#fff;border-right:1px solid #e5e9ef;z-index:5}
+.platform-sidebar-brand{display:flex;align-items:center;gap:10px;margin:0 8px 36px;color:#172b3a;text-decoration:none;font-size:22px;font-weight:800;letter-spacing:-1px}
+.platform-sidebar-mark{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#087f70;color:#fff;font-size:20px;font-weight:800}
+.platform-brand-dot{color:#0d897a}
+.platform-sidebar-label{margin:0 10px 12px;color:#8995a5;font-size:10px;font-weight:800;letter-spacing:1.1px}
+.platform-sidebar-nav{display:grid;gap:5px}
+.platform-sidebar-nav a{min-height:42px;display:flex;align-items:center;gap:11px;padding:0 12px;border-radius:9px;color:#637184;text-decoration:none;font-size:13px;font-weight:600}
+.platform-sidebar-nav a:hover,.platform-sidebar-nav a.active{background:#eaf5f2;color:#087f70}
+.platform-sidebar-spacer{flex:1}
+.platform-sidebar-note{display:flex;gap:10px;padding:13px 11px;margin-bottom:16px;border:1px solid #e1eee9;border-radius:12px;background:#f3faf7;color:#16816e}
+.platform-sidebar-note div,.platform-sidebar-user>span:nth-child(2){display:grid;gap:4px}
+.platform-sidebar-note strong{font-size:11px}.platform-sidebar-note small{color:#718278;font-size:10px;line-height:1.45}
+.platform-sidebar-user{display:flex;align-items:center;gap:9px;padding:13px 6px 2px;border-top:1px solid #edf0f3}
+.platform-user-avatar{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:50%;background:#e9f0f7;color:#27656d;font-size:13px;font-weight:800}
+.platform-sidebar-user>span:nth-child(2){min-width:0;flex:1}.platform-sidebar-user strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#344255;font-size:11px}.platform-sidebar-user small{color:#8290a0;font-size:10px}
+.platform-user-logout{border:0;background:transparent;color:#657386;padding:8px;cursor:pointer}
+.platform-main{min-width:0}
+.platform-header{min-height:58px;box-sizing:border-box;padding:10px 28px;background:#fff;border-bottom:1px solid #e5e9ef}
+.platform-breadcrumb{display:flex;align-items:center;gap:10px;color:#8793a2;font-size:12px;white-space:nowrap}
+.platform-breadcrumb strong{color:#465469;font-weight:650}
+.platform-header-actions{flex:0 1 auto;justify-content:flex-end;gap:18px}
+.platform-header-actions time{color:#728093;font-size:11px;white-space:nowrap}
+.platform-env-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:30px;font-size:9px;font-weight:800;letter-spacing:.45px;white-space:nowrap}
+.platform-env-badge i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.platform-env-badge.staging{background:#fff6e5;color:#a66b09}.platform-env-badge.production{background:#eaf7f1;color:#197859}
+.platform-header .platform-logout{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;font-size:11px}
+.platform-content{width:min(100%,1500px);max-width:none;box-sizing:border-box;margin:0 auto;padding:30px clamp(18px,2.5vw,38px)}
+.platform-welcome{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:23px}
+.platform-welcome p{margin:0 0 7px;color:#8794a4;font-size:10px;font-weight:800;letter-spacing:1px}
+.platform-welcome h2{margin:0 0 6px;font-size:clamp(23px,2.2vw,30px);letter-spacing:-.7px}
+.platform-welcome span{color:#748195;font-size:13px}
+.platform-welcome-action{display:inline-flex;align-items:center;gap:8px;width:auto;margin:0;padding:11px 16px;font-size:12px;white-space:nowrap}
+.platform-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:22px 0}
+.platform-overview-row{display:grid;grid-template-columns:minmax(0,1fr) 250px;align-items:start;gap:14px}
+.platform-overview-row .platform-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:22px 0}
+.platform-overview-rail{display:grid;gap:14px;margin-top:22px}
+.platform-overview-rail .platform-section{margin:0;padding:17px}
+.platform-quick-actions h3,.platform-data-note h3{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+.platform-quick-actions>button,.platform-quick-actions>a{display:flex;align-items:center;gap:9px;width:100%;box-sizing:border-box;margin:7px 0 0;padding:10px 11px;border:1px solid #e6ebf0;border-radius:9px;background:#fff;color:#435267;text-align:left;text-decoration:none;font:inherit;font-size:11px;font-weight:650;cursor:pointer}
+.platform-quick-actions>button:hover,.platform-quick-actions>a:hover{border-color:#a9d7cb;background:#f5fbf9;color:#087f70}
+.platform-quick-actions>button svg,.platform-quick-actions>a svg{color:#078573}
+.platform-data-note{background:#f3faf7;border-color:#dcefe8}
+.platform-data-note h3{color:#087f70}.platform-data-note p{margin:0;font-size:11px;line-height:1.65}
+.platform-stat,.platform-section{padding:19px;border:1px solid #e4e9ef;border-radius:14px;box-shadow:0 2px 8px rgba(20,40,60,.025)}
+.platform-stat{gap:9px;min-width:0}.platform-stat span{font-size:12px}.platform-stat strong{font-size:32px;line-height:1.1}.platform-stat small{font-size:10px;line-height:1.45}
+.platform-section{margin-bottom:16px}.platform-section h3{font-size:16px}.platform-section p{font-size:12px}
+.platform-company-list{display:grid;gap:0;margin-top:8px;border:1px solid #e8edf2;border-radius:11px;overflow:hidden}
+.platform-company-row{border:0!important;border-bottom:1px solid #edf0f4!important;border-radius:0!important;padding:13px 14px!important;background:#fff;gap:14px!important}
+.platform-company-row:last-child{border-bottom:0!important}
+.platform-company-row>div:last-child button{font-size:11px!important;padding:8px 9px!important}
+@media(max-width:1120px){.platform-dashboard{grid-template-columns:210px minmax(0,1fr)}.platform-sidebar{padding-inline:12px}.platform-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.platform-overview-row{grid-template-columns:minmax(0,1fr) 220px}.platform-header{padding-inline:18px}.platform-header-actions{gap:10px}}
+@media(max-width:920px){.platform-overview-row{grid-template-columns:1fr}.platform-overview-rail{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}.platform-overview-rail .platform-section{height:100%;box-sizing:border-box}}
+@media(max-width:760px){.platform-dashboard{display:flex;flex-direction:column}.platform-sidebar{position:static;height:auto;padding:12px 14px 8px;border-right:0;border-bottom:1px solid #e5e9ef}.platform-sidebar-brand{margin:0 0 10px;font-size:19px}.platform-sidebar-mark{width:30px;height:30px}.platform-sidebar-label,.platform-sidebar-spacer,.platform-sidebar-note,.platform-sidebar-user{display:none}.platform-sidebar-nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}.platform-sidebar-nav a{min-height:38px;padding:0 10px;flex:0 0 auto;font-size:11px}.platform-header{min-height:52px;padding:9px 14px;gap:9px;flex-wrap:wrap}.platform-breadcrumb{font-size:10px}.platform-header-actions{flex:1 1 auto;justify-content:flex-end;gap:9px}.platform-header-actions time{display:none}.platform-content{padding:21px 14px}.platform-welcome{align-items:flex-start}.platform-welcome h2{font-size:22px}.platform-welcome span{font-size:11px}.platform-welcome-action{padding:9px 10px;font-size:10px}.platform-grid,.platform-overview-row .platform-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:16px 0}.platform-overview-rail{gap:9px}.platform-stat,.platform-section{padding:15px}.platform-stat strong{font-size:27px}.platform-stat span{font-size:11px}.platform-stat small{font-size:9px}.platform-company-row{align-items:flex-start!important}.platform-company-row>div:last-child{flex-basis:100%}}
+@media(max-width:420px){.platform-grid{grid-template-columns:1fr 1fr}.platform-header .platform-logout span{display:none}.platform-header .platform-logout{padding:7px}.platform-welcome{flex-wrap:wrap}.platform-welcome-action{margin-left:auto}}
