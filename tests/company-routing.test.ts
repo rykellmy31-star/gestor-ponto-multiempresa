@@ -301,6 +301,7 @@ describe('CR JORNADA - protecao das rotas', () => {
       ['POST', '/api/admin/employees'],
       ['GET', '/api/admin/reports'],
       ['GET', '/api/auth/session'],
+      ['POST', '/api/company/employees/employee-a/status'],
       ['POST', '/api/auth/admin/login'],
       ['GET', '/api/company/employees/employee-b'],
       ['PATCH', '/api/company/employees/employee-b'],

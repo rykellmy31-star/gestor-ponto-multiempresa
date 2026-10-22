@@ -9,7 +9,7 @@ import { employeeCpfAuthRoutes } from '../server/routes/employee-cpf-auth';
 import { employeeCpfPunchRoutes } from '../server/routes/employee-cpf-punch';
 import { employeeCpfHistoryRoutes } from '../server/routes/employee-cpf-history';
 import { employeeCpfLookupKey } from '../server/core/employee-cpf';
-import { sha256, verifyPassword } from '../server/core/crypto';
+import { hashPassword, sha256, verifyPassword } from '../server/core/crypto';
 
 const pepper='cr-jornada-onboarding-pepper-test-2026';
 const cpfSecret='cr-jornada-onboarding-cpf-secret-2026';
@@ -696,6 +696,49 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         'SELECT COUNT(*) AS n FROM schedule_assignments'
       ).first<{n:number}>();
       expect(totalAssignments?.n).toBe(4);
+      await db.prepare('ALTER TABLE company_admins ADD COLUMN password_hash TEXT').run();
+      const managerPassword='Manager-Test-Only-2026!';
+      // Reinicia os dois gestores fictícios após o cenário anterior de suspensão.
+      await db.prepare('UPDATE company_admins SET password_hash=?,active=1').bind(await hashPassword(managerPassword,pepper)).run();
+      await db.prepare('UPDATE company_admin_sessions SET expires_at=?,last_seen_at=?').bind(Date.now()+600000,Date.now()).run();
+      const statusRequest=(body:object,token=tokenA,csrf='csrf-a')=>app.request('/api/company/employees/'+a.employee.id+'/status',{
+        method:'POST',headers:{Cookie:'cr_jornada_company_dev='+token,'X-CSRF-Token':csrf,'Content-Type':'application/json'},body:JSON.stringify(body)
+      },env);
+      const profile=async()=>await db.prepare('SELECT status,updated_at,employment_end FROM employees WHERE id=?').bind(a.employee.id).first<any>();
+      const initialProfile=await profile();
+      const statusBody={status:'blocked',reason:'Bloqueio fictício de homologação',current_password:managerPassword,expected_updated_at:initialProfile.updated_at};
+      expect((await statusRequest(statusBody,tokenB,'csrf-b')).status).toBe(404);
+      expect((await statusRequest(statusBody,tokenA,'invalid')).status).toBe(403);
+      expect((await statusRequest({...statusBody,current_password:'incorrect-password'})).status).toBe(403);
+      const authBefore=await db.prepare('SELECT auth_version FROM users WHERE employee_id=?').bind(a.employee.id).first<any>();
+      expect((await statusRequest(statusBody)).status).toBe(200);
+      expect((await profile()).status).toBe('blocked');
+      expect((await employeeRequest('/api/employee/cpf-auth/session',undefined,joaoCookie)).status).toBe(401);
+      expect((await statusRequest(statusBody)).status).toBe(409);
+      expect((await statusRequest({...statusBody,status:'active',expected_updated_at:(await profile()).updated_at})).status).toBe(200);
+      expect((await employeeRequest('/api/employee/cpf-auth/session',undefined,joaoCookie)).status).toBe(401);
+      const authAfter=await db.prepare('SELECT active,auth_version FROM users WHERE employee_id=?').bind(a.employee.id).first<any>();
+      expect(authAfter.active).toBe(1);expect(authAfter.auth_version).toBeGreaterThan(authBefore.auth_version);
+      const termination={...statusBody,status:'terminated',employment_end:'2026-10-28',expected_updated_at:(await profile()).updated_at};
+      expect((await statusRequest({...termination,employment_end:'2026-10-27'})).status).toBe(409);
+      expect((await statusRequest({...termination,employment_end:'2026-11-01'})).status).toBe(400);
+      await db.prepare(`INSERT INTO work_days(id,employee_id,work_date,timezone,schedule_json,rules_json,next_seq,created_at,last_at,company_id)
+        SELECT 'test-open-day',employee_id,'2026-10-29',timezone,schedule_json,rules_json,1,created_at,last_at,company_id FROM work_days WHERE employee_id=? LIMIT 1`).bind(a.employee.id).run();
+      expect((await statusRequest(termination)).status).toBe(409);
+      await db.prepare("UPDATE work_days SET company_id=NULL,next_seq=0 WHERE id='test-open-day'").run();
+      expect((await statusRequest(termination)).status).toBe(409);
+      await db.prepare("DELETE FROM work_days WHERE id='test-open-day'").run();
+      await db.prepare("CREATE TRIGGER reject_status_audit BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT,'test_audit_failure'); END").run();
+      expect((await statusRequest({...statusBody,expected_updated_at:(await profile()).updated_at})).status).toBe(500);
+      expect((await profile()).status).toBe('active');
+      expect((await db.prepare('SELECT active,auth_version FROM users WHERE employee_id=?').bind(a.employee.id).first<any>())).toEqual(authAfter);
+      await db.prepare('DROP TRIGGER reject_status_audit').run();
+      expect((await statusRequest(termination)).status).toBe(200);
+      expect(await profile()).toMatchObject({status:'terminated',employment_end:'2026-10-28'});
+      expect((await statusRequest({...statusBody,status:'active',expected_updated_at:(await profile()).updated_at})).status).toBe(409);
+      expect((await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='company.employee.status_changed'").first<any>()).n).toBe(3);
+      expect((await db.prepare('SELECT COUNT(*) AS n FROM punches').first<any>()).n).toBe(12);
+      expect((await db.prepare('SELECT status FROM employees WHERE id=?').bind(b.employee.id).first<any>()).status).toBe('active');
       expect((await db.prepare('SELECT COUNT(*) AS total FROM company_admin_write_guards')
         .first<{total:number}>())?.total).toBe(0);
       const guards=await db.prepare('SELECT COUNT(*) AS total FROM company_employee_write_guards').first<{total:number}>();

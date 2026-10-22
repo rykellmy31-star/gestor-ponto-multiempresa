@@ -396,6 +396,58 @@ try {
       } finally {await context.close();}
     }
   } finally {await profilesBrowser.close();}
+  const statusBrowser=await chromium.launch({headless:true});
+  try {
+    const context=await statusBrowser.newContext();
+    try {
+      const page=await context.newPage();
+      await page.goto(STAGING_ORIGIN+'/admin/entrar');
+      await page.getByLabel('Identificador da empresa',{exact:true}).fill(a.slug);
+      await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
+      await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
+      await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      const access=page.locator('section').filter({has:page.getByRole('heading',{name:'Acesso dos funcionários',exact:true})});
+      const initial=(await a.client.call('/api/company/employees')).employees.find(e=>e.id===a.employee.id);
+      const request={status:'blocked',reason:'Teste ficticio de bloqueio do vinculo',current_password:finalPassword,expected_updated_at:initial.updated_at};
+      await b.client.call('/api/company/employees/'+a.employee.id+'/status',{method:'POST',body:request,expected:404});
+      await a.client.call('/api/company/employees/'+a.employee.id+'/status',{method:'POST',csrf:'invalid',body:request,expected:403});
+      async function changeStatus(status,label){
+        await access.getByRole('button',{name:'Gerenciar vínculo',exact:true}).click();
+        const form=access.locator('form').filter({has:page.getByRole('heading',{name:'Situação do vínculo',exact:true})});
+        await form.getByLabel('Nova situação',{exact:true}).selectOption(status);
+        if(status==='terminated'){
+          await form.getByLabel('Data de desligamento',{exact:true}).fill(today);
+          await form.getByLabel('Confirmo o desligamento deste vínculo.',{exact:true}).check();
+        }
+        await form.getByLabel('Motivo da alteração',{exact:true}).fill('Homologacao ficticia do ciclo do vinculo');
+        await form.getByLabel('Sua senha de administrador',{exact:true}).fill(finalPassword);
+        await form.getByRole('button',{name:'Confirmar alteração de vínculo',exact:true}).click();
+        await access.getByText(label,{exact:true}).waitFor();
+        verify(true,'painel confirma situacao do vinculo: '+status);
+      }
+      await changeStatus('blocked','Bloqueado');
+      await employeeClients[0].call('/api/employee/cpf-auth/session',{expected:401});
+      await employeeClients[1].call('/api/employee/cpf-auth/session');
+      await a.client.call('/api/company/employees/'+a.employee.id+'/status',{method:'POST',body:request,expected:409});
+      await changeStatus('active','Ativo');
+      await employeeClients[0].call('/api/employee/cpf-auth/session',{expected:401});
+      const freshEmployee=new Client();
+      const choices=await freshEmployee.call('/api/employee/cpf-auth/login',{method:'POST',body:{cpf,password:employeePassword}});
+      verify(choices.selection_required,'reativacao permite novo login CPF com dois vinculos');
+      await freshEmployee.call('/api/employee/cpf-auth/select',{method:'POST',body:{company_id:a.id}});
+      await freshEmployee.call('/api/employee/cpf-auth/session');
+      await changeStatus('terminated','Desligado');
+      await freshEmployee.call('/api/employee/cpf-auth/session',{expected:401});
+      await employeeClients[1].call('/api/employee/cpf-auth/session');
+      const finalEmployee=(await a.client.call('/api/company/employees')).employees.find(e=>e.id===a.employee.id);
+      verify(finalEmployee.status==='terminated'&&finalEmployee.employment_end===today,'API confirma desligamento com data da empresa');
+      await a.client.call('/api/company/employees/'+a.employee.id+'/status',{method:'POST',body:{...request,status:'active',expected_updated_at:finalEmployee.updated_at},expected:409});
+      const events=await query("SELECT details_json FROM audit_log WHERE action='company.employee.status_changed' AND entity_id=?",[a.employee.id]);
+      verify(events.length===3&&events.every(e=>JSON.parse(e.details_json).company_id===a.id),'D1 confirma tres auditorias de situacao do vinculo');
+      const retained=await query('SELECT COUNT(*) AS total FROM punches p JOIN work_days d ON d.id=p.work_day_id WHERE d.company_id=? AND p.employee_id=?',[a.id,a.employee.id]);
+      verify(retained[0].total===4,'desligamento preserva os quatro pontos e historico da empresa');
+    } finally {await context.close();}
+  } finally {await statusBrowser.close();}
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
   await a.client.call('/api/company/reports/attendance?employee_id=' + a.employee.id + '&month=' + today.slice(0,7), {expected:401});
   await a.client.call('/api/company/reports/calculations?employee_id='+a.employee.id+'&month='+today.slice(0,7),{expected:401});

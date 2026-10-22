@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { CompanyEmployeeStatus } from './company-employee-status';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-type Employee={id:string;full_name:string;registration:string;status:string;job_title?:string;updated_at?:number};
+type Employee={id:string;full_name:string;registration:string;status:string;job_title?:string;updated_at?:number;employment_end?:string|null};
 type Result={company_id:string;employees:Employee[];
   recovery_available:boolean;registration_available?:boolean};
 type NewEmployee={full_name:string;registration:string;cpf:string;
@@ -216,6 +217,11 @@ export function CompanyEmployeeAccess({
         <strong>{employee.full_name}</strong>
         <p>Matrícula: {employee.registration}</p>
         <p>{employee.job_title||'Cargo não informado'}</p>
+        {data.registration_available&&<CompanyEmployeeStatus employee={employee} companyId={companyId} csrf={csrf}
+          onSessionExpired={onSessionExpired} onUpdated={change=>{
+            setData(prev=>prev?{...prev,employees:prev.employees.map(e=>e.id===employee.id?{...e,...change}:e)}:prev);
+            onEmployeeCreated?.();
+          }}/>} 
         {data.registration_available&&Number.isSafeInteger(employee.updated_at)&&<button type="button" className="company-schedules-secondary" onClick={()=>{
           setEditing(employee);setEditName(employee.full_name);setEditJob(employee.job_title||'');setError('');setEditUncertain(false);
         }}>Editar nome e cargo</button>}

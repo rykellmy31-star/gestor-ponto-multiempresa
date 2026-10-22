@@ -7,6 +7,7 @@ import { normalizeEmployeeCpf, employeeCpfLookupKey } from '../core/employee-cpf
 import { VALID_COMPANY_ADMIN_WRITE_SQL, companyAdminWriteParams } from '../core/company-admin-write-guard';
 import { ipHash, limit } from '../core/security';
 import { atomicIdentityWrite } from '../core/atomic-identity-write';
+import { updateCompanyEmployeeStatus } from './company-employee-status';
 
 import { Hono } from 'hono';
 import type { App } from '../types';
@@ -17,6 +18,7 @@ export const companyEmployeesRoutes = new Hono<App>();
 // Todas as rotas deste modulo exigem
 // uma sessao empresarial autenticada.
 companyEmployeesRoutes.use('*', requireCompanyAdmin);
+companyEmployeesRoutes.post('/:id/status', updateCompanyEmployeeStatus);
 
 const registrationSchema=z.object({
   full_name:z.string().trim().min(3).max(140),

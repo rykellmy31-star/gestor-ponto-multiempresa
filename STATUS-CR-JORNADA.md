@@ -1,6 +1,12 @@
 # CR JORNADA — estado real do desenvolvimento
 
-Atualizado em 19/10/2026. Repositório oficial:
+Estado atual: staging real em funcionamento, 39 migrations, produção preservada com 38. A edição de nome/cargo foi homologada com 240 verificações reais e CI integral aprovado. O ciclo de bloqueio, reativação e desligamento está em validação.
+
+Progresso por checklist: **75,00% (15/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). Publicação de produção ainda bloqueada: ocorrências/feriados/ajustes, fechamento, auditoria integral e preparação operacional permanecem pendentes.
+
+## Registro histórico — 19/10/2026
+
+As seções seguintes registram uma etapa anterior e não substituem o checklist atual. Repositório oficial:
 `rykellmy31-star/gestor-ponto-multiempresa`, branch `desenvolvimento-cr-jornada`, PR #1.
 
 ## Implementado na branch

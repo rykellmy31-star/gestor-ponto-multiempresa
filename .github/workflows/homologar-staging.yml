@@ -10,6 +10,8 @@ on:
       - 'scripts/exercise-cloudflare-staging.mjs'
       - 'server/routes/company-schedules.ts'
       - 'server/routes/company-employees.ts'
+      - 'server/routes/company-employee-status.ts'
+      - 'web/src/company-employee-status.tsx'
       - 'web/src/company-employee-access.tsx'
       - 'server/routes/company-attendance.ts'
       - 'server/routes/company-calculations.ts'
