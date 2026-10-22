@@ -509,12 +509,13 @@ try {
   const historicalMonth=historicalDate.slice(0,7);
   const historicalMarks=['07:00','11:00','12:00','16:00'].map(t=>DateTime.fromISO(historicalDate+'T'+t,{zone:'America/Bahia'}).toMillis());
   await query(`INSERT INTO employees(id,company_id,full_name,registration,company_registration,status,admission_date,employment_end,created_at,updated_at)
-    VALUES(?,?,'Funcionario ficticio de fechamento',?,?,'terminated',?,?,?,?)`,[closureEmployee,b.id,'qa-closure-'+tag,'FECH-'+tag,historicalDate,historicalDate,Date.now(),Date.now()]);
+    VALUES(?,?,'Funcionario ficticio de fechamento',?,?,'active',?,NULL,?,?)`,[closureEmployee,b.id,'qa-closure-'+tag,'FECH-'+tag,historicalDate,Date.now(),Date.now()]);
   const baseRules=(await query('SELECT rules_json FROM work_days WHERE company_id=? AND employee_id=?',[b.id,b.employee.id]))[0].rules_json;
   await query(`INSERT INTO work_days(id,employee_id,work_date,timezone,schedule_json,rules_json,company_id,created_at)
     VALUES(?,?,?,'America/Bahia',?,?,?,?)`,[closureDay,closureEmployee,historicalDate,JSON.stringify({start:'07:00',break_start:'11:00',break_end:'12:00',end:'16:00',weekdays:[0,1,2,3,4,5,6],paid_break:false}),baseRules,b.id,historicalMarks[0]]);
   for(let seq=0;seq<4;seq++)await query(`INSERT INTO punches(id,work_day_id,employee_id,seq,type,recorded_at,idempotency_key,ip_hash,receipt_hash)
     VALUES(?,?,?,?,?,?,?,'qa-historical-fixture','qa-historical-fixture')`,[randomUUID(),closureDay,closureEmployee,seq,['entry','break_start','break_end','exit'][seq],historicalMarks[seq],randomUUID()]);
+  await query("UPDATE employees SET status='terminated',employment_end=?,updated_at=? WHERE id=? AND company_id=?",[historicalDate,Date.now(),closureEmployee,b.id]);
   const closurePath='/api/company/closures?employee_id='+closureEmployee+'&month='+historicalMonth;
   await a.client.call(closurePath,{expected:404});
   const closurePreview=await b.client.call(closurePath);

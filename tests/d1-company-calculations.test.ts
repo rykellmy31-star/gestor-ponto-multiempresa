@@ -111,6 +111,11 @@ print(json.dumps(files))
       // Close a fully covered past month, retaining prior snapshots on reopening.
       await db.prepare("UPDATE employees SET admission_date='2026-09-01',employment_end='2026-09-30' WHERE id='ea2'").run();
       await db.prepare("INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('assign-a2-past','ea2','sa-afternoon','2026-09-01',?)").bind(created).run();
+      // Historical fixture obeys the same active-owner guards as live punches.
+      await db.prepare("INSERT INTO work_days(id,employee_id,work_date,timezone,schedule_json,rules_json,company_id,created_at) VALUES('historical','ea2','2026-09-01','America/Bahia',?,?,'a',?)").bind(JSON.stringify(schedule),rules,at('2026-09-01','07:00')).run();
+      for(const [seq,time] of ['07:00','11:00','12:00','16:00'].entries())await db.prepare("INSERT INTO punches(id,work_day_id,employee_id,seq,type,recorded_at,idempotency_key,ip_hash,receipt_hash) VALUES(?,'historical','ea2',?,?,?,?, 'qa','receipt')")
+        .bind('historical'+seq,seq,['entry','break_start','break_end','exit'][seq],at('2026-09-01',time),'historical-key'+seq).run();
+      await db.prepare("UPDATE employees SET status='terminated' WHERE id='ea2'").run();
       await db.prepare("UPDATE company_admins SET password_hash=? WHERE id='aa'").bind(await hashPassword('Closure-QA!123',env.AUTH_PEPPER)).run();
       const closureGet=(employee='ea2',month='2026-09')=>server.request('/api/company/closures?employee_id='+employee+'&month='+month,{headers:{Cookie:'cr_jornada_company_dev='+token}},env);
       const closurePost=(body:object,csrf='csrf')=>server.request('/api/company/closures',{method:'POST',headers:{Cookie:'cr_jornada_company_dev='+token,Origin:'http://localhost','X-CSRF-Token':csrf,'Content-Type':'application/json'},body:JSON.stringify(body)},env);

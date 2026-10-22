@@ -65,7 +65,7 @@ jobs:
           import os,subprocess
           base=os.environ.get('BASE_SHA','')
           files=subprocess.check_output(['git','diff','--name-only',base,os.environ['GITHUB_SHA']],text=True).splitlines() if base and set(base)!={'0'} else ['migrations/new']
-          required=any(p.startswith('migrations/') or p in ['scripts/verify-staging-recovery.mjs','scripts/prepare_d1_restore.py','scripts/backup.mjs','scripts/decrypt-backup.mjs'] for p in files)
+          required=any(p.startswith('migrations/') or p in ['.github/workflows/homologar-staging.yml','scripts/verify-staging-recovery.mjs','scripts/prepare_d1_restore.py','scripts/backup.mjs','scripts/decrypt-backup.mjs'] for p in files)
           with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('recovery='+str(required).lower()+'\n')
           PY
       - uses: actions/setup-node@v4
