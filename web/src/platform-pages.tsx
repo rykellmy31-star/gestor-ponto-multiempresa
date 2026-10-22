@@ -796,7 +796,7 @@ export function PlatformPage() {
           <a href="/superadmin#companies"><ShieldCheck size={18}/> Administradores
           </a>
           <Link to="/superadmin/vendas" className={location.pathname === '/superadmin/vendas' ? 'active' : ''}>
-            <ShoppingBag size={18}/> Página comercial
+            <ShoppingBag size={18}/> Página de vendas
           </Link>
         </nav>
         <div className="platform-sidebar-spacer"/>
