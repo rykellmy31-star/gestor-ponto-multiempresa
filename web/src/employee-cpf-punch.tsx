@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clock3, CheckCircle2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Clock3, CheckCircle2, RefreshCw, ShieldCheck, LogIn, Coffee, RotateCcw, LogOut, ArrowRight, LockKeyhole, CalendarDays } from 'lucide-react';
 import './employee-cpf-punch.css';
 import {nextEmployeePunchAttempt,matchesEmployeePunchConfirmation,
   checkEmployeePunchPreflight,
@@ -17,6 +17,10 @@ type Today = {
   company_id:string; employee_id:string; work_date:string;
   next_seq:number; next_type:PunchType|null; completed:boolean;
   server_now:number;
+  timezone?:string;
+  schedule?:{start:string;break_start:string;break_end:string;end:string;paid_break:boolean}|null;
+  expected_minutes?:number;worked_minutes?:number;break_minutes?:number;
+  punches?:Array<{id:string;seq:number;type:PunchType;recorded_at:number}>;
 };
 const descriptions:Record<PunchType,string> = {
   entry:'Registrar entrada',
@@ -37,6 +41,7 @@ export function EmployeeCpfPunch({
   onSessionExpired?:()=>void;
 }) {
   const [today,setToday]=useState<Today|null>(null);
+  const [now,setNow]=useState(Date.now());
   const [loading,setLoading]=useState(false);
   const [busy,setBusy]=useState(false);
   const [disabled,setDisabled]=useState(false);
@@ -45,6 +50,13 @@ export function EmployeeCpfPunch({
   const [lastConfirmation,setLastConfirmation]=useState<Confirmation|null>(null);
   // Enquanto a confirmacao nao vier, reutiliza a MESMA chave no retry.
   const pendingKey=useRef<PendingEmployeePunch|null>(null);
+  useEffect(()=>{
+    const base=today?.server_now||Date.now();
+    const started=performance.now();
+    setNow(base);
+    const timer=setInterval(()=>setNow(base+performance.now()-started),1000);
+    return ()=>clearInterval(timer);
+  },[today?.server_now]);
 
   const load=useCallback(async()=>{
     setLoading(true);setError('');setNotice('');
@@ -147,46 +159,103 @@ export function EmployeeCpfPunch({
       setError(e instanceof Error?e.message:'Erro ao confirmar.');
     }finally{setBusy(false);}
   }
-  return <section className="cpf-punch-panel" aria-label="Registro de ponto">
-    <header><Clock3 size={21}/><h3>Meu ponto de hoje</h3></header>
-    <p>Os horários são registrados pelo servidor e vinculados à empresa da sua sessão.</p>
-    {disabled ? <div className="cpf-punch-warning">
-      <ShieldCheck size={19}/>
-      Marcação ainda em homologação. Nenhuma batida real está habilitada.
-    </div> : null}
-    {!today&&!loading&&!disabled&&!error &&
-      <p className="cpf-punch-muted">Consulte o próximo registro para começar.</p>}
-    {today&&<div className="cpf-punch-info">
-      <strong>{today.work_date.split('-').reverse().join('/')}</strong>
-      <span>{today.completed ? 'Jornada do dia finalizada' :
-        'Próximo registro: '+descriptions[today.next_type as PunchType]}</span>
-    </div>}
-    {loading&&<p role="status" className="cpf-punch-muted">Consultando registro…</p>}
-    {error&&<p role="alert" className="cpf-punch-error">{error}</p>}
-    {notice&&<p role="status" className="cpf-punch-success">
-      <CheckCircle2 size={16}/>{notice}</p>}
-    {lastConfirmation&&<div className="cpf-punch-receipt">
-      <strong>Última marcação confirmada</strong>
-      <span>{descriptions[lastConfirmation.type]} — {
-        new Intl.DateTimeFormat('pt-BR', {
-          timeZone: timezone, day:'2-digit',month:'2-digit',year:'numeric',
-          hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
-        }).format(new Date(lastConfirmation.recorded_at))
-      }</span>
-      <small>Identificação técnica do registro (não substitui comprovante oficial):</small>
-      <code>{lastConfirmation.receipt_hash}</code>
-    </div>}
-    <div className="cpf-punch-actions">
-      <button type="button" onClick={()=>void load()} disabled={loading||busy}>
-        <RefreshCw size={16}/> Atualizar
-      </button>
-      <button type="button" className="cpf-punch-confirm"
-        onClick={()=>void punch()}
-        disabled={!today?.next_type||busy||loading||disabled}>
-        <Clock3 size={16}/>{busy?'Confirmando…':
-          today?.next_type ? descriptions[today.next_type] : 'Aguardando liberação'}
-      </button>
-    </div>
-    <small>Se sua confirmação apresentar erro de rede, tente novamente sem mudar o tipo de registro. Não registre pontos de terceiros.</small>
-  </section>;
+  const zone=today?.timezone||timezone;
+  const marks=([['entry','Entrada',LogIn],['break_start','Saída para intervalo',Coffee],
+    ['break_end','Retorno do intervalo',RotateCcw],['exit','Saída final',LogOut]] as const);
+  const format=(value:number,seconds=false)=>new Intl.DateTimeFormat('pt-BR',{
+    timeZone:zone,hour:'2-digit',minute:'2-digit',
+    ...(seconds?{second:'2-digit'}:{}),hour12:false
+  }).format(new Date(value));
+  const totalMinutes=(value:number)=>Math.floor(value/60).toString().padStart(2,'0')+':'+
+    Math.floor(value%60).toString().padStart(2,'0');
+  const sequence=today?.next_seq??0;
+  const livePunch=sequence===1?today?.punches?.find(p=>p.seq===0)?.recorded_at:
+    sequence===3?today?.punches?.find(p=>p.seq===2)?.recorded_at:undefined;
+  const worked=(today?.worked_minutes||0)+(livePunch?Math.max(0,Math.floor((now-livePunch)/60000)):0);
+  const dateText=new Intl.DateTimeFormat('pt-BR',{
+    timeZone:zone,weekday:'long',day:'2-digit',month:'long',year:'numeric'
+  }).format(new Date(now));
+  const entries=today?.punches||[];
+  return <div className="clock-layout cr-employee-original-clock" aria-label="Registro de ponto">
+    <section className="panel punch-panel">
+      <div className="panel-header"><span className="section-label">
+        <span className="live-dot"/> REGISTRO DE PONTO
+      </span><ShieldCheck size={19}/></div>
+      <div className="clock-face">
+        <p className="clock-date">{dateText}</p>
+        <div className="digital-clock" aria-label="Relógio">{format(now,true)}</div>
+        <div className="clock-sync"><ShieldCheck size={13}/>
+          {today?'Referência de horário do servidor':'Relógio do dispositivo — registro indisponível'} · {zone}
+        </div>
+      </div>
+      <div className="punch-progress">
+        {marks.map(([kind,label],i)=><div key={kind}
+          className={today&&sequence>i?'done':today&&sequence===i?'current':''}>
+          <span>{today&&sequence>i?<CheckCircle2 size={17}/>:i+1}</span>
+          <small>{['Entrada','Intervalo','Retorno','Saída'][i]}</small>
+        </div>)}
+      </div>
+      <div className="punch-buttons">
+        {marks.map(([kind,label,Icon],i)=>{
+          const enabled=Boolean(today&&today.next_type===kind&&!busy&&!loading&&!disabled);
+          const done=Boolean(today&&sequence>i);
+          return <button key={kind} type="button"
+            className={'punch-button '+(enabled?'punch-enabled':'')+(done?' punch-done':'')}
+            disabled={!enabled} onClick={()=>void punch()}>
+            <span className="punch-button-icon"><Icon size={23}/></span>
+            <div><strong>{label}</strong>
+              <small>{done?'Registro realizado':enabled?'Clique para registrar':'Aguardando etapa anterior'}</small></div>
+            {done?<CheckCircle2 size={18}/>:enabled?<ArrowRight size={18}/>:<LockKeyhole size={17}/>}
+          </button>;
+        })}
+      </div>
+      {loading&&<p role="status" className="cpf-punch-muted">Consultando sua jornada…</p>}
+      {disabled&&<div role="status" className="cpf-punch-warning">
+        <ShieldCheck size={17}/> Marcação ainda em homologação. Nenhuma batida real está habilitada.
+      </div>}
+      {error&&<p role="alert" className="cpf-punch-error">{error}</p>}
+      {notice&&<p role="status" className="cpf-punch-success"><CheckCircle2 size={16}/>{notice}</p>}
+      {today?.completed&&<div className="day-completed"><CheckCircle2 size={17}/>
+        Jornada concluída. Os registros foram confirmados pelo servidor.</div>}
+      {lastConfirmation&&<div className="cpf-punch-receipt">
+        <strong>Último registro confirmado · {descriptions[lastConfirmation.type]}</strong>
+        <span>{format(lastConfirmation.recorded_at,true)}</span>
+        <small>Identificação técnica do registro (não equivale a comprovante oficial):</small>
+        <code>{lastConfirmation.receipt_hash}</code>
+      </div>}
+      <div className="punch-footnote"><ShieldCheck size={15}/>
+        Aguarde a confirmação. Não há registro offline ou retroativo.
+      </div>
+      <button className="cr-reload-link" type="button" onClick={()=>void load()}
+        disabled={loading||busy}><RefreshCw size={14}/> Atualizar registro</button>
+    </section>
+    <aside className="day-sidebar">
+      <section className="panel day-summary">
+        <div className="panel-header"><h3>Resumo do dia</h3><CalendarDays size={18}/></div>
+        <div className="day-total"><span>Tempo trabalhado{livePunch?' · em andamento':''}</span>
+          <strong>{today?totalMinutes(worked):'--:--'}<small>h</small></strong></div>
+        <div className="summary-line"><span>Jornada prevista</span>
+          <strong>{today?.expected_minutes!=null?totalMinutes(today.expected_minutes)+' h':'—'}</strong></div>
+        <div className="summary-line"><span>Intervalo realizado</span>
+          <strong>{today?.break_minutes!=null?totalMinutes(today.break_minutes)+' h':'—'}</strong></div>
+        <div className="summary-line"><span>Último registro</span>
+          <strong>{entries.length?format(entries[entries.length-1].recorded_at):'Nenhum'}</strong></div>
+        <div className="employee-schedule"><span>SEU HORÁRIO CONTRATUAL</span>
+          {today?.schedule?<><strong>{today.schedule.start} <ArrowRight size={14}/> {today.schedule.end}</strong>
+            <small>Intervalo: {today.schedule.break_start} às {today.schedule.break_end}</small></>:
+            <p>Jornada não disponível. Confira com o RH.</p>}
+        </div>
+      </section>
+      <section className="panel timeline-panel">
+        <div className="panel-header"><h3>Registros de hoje</h3>
+          <span className="count-chip">{entries.length}/4</span></div>
+        {!entries.length?<div className="timeline-empty"><Clock3 size={25}/>
+          <span>Sua jornada começa com o primeiro registro.</span></div>:
+        <ol className="timeline">{entries.map(p=><li key={p.id}>
+          <span className="timeline-dot"/><div><strong>{marks[p.seq]?.[1]||p.type}</strong>
+            <small>Confirmado no servidor</small></div><time>{format(p.recorded_at)}</time>
+        </li>)}</ol>}
+      </section>
+    </aside>
+  </div>;
 }
