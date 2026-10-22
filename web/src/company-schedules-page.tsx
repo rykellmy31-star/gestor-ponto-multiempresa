@@ -1,5 +1,6 @@
 import { CompanyPunchPolicy } from './company-punch-policy';
 import { CompanyCalculations } from './company-calculations';
+import { CompanyDayEvents } from './company-day-events';
 import { CompanyAttendance } from './company-attendance';
 import { CompanyEmployeeAccess } from './company-employee-access';
 import { jsonRequest,isExpiredCompanySession } from './company-schedules-network';
@@ -378,6 +379,8 @@ export function CompanySchedulesPage() {
 
       <CompanyCalculations key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>
+      <CompanyDayEvents key={session.company.id+':events:'+session.csrf_token}
+        companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
 
       <CompanyAttendance key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>

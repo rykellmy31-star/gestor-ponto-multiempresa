@@ -6,7 +6,7 @@ import server from '../server/index';
 import { sha256 } from '../server/core/crypto';
 import { DEFAULT_RULES } from '../server/core/calculations';
 const at=(date:string,time:string)=>DateTime.fromISO(date+'T'+time,{zone:'America/Bahia'}).toMillis();
-describe('apuracao empresarial com 39 migrations reais no D1',()=>{
+describe('apuracao empresarial com 40 migrations reais no D1',()=>{
   it('isola dados, aplica snapshots, filtra cancelamentos e exige conciliacao de legado',async()=>{
     const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'test',modules:true,
       script:'export default {fetch(){return new Response("ok")}}',d1Databases:['DB']}]}));
@@ -27,7 +27,7 @@ for p in sorted(Path('migrations').glob('*.sql')):
   files.append(statements)
 print(json.dumps(files))
 `],{encoding:'utf8'})) as string[][];
-      expect(migrations).toHaveLength(39);
+      expect(migrations).toHaveLength(40);
       for(const statements of migrations)if(statements.length)await db.batch(statements.map(s=>db.prepare(s)));
       const token='a'.repeat(64),now=Date.now(),created=at('2026-09-01','00:00');
       const schedule={start:'07:00',break_start:'11:00',break_end:'12:00',end:'16:00',weekdays:[1,2,3,4,5],paid_break:false};
@@ -75,6 +75,39 @@ print(json.dumps(files))
       const cancelled=await (await call()).json() as any;
       expect(cancelled.days[5].result.schedule.start).toBe('07:00');
       expect(cancelled.days[4].source).toBe('snapshot');
+      const event=(body:object,csrf='csrf')=>server.request('/api/company/day-events',{
+        method:'POST',headers:{Cookie:'cr_jornada_company_dev='+token,Origin:'http://localhost','X-CSRF-Token':csrf,'Content-Type':'application/json'},body:JSON.stringify(body)
+      },env);
+      const holiday={kind:'holiday',work_date:'2026-10-05',expected_revision:0,reason:'Feriado fictício de homologação',value:{name:'Feriado QA'}};
+      expect((await event(holiday,'invalid')).status).toBe(403);
+      expect((await event({...holiday,company_id:'b'})).status).toBe(400);
+      const savedHoliday=await event(holiday);expect(savedHoliday.status).toBe(201);
+      const holidayId=(await savedHoliday.json() as any).id;
+      expect((await event(holiday)).status).toBe(409);
+      expect((await (await call()).json() as any).days[4].result.expected_minutes).toBe(0);
+      expect((await (await call('employee_id=ea2&month=2026-10')).json() as any).days[4].result.expected_minutes).toBe(0);
+      await expect(db.prepare("UPDATE company_day_events SET reason='Alteracao indevida' WHERE id=?").bind(holidayId).run()).rejects.toThrow();
+      await expect(db.prepare('DELETE FROM company_day_events WHERE id=?').bind(holidayId).run()).rejects.toThrow();
+      await expect(db.prepare('INSERT OR REPLACE INTO company_day_events SELECT * FROM company_day_events WHERE id=?').bind(holidayId).run()).rejects.toThrow();
+      expect((await event({...holiday,expected_revision:1,value:null})).status).toBe(201);
+      expect((await (await call()).json() as any).days[4].result.expected_minutes).toBe(480);
+      const occurrence={kind:'occurrence',work_date:'2026-10-06',employee_id:'ea',expected_revision:0,
+        reason:'Atestado fictício aprovado pelo gestor',value:{kind:'medical',paid:true}};
+      expect((await event({...occurrence,employee_id:'eb'})).status).toBe(404);
+      expect((await event(occurrence)).status).toBe(201);
+      expect((await (await call()).json() as any).days[5].result).toMatchObject({credited_minutes:480,absence:false});
+      const adjustment={kind:'adjustment',work_date:'2026-10-05',employee_id:'ea',expected_revision:0,
+        reason:'Correcao fictícia conferida pelo gestor',value:{marks:['07:00','11:00','12:00','16:00'].map(t=>at('2026-10-05',t))}};
+      expect((await event({...adjustment,value:{marks:[4,3,2,1]}})).status).toBe(400);
+      expect((await event({...adjustment,work_date:'2026-10-06'})).status).toBe(400);
+      expect((await event({...adjustment,employee_id:'ea2'})).status).toBe(409);
+      expect((await event(adjustment)).status).toBe(201);
+      const adjusted=(await (await call()).json() as any).days[4].result;
+      expect(adjusted).toMatchObject({worked_minutes:480,late_minutes:0,adjusted:true});
+      expect(adjusted.raw_marks[0]).toBe(at('2026-10-05','07:12'));
+      expect((await db.prepare("SELECT recorded_at FROM punches WHERE id='p0'").first<any>()).recorded_at).toBe(at('2026-10-05','07:12'));
+      const eventsRead=await server.request('/api/company/day-events?employee_id=ea&month=2026-10',{headers:{Cookie:'cr_jornada_company_dev='+token}},env);
+      expect(eventsRead.status).toBe(200);expect((await eventsRead.json() as any).events).toHaveLength(3);
       env.DB={withSession:()=>({prepare:(sql:string)=>db.prepare(sql),async batch(statements:any[]){
         await db.prepare("UPDATE company_admins SET auth_version=1 WHERE id='aa'").run();
         return db.batch(statements);
@@ -86,6 +119,9 @@ print(json.dumps(files))
       expect((await call()).status).toBe(200);
       // Any unsupported old closure must block preview rather than be ignored.
       await db.prepare("INSERT INTO monthly_closures(id,employee_id,month,status,version,snapshot_json,report_hash,closed_by,closed_at) VALUES('closure-2','ea','2026-10','open',1,'{}','fixture','legacy-admin',?)").bind(now).run();
+      await db.prepare("UPDATE monthly_closures SET status='closed' WHERE id='closure-2'").run();
+      expect((await event({...holiday,expected_revision:2,value:{name:'Feriado bloqueado'}})).status).toBe(409);
+      expect((await event({...occurrence,expected_revision:1,value:null})).status).toBe(409);
       const blocked=await call();expect(blocked.status).toBe(409);
       expect((await blocked.json() as any).error.code).toBe('company_report_reconciliation_required');
       env.ENABLE_COMPANY_SCHEDULES='false';expect((await call()).status).toBe(503);

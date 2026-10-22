@@ -4,6 +4,7 @@ import { calculateDay, sumDays } from './calculations';
 import { ensure } from './errors';
 import { rulesSchema, scheduleSchema } from './validation';
 import { shiftBounds } from './time';
+import { companyDayEventSchema,type CompanyDayEvent } from '../../shared/company-day-events';
 
 export type CalculationWorkDay={id:string;company_id:string|null;work_date:string;
   timezone:string;schedule_json:string;rules_json:string;next_seq:number};
@@ -23,7 +24,7 @@ function parse<T>(json:string, schema:{safeParse:(value:unknown)=>{success:boole
 export function calculateCompanyMonth(input:{month:string;timezone:string;
   admission_date:string;employment_end:string|null;now:number;
   workDays:CalculationWorkDay[];punches:CalculationPunch[];
-  schedules:CalculationSchedule[];policies:CalculationPolicy[]}) {
+  schedules:CalculationSchedule[];policies:CalculationPolicy[];events?:CompanyDayEvent[]}) {
   ensure(['America/Bahia','America/Sao_Paulo'].includes(input.timezone),409,
     'invalid_report_timezone','Confira o fuso horário da empresa.');
   const from=DateTime.fromISO(input.month+'-01',{zone:'utc'});
@@ -71,8 +72,33 @@ export function calculateCompanyMonth(input:{month:string;timezone:string;
       row.source='policy_history';
     }
     row.state='calculated';
+    const events=(input.events??[]).filter(e=>e.work_date===date);
+    ensure(new Set(events.map(e=>e.kind)).size===events.length,409,'invalid_day_events','Tratamentos duplicados exigem conferência.');
+    const parsedEvents=events.map(e=>{
+      let value;try{value=JSON.parse(e.value_json);}catch{value=undefined;}
+      const parsed=companyDayEventSchema.safeParse({kind:e.kind,value,work_date:e.work_date,
+        expected_revision:e.revision-1,reason:e.reason,...(e.employee_id?{employee_id:e.employee_id}:{})});
+      ensure(parsed.success,409,'invalid_day_events','O histórico dos tratamentos precisa de conferência.');
+      return {id:e.id,...parsed.data};
+    });
+    const holiday=parsedEvents.find(e=>e.kind==='holiday');
+    const occurrence=parsedEvents.find(e=>e.kind==='occurrence');
+    const adjustment=parsedEvents.find(e=>e.kind==='adjustment');
+    const rawMarks=[...marks];
+    if(adjustment?.kind==='adjustment'&&adjustment.value){
+      const corrected=adjustment.value.marks;
+      ensure(Boolean(day)&&corrected.every((m,i)=>m>=0&&m<=input.now&&(i===0||m>=corrected[i-1]))&&
+        corrected[3]-corrected[0]<=24*3600000&&DateTime.fromMillis(corrected[0],{zone}).toISODate()===date,
+        409,'invalid_adjustment','O ajuste precisa de conferência.');
+      marks.splice(0,4,...corrected);
+    }
     row.result=calculateDay({date,timezone:zone,schedule,rules,marks,
-      occurrences:[],now:input.now,employed:true});
+      rawMarks,adjusted:Boolean(adjustment?.value),adjustmentReason:adjustment?.reason,
+      holiday:holiday?.kind==='holiday'&&holiday.value?holiday.value.name:undefined,
+      occurrences:occurrence?.kind==='occurrence'&&occurrence.value?[{
+        id:occurrence.id,work_date:date,kind:occurrence.value.kind,paid:occurrence.value.paid?1:0,
+        reason:occurrence.reason,status:'approved'
+      }]:[],now:input.now,employed:true});
     return row;
   });
   const calculated=days.flatMap(day=>day.result?[day.result]:[]);

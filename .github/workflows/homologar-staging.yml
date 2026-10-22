@@ -25,6 +25,10 @@ on:
       - 'server/routes/company-punch-policy.ts'
       - 'web/src/company-punch-policy.tsx'
       - 'migrations/0039_company_punch_policy_audit.sql'
+      - 'migrations/0040_company_day_events.sql'
+      - 'shared/company-day-events.ts'
+      - 'server/routes/company-day-events.ts'
+      - 'web/src/company-day-events.tsx'
       - 'web/src/company-attendance.tsx'
       - 'web/src/company-schedules-page.tsx'
       - 'server/routes/platform-sales.ts'
@@ -47,6 +51,20 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Identificar necessidade de ensaio de recuperacao
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          python3 - <<'PY'
+          import os,subprocess
+          base=os.environ.get('BASE_SHA','')
+          files=subprocess.check_output(['git','diff','--name-only',base,os.environ['GITHUB_SHA']],text=True).splitlines() if base and set(base)!={'0'} else ['migrations/new']
+          required=any(p.startswith('migrations/') or p in ['scripts/verify-staging-recovery.mjs','scripts/prepare_d1_restore.py','scripts/backup.mjs','scripts/decrypt-backup.mjs'] for p in files)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('recovery='+str(required).lower()+'\n')
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -73,7 +91,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/exercise-cloudflare-staging.mjs
       - name: Verificar backup cifrado e restauracao em novo D1 separado
-        if: ${{ github.event_name == 'workflow_dispatch' && !cancelled() && steps.remote.outcome != 'skipped' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' || steps.changes.outputs.recovery == 'true') && !cancelled() && steps.remote.outcome == 'success' }}
         env:
           CLOUDFLARE_STAGING_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

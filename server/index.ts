@@ -5,6 +5,7 @@ import { employeeCpfHistoryRoutes } from './routes/employee-cpf-history';
 import { employeeCpfPunchRoutes } from './routes/employee-cpf-punch';
 
 import { Hono } from 'hono';
+import { companyDayEventsRoutes } from './routes/company-day-events';
 import { bodyLimit } from 'hono/body-limit';
 import type { App, Env } from './types';
 import { deleteExpiredSalesLeads, parseLeadRetentionDays } from './core/sales-leads-retention';
@@ -210,6 +211,7 @@ app.use('/api/*', async (c, next) => {
 
   const isHealthRoute =
     path === '/api/health';
+  const isCompanyDayEventsRoute=['/api/company/day-events','/api/company/day-events/'].includes(path)&&['GET','POST'].includes(c.req.method);
 
   // Somente o novo acesso por CPF; demais rotas antigas ficam bloqueadas.
   const isEmployeeCpfAuthRoute =
@@ -238,6 +240,7 @@ app.use('/api/*', async (c, next) => {
     !isEmployeeCpfHistoryRoute &&
     !isEmployeeCpfPunchRoute &&
     !isHealthRoute
+    && !isCompanyDayEventsRoute
   ) {
     return c.json(
       {
@@ -279,6 +282,7 @@ app.route('/api/platform/sales-page', platformSalesRoutes);
 app.route('/api/company/auth', companyAuthRoutes);
 app.route('/api/company/reports', companyAttendanceRoutes);
 app.route('/api/company/reports', companyCalculationsRoutes);
+app.route('/api/company/day-events', companyDayEventsRoutes);
 app.route('/api/company/punch-policy', companyPunchPolicyRoutes);
 
 // CR JORNADA - Listagem de funcionarios da empresa

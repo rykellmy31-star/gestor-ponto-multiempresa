@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { DateTime } from 'luxon';
 import { chromium } from 'playwright';
 import { readFileSync, appendFileSync } from 'node:fs';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
@@ -448,6 +449,59 @@ try {
       verify(retained[0].total===4,'desligamento preserva os quatro pontos e historico da empresa');
     } finally {await context.close();}
   } finally {await statusBrowser.close();}
+  // Calendar treatments use only the two fictitious tenants created in this run.
+  const treatmentPath='/api/company/day-events';
+  const treatmentMonth=today.slice(0,7);
+  const eventRequest={kind:'holiday',work_date:today,expected_revision:0,
+    reason:'Homologacao ficticia do calendario empresarial',value:{name:'Feriado ficticio QA'}};
+  await b.client.call(treatmentPath,{method:'POST',body:eventRequest,csrf:'invalid',expected:403});
+  await b.client.call(treatmentPath,{method:'POST',body:eventRequest,expected:201});
+  await b.client.call(treatmentPath,{method:'POST',body:eventRequest,expected:409});
+  const calculationFor=async company=>(await company.client.call('/api/company/reports/calculations?employee_id='+company.employee.id+'&month='+treatmentMonth)).days.find(d=>d.date===today).result;
+  verify((await calculationFor(b)).expected_minutes===0,'feriado empresarial altera somente apuracao da empresa B');
+  verify((await calculationFor(a)).expected_minutes===1320,'feriado da empresa B nao modifica empresa A');
+  await b.client.call(treatmentPath,{method:'POST',body:{...eventRequest,expected_revision:1,value:null},expected:201});
+  verify((await calculationFor(b)).expected_minutes===1320,'cancelamento versionado restaura jornada prevista');
+  const occurrence={kind:'occurrence',employee_id:b.employee.id,work_date:today,expected_revision:0,
+    reason:'Atestado ficticio aprovado na homologacao',value:{kind:'medical',paid:true}};
+  await a.client.call(treatmentPath,{method:'POST',body:occurrence,expected:404});
+  await b.client.call(treatmentPath,{method:'POST',body:occurrence,expected:201});
+  verify((await calculationFor(b)).credited_minutes>0,'ocorrencia remunerada credita horas sem alterar marcacoes');
+  const originals=await query('SELECT p.recorded_at FROM punches p JOIN work_days d ON d.id=p.work_day_id WHERE d.company_id=? AND p.employee_id=? ORDER BY p.seq',[b.id,b.employee.id]);
+  const adjusted=originals.map(p=>Math.floor(p.recorded_at/60000)*60000);
+  const treatmentBrowser=await chromium.launch({headless:true});
+  try {
+    const context=await treatmentBrowser.newContext();
+    try {
+      const page=await context.newPage();
+      await page.goto(STAGING_ORIGIN+'/admin/entrar');
+      await page.getByLabel('Identificador da empresa',{exact:true}).fill(b.slug);
+      await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
+      await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
+      await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      const treatments=page.locator('section').filter({has:page.getByRole('heading',{name:'Calendário e tratamentos do ponto',exact:true})});
+      await treatments.getByLabel('Funcionário dos tratamentos',{exact:true}).selectOption(b.employee.id);
+      await treatments.getByLabel('Mês dos tratamentos',{exact:true}).fill(treatmentMonth);
+      await treatments.getByRole('button',{name:'Consultar tratamentos',exact:true}).click();
+      await treatments.getByLabel('Data do tratamento',{exact:true}).fill(today);
+      await treatments.getByLabel('Tipo de tratamento',{exact:true}).selectOption('adjustment');
+      const labels=['Entrada ajustada','Início do intervalo ajustado','Retorno ajustado','Saída ajustada'];
+      for(let i=0;i<4;i++)await treatments.getByLabel(labels[i],{exact:true}).fill(DateTime.fromMillis(adjusted[i],{zone:'America/Bahia'}).toFormat("yyyy-MM-dd'T'HH:mm"));
+      await treatments.getByLabel('Justificativa do tratamento',{exact:true}).fill('Ajuste ficticio pelo painel real de homologacao');
+      await treatments.getByRole('button',{name:'Salvar tratamento',exact:true}).click();
+      await treatments.getByText('Versão atual nesta data: 1. Salvar registra uma nova versão com o administrador responsável.',{exact:true}).waitFor();
+      verify(true,'administrador salva ajuste pelo painel real com controle de versao');
+    } finally {await context.close();}
+  } finally {await treatmentBrowser.close();}
+  const calculatedAdjustment=await calculationFor(b);
+  verify(calculatedAdjustment.adjusted===true,'apuracao real identifica ajuste aprovado');
+  const retainedOriginals=await query('SELECT p.recorded_at FROM punches p JOIN work_days d ON d.id=p.work_day_id WHERE d.company_id=? AND p.employee_id=? ORDER BY p.seq',[b.id,b.employee.id]);
+  verify(JSON.stringify(retainedOriginals)===JSON.stringify(originals),'ajuste preserva todos os horarios originais no D1');
+  const journal=await query('SELECT kind,revision,admin_id FROM company_day_events WHERE company_id=? ORDER BY kind,revision',[b.id]);
+  verify(journal.length===4&&journal.every(e=>Boolean(e.admin_id)),'D1 confirma quatro versoes auditadas de tratamentos');
+  await a.client.call(treatmentPath+'?employee_id='+b.employee.id+'&month='+treatmentMonth,{expected:404});
+  const isolated=await a.client.call(treatmentPath+'?employee_id='+a.employee.id+'&month='+treatmentMonth);
+  verify(isolated.events.length===0,'empresa A nao consulta tratamentos da empresa B');
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
   await a.client.call('/api/company/reports/attendance?employee_id=' + a.employee.id + '&month=' + today.slice(0,7), {expected:401});
   await a.client.call('/api/company/reports/calculations?employee_id='+a.employee.id+'&month='+today.slice(0,7),{expected:401});

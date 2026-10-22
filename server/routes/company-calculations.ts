@@ -8,6 +8,7 @@ import { calculateCompanyMonth,type CalculationPolicy,type CalculationPunch,
   type CalculationSchedule,type CalculationWorkDay } from '../core/company-calculations';
 import { companyCalculationStatuses } from '../../shared/company-calculation-status';
 import { csvCell } from './company-attendance';
+import type { CompanyDayEvent } from '../../shared/company-day-events';
 
 export const companyCalculationsRoutes=new Hono<App>();
 companyCalculationsRoutes.use('*',requireCompanyAdmin);
@@ -74,7 +75,12 @@ companyCalculationsRoutes.get('/calculations',async c=>{
       OR EXISTS(SELECT 1 FROM monthly_closures m WHERE m.employee_id=e.id AND m.month=?)
       OR EXISTS(SELECT 1 FROM adjustments a JOIN work_days d ON d.id=a.work_day_id
         WHERE d.employee_id=e.id AND d.company_id=e.company_id AND d.work_date>=? AND d.work_date<?))
-      LIMIT 1`).bind(...params,first,end,first,end,month,first,end)
+      LIMIT 1`).bind(...params,first,end,first,end,month,first,end),
+    db.prepare(`SELECT d.* FROM company_day_events d WHERE d.company_id=? AND (d.employee_id=? OR d.employee_id IS NULL)
+      AND d.work_date>=? AND d.work_date<? AND ${owned}
+      AND NOT EXISTS(SELECT 1 FROM company_day_events n WHERE n.company_id=d.company_id AND n.scope_key=d.scope_key
+        AND n.work_date=d.work_date AND n.kind=d.kind AND n.revision>d.revision)
+      ORDER BY d.work_date,d.kind LIMIT 94`).bind(company.id,employeeId,first,end,...params)
   ]);
   const employee=results[0].results[0] as unknown as {id:string;full_name:string;registration:string;
     admission_date:string;employment_end:string|null;timezone:string}|undefined;
@@ -83,12 +89,13 @@ companyCalculationsRoutes.get('/calculations',async c=>{
     409,'report_limit','O volume do histórico exige conferência.');
   ensure(results[5].results.length===0,409,'company_report_reconciliation_required',
     'Ocorrências, ajustes ou fechamentos antigos exigem conciliação empresarial antes da apuração.');
+  ensure(results[6].results.length<94,409,'report_limit','Tratamentos excedem o limite de conferência.');
   const report=calculateCompanyMonth({month,now,timezone:employee.timezone,
     admission_date:employee.admission_date,employment_end:employee.employment_end,
     workDays:results[1].results as unknown as CalculationWorkDay[],
     punches:results[2].results as unknown as CalculationPunch[],
     schedules:results[3].results as unknown as CalculationSchedule[],
-    policies:results[4].results as unknown as CalculationPolicy[]});
+    policies:results[4].results as unknown as CalculationPolicy[],events:results[6].results as unknown as CompanyDayEvent[]});
   c.header('Cache-Control','private, no-store');
   if(format==='csv') {
     const lines=[['Apuração provisória — conferir ocorrências e feriados antes do fechamento'],
@@ -97,7 +104,7 @@ companyCalculationsRoutes.get('/calculations',async c=>{
       ...report.days.map(day=>[employee.full_name,employee.registration,day.date,companyCalculationStatuses[day.result?.status??day.state]??'Conferência necessária',
         day.result?.expected_minutes??'',day.result?.worked_minutes??'',day.result?.break_minutes??'',
         day.result?.late_minutes??'',day.result?.early_minutes??'',day.result?.raw_balance_minutes??'',
-        day.result?.overtime_pending_minutes??'',day.reason??(day.result?.absence?'Ausência a conferir':'')])];
+        day.result?.overtime_pending_minutes??'',day.reason??day.result?.notes.join(' | ')??''])];
     c.header('Content-Type','text/csv; charset=utf-8');
     c.header('Content-Disposition',`attachment; filename="apuracao-${month}.csv"`);
     return c.body('\uFEFF'+lines.map(line=>line.map(csvCell).join(';')).join('\r\n')+'\r\n');
