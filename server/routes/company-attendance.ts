@@ -158,7 +158,7 @@ companyAttendanceRoutes.get('/overview',async c=>{
     if(item.seq!==null&&item.seq>=0&&item.seq<=3)times[item.seq]=item.recorded_at;
   }
   const trend=[] as Array<{date:string;worked_minutes:number}>;
-  for(let d=start;d<start.plus({months:1});d=d.plus({days:1})){
+  for(let d=start;d.toMillis()<start.plus({months:1}).toMillis();d=d.plus({days:1})){
     const day=days.get(d.toISODate()!);
     trend.push({date:d.toISODate()!,worked_minutes:day?
       [...day.values()].reduce((sum,t)=>sum+worked(t),0):0});
