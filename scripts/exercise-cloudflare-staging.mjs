@@ -703,9 +703,11 @@ try {
   await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
   const count = await query('SELECT COUNT(*) AS total FROM employees WHERE company_id IN (?,?)', [a.id,b.id]);
   verify(count[0].total === 3, 'D1 confirma dois funcionarios CPF e um vinculo historico ficticio');
-  const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
-  verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, apuracao provisoria com snapshots, login visual Superadmin/funcionario e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
+  const assignments = await query('SELECT effective_from FROM schedule_assignments WHERE employee_id=? ORDER BY effective_from', [a.employee.id]);
+  const expectedAssignmentDates=[today,DateTime.fromISO(today,{zone:'utc'}).plus({days:1}).toISODate(),'2026-10-26','2026-10-27'].sort();
+  verify(assignments.length===4&&JSON.stringify(assignments.map(row=>row.effective_from))===JSON.stringify(expectedAssignmentDates),
+    'D1 confirma quatro atribuicoes, incluindo a alteracao feita pela aba funcionarios sem perder o historico');
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, visao geral, escala do funcionario e arquivo de modelos, solicitacoes e pesquisa de humor por empresa, apuracao provisoria com snapshots, login visual Superadmin/funcionario e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {
