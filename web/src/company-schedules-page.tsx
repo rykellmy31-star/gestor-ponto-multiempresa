@@ -130,7 +130,12 @@ export function CompanySchedulesPage() {
   const check=useCallback(async()=>{
     try{
       const data=await jsonRequest<CompanySession>('/company/auth/session');
-      setSession(data);
+      const brand=await jsonRequest<{
+        company:{id:string;name:string;logo_url:string|null;primary_color:string;
+          timezone:'America/Bahia'|'America/Sao_Paulo'}
+      }>('/company/auth/branding').catch(()=>null);
+      setSession(brand?.company.id===data.company.id?
+        {...data,company:{...data.company,...brand.company}}:data);
     }catch{
       // Pages publica somente arquivos estaticos: aqui nao existe sessao real.
       setSession(null);
