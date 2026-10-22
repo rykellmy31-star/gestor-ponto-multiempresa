@@ -1,0 +1,50 @@
+/* Restauracao visual da folha original: reutiliza a linguagem de componentes
+   de web/src/styles.css, sem reativar APIs antigas ou alterar permissoes.
+   Escopo: interfaces novas autenticadas de funcionario e empresa. */
+.cr-legacy-sidebar{background:#18323e;color:#d4e2e3;padding:28px 16px;display:flex;flex-direction:column;gap:26px;min-width:0}
+.cr-legacy-sidebar-brand{display:flex;align-items:center;gap:10px;color:#fff;font-size:20px;font-weight:700;letter-spacing:-.04em}
+.cr-legacy-sidebar-brand svg{color:#74ccac}
+.cr-legacy-sidebar-title{font-size:10px;letter-spacing:.13em;font-weight:700;color:#a5c4bf}
+.cr-legacy-sidebar-nav{display:grid;gap:5px}
+.cr-legacy-sidebar-nav a{display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;font-size:12px;font-weight:600;color:#d4e2e3}
+.cr-legacy-sidebar-nav a:hover,.cr-legacy-sidebar-nav a:focus-visible{background:#294b52;color:#fff}
+.cr-legacy-sidebar-note{font-size:11px;line-height:1.7;color:#a5bdc1;margin-top:auto}
+.cr-legacy-employee-page.is-authenticated{display:grid!important;grid-template-columns:235px minmax(0,900px);gap:0!important;justify-content:center!important;align-items:stretch!important;background:#f6f8fa!important;padding:0!important;color:#233442!important;min-height:100dvh!important}
+.cr-legacy-employee-page.is-authenticated>.cr-legacy-sidebar{min-height:100dvh;position:sticky;top:0;align-self:start;height:100dvh}
+.cr-legacy-employee-page.is-authenticated>.cr-legacy-employee-content{max-width:none!important;width:100%!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:#f6f8fa!important;padding:clamp(22px,4vw,44px)!important}
+.cr-legacy-employee-page.is-authenticated .cr-legacy-employee-header{text-align:left!important;border-bottom:1px solid #e1e9ea;padding-bottom:18px}
+.cr-legacy-employee-page.is-authenticated .cr-legacy-employee-header h1{color:#233442;font-weight:680;font-size:clamp(24px,3vw,30px)!important}
+.cr-legacy-employee-dashboard{display:grid;gap:20px}
+.cr-legacy-employee-page.is-authenticated .cr-legacy-employee-company{background:#fff!important;border:1px solid #e9edf0;border-radius:12px!important;padding:17px!important}
+.cr-legacy-employee-section{background:#fff;border:1px solid #e9edf0;box-shadow:0 3px 14px #16334704;border-radius:13px;padding:22px;min-width:0}
+.cr-legacy-employee-page.is-authenticated :is(.cpf-punch-panel,.cpf-history-panel){border:0;box-shadow:none;padding:0;background:transparent}
+.cr-legacy-employee-page.is-authenticated button[style]{max-width:100%}
+.cr-legacy-employee-page.is-authenticated .cr-legacy-logout{width:auto!important;min-height:42px!important;background:#087f6f!important;border-radius:8px!important;justify-self:end}
+.cr-legacy-employee-page.is-authenticated .cr-legacy-status{color:#087f6f!important;font-size:12px;display:flex;align-items:center;gap:8px}
+.company-schedules-page{background:#f6f8fa!important;color:#233442!important;padding:0!important}
+.company-schedules-shell{max-width:none!important;display:grid!important;grid-template-columns:235px minmax(0,1fr)!important;gap:0!important;min-height:100dvh}
+.company-schedules-shell>.cr-legacy-sidebar{height:100dvh;position:sticky;top:0;align-self:start}
+.cr-legacy-main{max-width:1260px;width:100%;margin:0 auto;padding:clamp(22px,3vw,44px);display:grid;gap:23px;min-width:0}
+.company-schedules-page .company-schedules-overline{color:#087f6f!important}
+.company-schedules-page .company-schedules-head h1{color:#233442}
+.company-schedules-page :is(.company-schedules-intro>svg,.company-schedules-item strong,.company-schedules-total strong,.company-schedules-week-preview li strong){color:#087f6f!important}
+.company-schedules-page :is(.company-schedules-card,.company-schedules-item){border-color:#e9edf0!important;box-shadow:0 3px 14px #16334704!important}
+.company-schedules-page .company-schedules-saturday{background:#f0f7f5!important;border-color:#d7e7e1!important}
+.company-schedules-page :is(.company-schedules-total,.company-schedules-weekdays){background:#f6f9f9!important;border-color:#e3ebed!important}
+.company-schedules-page .company-schedules-page input:focus-visible{outline-color:#087f6f40}
+.company-schedules-page button:not(.company-schedules-secondary){background:#087f6f!important;border-color:#087f6f!important}
+.company-schedules-page .company-schedules-secondary{color:#087f6f!important;border-color:#d5e4e1!important}
+.company-schedules-page :is(.company-schedules-weekdays input,.company-schedules-check input,.company-schedules-all-option input){accent-color:#087f6f!important}
+.company-schedules-page .company-schedules-shortcuts button[aria-pressed="true"]{color:#fff!important;background:#087f6f!important}
+.cr-legacy-group{display:grid;gap:18px;min-width:0;scroll-margin-top:20px}
+@media(max-width:760px){
+ .cr-legacy-employee-page.is-authenticated{grid-template-columns:minmax(0,1fr)!important}
+ .company-schedules-shell{grid-template-columns:minmax(0,1fr)!important}
+ .cr-legacy-employee-page.is-authenticated>.cr-legacy-sidebar,.company-schedules-shell>.cr-legacy-sidebar{position:static;height:auto;min-height:0;padding:18px 15px;gap:12px}
+ .cr-legacy-sidebar-nav{display:flex;overflow-x:auto;gap:6px;padding-bottom:3px}
+ .cr-legacy-sidebar-nav a{white-space:nowrap;padding:10px;flex-shrink:0}
+ .cr-legacy-sidebar-note{display:none}
+ .cr-legacy-employee-page.is-authenticated>.cr-legacy-employee-content{padding:20px 12px!important}
+ .cr-legacy-main{padding:20px 12px}
+ .cr-legacy-employee-section{padding:15px}
+}
