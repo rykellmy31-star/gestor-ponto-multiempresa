@@ -28,7 +28,7 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       await db.batch([
         db.prepare('CREATE TABLE rate_limits(key TEXT PRIMARY KEY,count INTEGER NOT NULL,reset_at INTEGER NOT NULL)'),
         db.prepare('CREATE TABLE companies(id TEXT PRIMARY KEY,name TEXT NOT NULL,document TEXT NOT NULL DEFAULT \'\',slug TEXT UNIQUE COLLATE NOCASE,logo_url TEXT,primary_color TEXT,timezone TEXT,status TEXT,created_at INTEGER,updated_at INTEGER)'),
-        db.prepare('CREATE TABLE platform_admins(id TEXT PRIMARY KEY,login TEXT UNIQUE COLLATE NOCASE,email TEXT,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,created_at INTEGER,updated_at INTEGER)'),
+        db.prepare('CREATE TABLE platform_admins(must_change_password INTEGER NOT NULL DEFAULT 0,temporary_password_expires_at INTEGER,id TEXT PRIMARY KEY,login TEXT UNIQUE COLLATE NOCASE,email TEXT,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,created_at INTEGER,updated_at INTEGER)'),
         db.prepare('CREATE TABLE platform_sessions(token_hash TEXT PRIMARY KEY,admin_id TEXT,csrf_token TEXT,created_at INTEGER,expires_at INTEGER,last_seen_at INTEGER,reauth_at INTEGER,auth_version INTEGER)'),
         db.prepare('CREATE TABLE platform_audit_log(id TEXT PRIMARY KEY,actor_id TEXT,action TEXT,entity_type TEXT,entity_id TEXT,details_json TEXT,created_at INTEGER)'),
         db.prepare('CREATE TABLE company_admins(id TEXT PRIMARY KEY,company_id TEXT,login TEXT COLLATE NOCASE,email TEXT COLLATE NOCASE,display_name TEXT,password_hash TEXT,active INTEGER,auth_version INTEGER,must_change_password INTEGER NOT NULL DEFAULT 1,temporary_password_expires_at INTEGER,created_at INTEGER,updated_at INTEGER,UNIQUE(company_id,login))'),
@@ -37,7 +37,7 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
         db.prepare('CREATE TABLE employee_company_sessions(token_hash TEXT PRIMARY KEY,company_id TEXT NOT NULL)'),
         db.prepare('CREATE TABLE company_admin_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CONSTRAINT company_admin_write_conflict CHECK(affected_rows=1))'),
         db.prepare('CREATE TABLE company_admin_security_events(id TEXT PRIMARY KEY,company_id TEXT,admin_id TEXT,action TEXT,created_at INTEGER)'),
-        db.prepare('INSERT INTO platform_admins VALUES(?,?,?,?,?,1,1,?,?)')
+        db.prepare('INSERT INTO platform_admins(id,login,email,display_name,password_hash,active,auth_version,created_at,updated_at) VALUES(?,?,?,?,?,1,1,?,?)')
           .bind('super-a','root-cr',null,'Superadmin Fictício',
             await hashPassword(superPass,pepper),now,now)
       ]);

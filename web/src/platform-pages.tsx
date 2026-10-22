@@ -10,6 +10,7 @@ import {
   Navigate,
   useLocation
 } from 'react-router-dom';
+import { PlatformPasswordChange } from './platform-password-change';
 import { SalesPageEditor } from './sales-editor';
 import { PlatformCompanyAdmins } from './platform-company-admins';
 
@@ -33,6 +34,7 @@ type PlatformUser = {
   email: string | null;
   name: string;
   role: string;
+  must_change_password?:boolean;
 };
 
 type Session = {
@@ -271,7 +273,7 @@ export function PlatformPage() {
   }
 
   const loadCompanies = useCallback(async () => {
-    if (!session) return;
+    if (!session || session.user.must_change_password) return;
 
     setCompaniesLoading(true);
     setCompaniesError('');
@@ -615,6 +617,8 @@ export function PlatformPage() {
       </main>
     );
   }
+
+  if(session?.user.must_change_password)return <PlatformPasswordChange csrf={session.csrf_token} onComplete={()=>{setSession(null);setPassword('');setNotice('Senha alterada. Entre novamente com sua nova senha.');}}/>;
 
   if (!session) {
     return (

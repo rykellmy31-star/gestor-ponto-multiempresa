@@ -121,7 +121,7 @@ export async function provisionStaging({ exerciseFeatures = false } = {}) {
   };
   const tables = await query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'");
   const migrations = readdirSync('migrations').filter(n => n.endsWith('.sql')).sort();
-  if (migrations.length !== 41 || migrations.at(-1) !== '0041_company_monthly_closures.sql') throw new Error('Inventario de migrations mudou; revisao necessaria.');
+  if (migrations.length !== 42 || migrations.at(-1) !== '0042_platform_owner_access.sql') throw new Error('Inventario de migrations mudou; revisao necessaria.');
   if (tables.some(t => t.name === 'd1_migrations')) {
     assertMigrationHistory(await query('SELECT name FROM d1_migrations ORDER BY id'), migrations);
   } else if (tables.length) throw new Error('Banco staging contem schema desconhecido.');
@@ -139,7 +139,7 @@ export async function provisionStaging({ exerciseFeatures = false } = {}) {
   const history = await query('SELECT name FROM d1_migrations ORDER BY id');
   assertMigrationHistory(history, migrations);
   if (history.length !== migrations.length) throw new Error('Migrations incompletas.');
-  console.log('D1 staging confirmado: ' + databaseId + '; 41 migrations aplicadas.');
+  console.log('D1 staging confirmado: ' + databaseId + '; 42 migrations aplicadas.');
   run(['deploy', '--config', 'wrangler.staging.jsonc']);
   const settings = (await api(workerPath + '/settings')).result;
   if (!settings?.bindings?.some(b => b.type === 'd1' && b.name === 'DB' &&
@@ -166,7 +166,7 @@ export async function provisionStaging({ exerciseFeatures = false } = {}) {
   }
   if (!healthy) throw new Error('Health check HTTPS staging nao aprovado.');
   const report = 'Staging real publicado: ' + STAGING_ORIGIN + '\nD1 exclusivo: ' + databaseId +
-    '\n41 migrations; HTTPS/health/headers aprovados. Perfil: ' + (exerciseFeatures ? 'testes funcionais somente staging' : 'inicial restrito') + '.\n';
+    '\n42 migrations; HTTPS/health/headers aprovados. Perfil: ' + (exerciseFeatures ? 'testes funcionais somente staging' : 'inicial restrito') + '.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 }

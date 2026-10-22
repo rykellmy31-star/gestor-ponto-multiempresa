@@ -17,11 +17,11 @@ describe('CR JORNADA — rotas comerciais com triggers reais de auditoria D1', (
       const db = (await mf.getD1Database('DB')).withSession() as unknown as D1DatabaseSession;
       const token = 'a'.repeat(64), now = Date.now();
       await db.batch([
-        db.prepare('CREATE TABLE platform_admins(id TEXT PRIMARY KEY,login TEXT,email TEXT,display_name TEXT,active INTEGER,auth_version INTEGER)'),
+        db.prepare('CREATE TABLE platform_admins(must_change_password INTEGER NOT NULL DEFAULT 0,temporary_password_expires_at INTEGER,id TEXT PRIMARY KEY,login TEXT,email TEXT,display_name TEXT,active INTEGER,auth_version INTEGER)'),
         db.prepare('CREATE TABLE platform_sessions(token_hash TEXT PRIMARY KEY,admin_id TEXT,csrf_token TEXT,auth_version INTEGER,expires_at INTEGER,last_seen_at INTEGER)'),
         db.prepare('CREATE TABLE platform_audit_log(id TEXT PRIMARY KEY,actor_id TEXT,action TEXT,entity_type TEXT,entity_id TEXT,details_json TEXT,created_at INTEGER)'),
         db.prepare('CREATE TABLE rate_limits(key TEXT PRIMARY KEY,count INTEGER,reset_at INTEGER)'),
-        db.prepare("INSERT INTO platform_admins VALUES('qa','qa',NULL,'QA',1,1)"),
+        db.prepare("INSERT INTO platform_admins(id,login,email,display_name,active,auth_version) VALUES('qa','qa',NULL,'QA',1,1)"),
         db.prepare('INSERT INTO platform_sessions VALUES(?,?,?,1,?,?)').bind(sha256(token),'qa','csrf-qa',now+600000,now)
       ]);
       for (const file of ['0021_sales_page_settings.sql', '0022_sales_leads.sql']) {
