@@ -208,24 +208,33 @@ export function EmployeeCpfPage() {
   }
 
   return (
-    <main style={{
+    <main className={'cr-legacy-employee-page'+(session&&!session.user.must_change_password?' is-authenticated':'')} style={{
       minHeight: '100dvh', padding: '35px 16px', background: '#fbf7f7',
       display: 'flex', justifyContent: 'center', alignItems: 'center',
       color: '#302222'
     }}>
-      <div style={panel}>
-        <header style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{
+      {session&&!session.user.must_change_password&&<aside className="cr-legacy-sidebar" aria-label="Menu do funcionário">
+        <div className="cr-legacy-sidebar-brand"><Clock3 size={25}/> CR JORNADA</div>
+        <div className="cr-legacy-sidebar-title">PORTAL DO FUNCIONÁRIO</div>
+        <nav className="cr-legacy-sidebar-nav">
+          <a href="#cr-funcionario-ponto"><Clock3 size={17}/> Registrar ponto</a>
+          <a href="#cr-funcionario-historico"><ShieldCheck size={17}/> Minha folha de ponto</a>
+        </nav>
+        <p className="cr-legacy-sidebar-note">Registros vinculados exclusivamente à empresa autenticada.</p>
+      </aside>}
+      <div className="cr-legacy-employee-content" style={panel}>
+        <header className="cr-legacy-employee-header" style={{ textAlign: 'center', marginBottom: 28 }}>
+          {!(session&&!session.user.must_change_password)&&<div style={{
             width: 58, height: 58, borderRadius: 16, margin: '0 auto 14px',
             display: 'grid', placeItems: 'center', color: '#fff',
             background: '#800000'
-          }}><Clock3 size={28}/></div>
-          <div style={{ fontSize: 13, color: '#800000', fontWeight: 800, letterSpacing: 1.8 }}>
+          }}><Clock3 size={28}/></div>}
+          <div style={{ fontSize: 13, color: '#087f6f', fontWeight: 800, letterSpacing: 1.8 }}>
             CR JORNADA
           </div>
-          <h1 style={{ marginTop: 10, fontSize: 25 }}>Portal do funcionário</h1>
+          <h1 style={{ marginTop: 10, fontSize: 25 }}>{session&&!session.user.must_change_password ? `Olá, ${session.user.name.split(' ')[0]}. Bom trabalho!` : 'Portal do funcionário'}</h1>
           <p style={{ color: '#777', fontSize: 13, marginTop: 8 }}>
-            Acesso seguro por CPF e senha
+            {session&&!session.user.must_change_password?'Registre seu ponto e acompanhe seu dia em um só lugar.':'Acesso seguro por CPF e senha'}
           </p>
         </header>
 
@@ -274,14 +283,11 @@ export function EmployeeCpfPage() {
             </button>
           </form>
         ) : session ? (
-          <section>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#0c7856' }}>
+          <section className="cr-legacy-employee-dashboard">
+            <div className="cr-legacy-status">
               <CheckCircle2 size={20}/> Acesso confirmado
             </div>
-            <h2 style={{ fontSize: 21, margin: '18px 0 8px' }}>
-              Olá, {session.user.name}
-            </h2>
-            <div style={{ padding: 15, background: '#faf4f4', borderRadius: 12, marginBottom: 18 }}>
+            <div className="cr-legacy-employee-company" style={{ padding: 15, background: '#faf4f4', borderRadius: 12, marginBottom: 18 }}>
               <p style={{ display: 'flex', gap: 9, alignItems: 'center', fontWeight: 700 }}>
                 <Building2 size={18}/>{session.company.name}
               </p>
@@ -289,20 +295,20 @@ export function EmployeeCpfPage() {
                 Sua sessão está vinculada exclusivamente a esta empresa.
               </p>
             </div>
-            <EmployeeCpfPunch key={session.user.id + session.company.id}
+            <div id="cr-funcionario-ponto" className="cr-legacy-employee-section"><EmployeeCpfPunch key={session.user.id + session.company.id}
               companyId={session.company.id}
               employeeId={session.user.employee_id}
               csrfToken={session.csrf_token}
               timezone={session.company.timezone}
               onConfirmed={() => setHistoryVersion(v => v + 1)}
-              onSessionExpired={onSessionExpired}/>
-            <EmployeeCpfPointHistory key={session.company.id}
+              onSessionExpired={onSessionExpired}/></div>
+            <div id="cr-funcionario-historico" className="cr-legacy-employee-section"><EmployeeCpfPointHistory key={session.company.id}
               companyId={session.company.id}
               employeeId={session.user.employee_id}
               timezone={session.company.timezone}
               refreshVersion={historyVersion}
-              onSessionExpired={onSessionExpired}/>
-            <button type="button" style={primary} onClick={logout} disabled={busy}>
+              onSessionExpired={onSessionExpired}/></div>
+            <button type="button" className="cr-legacy-logout" style={primary} onClick={logout} disabled={busy}>
               <LogOut size={18}/>{busy ? 'Saindo…' : 'Encerrar sessão'}
             </button>
           </section>
