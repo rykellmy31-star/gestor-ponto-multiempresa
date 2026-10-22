@@ -77,10 +77,10 @@ function EmployeeWeek({companyId,employeeId,timezone}:{
 }
 
 export function EmployeeOriginalWorkspace({session,historyVersion,onSessionExpired,
-  onLogout,onPasswordChanged}:{
+  onLogout,onPasswordChanged,onPunchConfirmed}:{
   session:EmployeeSession;historyVersion:number;
   onSessionExpired:()=>void;onLogout:()=>Promise<void>;
-  onPasswordChanged:()=>void;
+  onPasswordChanged:()=>void;onPunchConfirmed:()=>void;
 }){
   const [view,setView]=useState<'clock'|'history'|'requests'|'account'|'help'>('clock');
   const [menu,setMenu]=useState(false);
@@ -167,7 +167,7 @@ export function EmployeeOriginalWorkspace({session,historyVersion,onSessionExpir
           <EmployeeCpfPunch key={session.user.id+session.company.id}
             companyId={session.company.id} employeeId={session.user.employee_id}
             csrfToken={session.csrf_token} timezone={session.company.timezone}
-            onConfirmed={()=>{window.dispatchEvent(new Event('cr-employee-punch-confirmed'));}}
+            onConfirmed={onPunchConfirmed}
             onSessionExpired={onSessionExpired}/>
           <EmployeeWeek key={historyVersion} companyId={session.company.id}
             employeeId={session.user.employee_id} timezone={timezone}/>
