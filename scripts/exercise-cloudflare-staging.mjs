@@ -295,6 +295,23 @@ try {
         await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
         await page.getByRole('heading',{name:'Jornadas e escalas',exact:true}).waitFor();
         verify(true,'login empresarial realizado pelo formulario real');
+        const access=page.locator('section').filter({has:page.getByRole('heading',{name:'Acesso dos funcionários',exact:true})});
+        await access.getByRole('button',{name:'Editar nome e cargo',exact:true}).click();
+        const editor=access.locator('form').filter({has:page.getByRole('heading',{name:'Editar nome e cargo',exact:true})});
+        const editedName='Funcionario QA '+company.slug;
+        await editor.getByLabel('Nome completo',{exact:true}).fill(editedName);
+        await editor.getByLabel('Cargo',{exact:true}).fill('Supervisor QA');
+        await editor.getByRole('button',{name:'Salvar nome e cargo',exact:true}).click();
+        await access.getByText(editedName,{exact:true}).waitFor();
+        const editedList=await company.client.call('/api/company/employees');
+        const editedEmployee=editedList.employees.find(e=>e.id===company.employee.id);
+        verify(editedEmployee.full_name===editedName&&editedEmployee.job_title==='Supervisor QA',
+          'edicao de nome e cargo pelo painel confirmada na API');
+        await companies.find(c=>c.id!==company.id).client.call('/api/company/employees/'+company.employee.id,{
+          method:'PATCH',body:{full_name:'Invasao QA',job_title:'Teste',expected_updated_at:editedEmployee.updated_at},expected:404});
+        const audit=await query("SELECT details_json FROM audit_log WHERE action='company.employee.profile_updated' AND entity_id=?",[company.employee.id]);
+        verify(audit.length===1&&JSON.parse(audit[0].details_json).company_id===company.id,
+          'D1 registra auditoria da edicao empresarial');
         const panel = page.locator('section').filter({has:page.getByRole('heading',{
           name:'Relatório mensal de marcações',exact:true
         })});

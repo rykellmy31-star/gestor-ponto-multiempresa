@@ -54,6 +54,8 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         // Triggers presentes no schema real: D1.meta.changes inclui tambem
         // estas atualizacoes, embora cada INSERT principal grave uma linha.
         db.prepare('CREATE TABLE data_revision(id INTEGER PRIMARY KEY,value INTEGER NOT NULL)'),
+        db.prepare('CREATE TABLE audit_log(id TEXT PRIMARY KEY,actor_id TEXT,action TEXT,entity_type TEXT,entity_id TEXT,details_json TEXT,ip_hash TEXT,created_at INTEGER)'),
+        db.prepare('CREATE TRIGGER revision_employees_update AFTER UPDATE ON employees BEGIN UPDATE data_revision SET value=value+1 WHERE id=1; END'),
         db.prepare('INSERT INTO data_revision VALUES(1,0)'),
         db.prepare('CREATE TRIGGER revision_schedules_insert AFTER INSERT ON schedules BEGIN UPDATE data_revision SET value=value+1 WHERE id=1; END'),
         db.prepare('CREATE TABLE schedule_history(id TEXT PRIMARY KEY,schedule_id TEXT,effective_from TEXT,config_json TEXT)'),
@@ -127,6 +129,28 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
       expect(b.employee.registration).toBe('001');
       expect(b.employee.id).not.toBe(a.employee.id);
       expect(a.temporary_password).not.toBe(b.temporary_password);
+
+      const patchProfile=(id:string,body:object,token=tokenA,csrf='csrf-a')=>app.request('/api/company/employees/'+id,{
+        method:'PATCH',headers:{Cookie:'cr_jornada_company_dev='+token,'X-CSRF-Token':csrf,'Content-Type':'application/json'},
+        body:JSON.stringify(body)
+      },env);
+      const original=(await (await get(tokenA)).json() as any).employees[0];
+      const edited={full_name:'João Atualizado',job_title:'Supervisor',expected_updated_at:original.updated_at};
+      expect((await patchProfile(b.employee.id,edited)).status).toBe(404);
+      expect((await patchProfile(a.employee.id,edited,tokenA,'wrong')).status).toBe(403);
+      expect((await patchProfile(a.employee.id,{...edited,company_id:'co-b'})).status).toBe(400);
+      expect((await patchProfile(a.employee.id,edited)).status).toBe(200);
+      expect((await patchProfile(a.employee.id,edited)).status).toBe(409);
+      expect((await db.prepare('SELECT display_name FROM users WHERE employee_id=?').bind(a.employee.id).first<any>())?.display_name).toBe('João Atualizado');
+      expect((await db.prepare('SELECT full_name FROM employees WHERE id=?').bind(b.employee.id).first<any>())?.full_name).toBe('Maria da Empresa B');
+      const profileAudit=await db.prepare("SELECT details_json FROM audit_log WHERE action='company.employee.profile_updated'").all<any>();
+      expect(profileAudit.results).toHaveLength(1);
+      expect(JSON.parse(profileAudit.results[0].details_json)).toMatchObject({company_id:'co-a',admin_id:'admin-a',before:{full_name:'João da Empresa A'},after:{full_name:'João Atualizado'}});
+      await db.prepare("CREATE TRIGGER reject_profile_audit BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT,'test_audit_failure'); END").run();
+      const current=(await (await get(tokenA)).json() as any).employees[0];
+      expect((await patchProfile(a.employee.id,{...edited,full_name:'Não deve salvar',expected_updated_at:current.updated_at})).status).toBe(500);
+      expect((await db.prepare('SELECT full_name FROM employees WHERE id=?').bind(a.employee.id).first<any>())?.full_name).toBe('João Atualizado');
+      await db.prepare('DROP TRIGGER reject_profile_audit').run();
 
       const dbEmployees=await db.prepare(
         'SELECT id,company_id,registration,company_registration,cpf_encrypted,cpf_last4 FROM employees ORDER BY company_id'

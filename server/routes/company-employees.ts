@@ -126,7 +126,7 @@ companyEmployeesRoutes.post('/', async c=>{
   return c.json({
     success:true,company_id:company.id,
     employee:{id:employeeId,full_name:input.full_name,
-      registration:input.registration,status:'active'},
+      registration:input.registration,status:'active',job_title:input.job_title,updated_at:now},
     temporary_password:temporaryPassword,expires_at:expiresAt,
     must_change_password:true
   },201);
@@ -159,6 +159,7 @@ companyEmployeesRoutes.get('/', async (c) => {
         admission_date,
         employment_end,
         status,
+        updated_at,
         cpf_last4
       FROM employees
       WHERE company_id = ?
@@ -176,6 +177,46 @@ companyEmployeesRoutes.get('/', async (c) => {
     recovery_available: c.env.ENABLE_EMPLOYEE_PASSWORD_RECOVERY === 'true',
     registration_available: c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION === 'true'
   });
+});
+
+// Alterações cadastrais sem modificar CPF, vínculo ou jornadas históricas.
+companyEmployeesRoutes.patch('/:id', async c => {
+  ensure(c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION==='true',503,
+    'employee_edit_unavailable','A edição está em homologação.');
+  const company=c.get('company')!,adminId=c.get('companyAdminId')!;
+  const token=c.get('companyAdminTokenHash')!;
+  ensure(new URL(c.req.url).search==='',400,'invalid_employee','Filtros não são aceitos nesta operação.');
+  const parsed=z.object({full_name:z.string().trim().min(3).max(140),
+    job_title:z.string().trim().max(100),expected_updated_at:z.number().int().nonnegative()})
+    .strict().safeParse(await c.req.json().catch(()=>null));
+  ensure(parsed.success,400,'invalid_employee','Confira o nome e o cargo do funcionário.');
+  await limit(c,'employee-edit:'+company.id+':'+adminId,60,3600000);
+  const db=c.get('db'),employeeId=c.req.param('id');
+  const previous=await db.prepare('SELECT full_name,job_title,updated_at FROM employees WHERE id=? AND company_id=? AND deleted_at IS NULL')
+    .bind(employeeId,company.id).first<{full_name:string;job_title:string;updated_at:number}>();
+  ensure(previous,404,'employee_not_found','Funcionário não encontrado nesta empresa.');
+  const input=parsed.data;
+  ensure(previous.updated_at===input.expected_updated_at,409,'employee_edit_conflict',
+    'O cadastro foi alterado. Atualize a lista antes de editar novamente.');
+  const now=Date.now(),updatedAt=Math.max(now,previous.updated_at+1);
+  await atomicIdentityWrite(db,[
+    db.prepare(`UPDATE employees SET full_name=?,job_title=?,updated_at=?
+      WHERE id=? AND company_id=? AND deleted_at IS NULL AND updated_at=?
+      AND EXISTS(SELECT 1 FROM companies co WHERE co.id=employees.company_id AND co.status='active')
+      AND ${VALID_COMPANY_ADMIN_WRITE_SQL}`)
+      .bind(input.full_name,input.job_title,updatedAt,employeeId,company.id,previous.updated_at,
+        ...companyAdminWriteParams(token,adminId,company.id,now)),
+    db.prepare(`UPDATE users SET display_name=?,updated_at=? WHERE employee_id=? AND role='employee'
+      AND EXISTS(SELECT 1 FROM employees e WHERE e.id=users.employee_id AND e.company_id=?)`)
+      .bind(input.full_name,updatedAt,employeeId,company.id),
+    db.prepare(`INSERT INTO audit_log(id,actor_id,action,entity_type,entity_id,details_json,ip_hash,created_at)
+      VALUES(?,NULL,'company.employee.profile_updated','employee',?,?,?,?)`)
+      .bind(crypto.randomUUID(),employeeId,JSON.stringify({company_id:company.id,admin_id:adminId,
+        before:{full_name:previous.full_name,job_title:previous.job_title},
+        after:{full_name:input.full_name,job_title:input.job_title}}),ipHash(c),now)
+  ],'employee_edit_conflict');
+  return c.json({success:true,company_id:company.id,employee:{id:employeeId,
+    full_name:input.full_name,job_title:input.job_title,updated_at:updatedAt}});
 });
 
 // Recuperação assistida sem e-mail ou reutilização de acesso legado.

@@ -192,7 +192,8 @@ app.use('/api/*', async (c, next) => {
   // Somente o novo cadastro empresarial; o modulo ainda exige sessao,
   // CSRF, flag, isolamento SQL e auditoria antes de qualquer gravacao.
   const isCompanyEmployeeRegistration =
-    path === '/api/company/employees' && c.req.method === 'POST' &&
+    ((path === '/api/company/employees' && c.req.method === 'POST') ||
+      (/^\/api\/company\/employees\/[^/]+$/.test(path) && c.req.method === 'PATCH')) &&
     c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION === 'true';
 
   // Autenticacao empresarial obrigatoria; funcao desligada sem flag.

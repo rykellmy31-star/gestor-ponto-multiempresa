@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
-type Employee={id:string;full_name:string;registration:string;status:string};
+type Employee={id:string;full_name:string;registration:string;status:string;job_title?:string;updated_at?:number};
 type Result={company_id:string;employees:Employee[];
   recovery_available:boolean;registration_available?:boolean};
 type NewEmployee={full_name:string;registration:string;cpf:string;
@@ -13,7 +13,7 @@ type CreatedEmployee={
 const employeeCreateSchema=z.object({
   company_id:z.string(),
   employee:z.object({id:z.string(),full_name:z.string(),
-    registration:z.string(),status:z.string()}),
+    registration:z.string(),status:z.string(),job_title:z.string(),updated_at:z.number().int()}),
   temporary_password:z.string().regex(/^[a-f0-9]{24}$/),
   expires_at:z.number().int().positive(),must_change_password:z.literal(true)
 });
@@ -39,6 +39,11 @@ export function CompanyEmployeeAccess({
   const [newEmployee,setNewEmployee]=useState<NewEmployee>(emptyNewEmployee);
   const [creating,setCreating]=useState(false);
   const [created,setCreated]=useState<CreatedEmployee|null>(null);
+  const [editing,setEditing]=useState<Employee|null>(null);
+  const [editName,setEditName]=useState('');
+  const [editJob,setEditJob]=useState('');
+  const [editBusy,setEditBusy]=useState(false);
+  const [editUncertain,setEditUncertain]=useState(false);
   const active=useRef(true);
   useEffect(()=>{
     active.current=true;
@@ -113,6 +118,31 @@ export function CompanyEmployeeAccess({
     finally {if(active.current){setBusy(false);setPassword('');}}
   }
 
+  async function saveProfile(event:FormEvent) {
+    event.preventDefault();
+    if(!editing||editBusy||editUncertain||!Number.isSafeInteger(editing.updated_at))return;
+    setEditBusy(true);setError('');
+    try {
+      const response=await fetch('/api/company/employees/'+encodeURIComponent(editing.id),{
+        method:'PATCH',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+        body:JSON.stringify({full_name:editName,job_title:editJob,expected_updated_at:editing.updated_at})
+      });
+      if(response.status===401){onSessionExpired?.();return;}
+      const payload=await response.json().catch(()=>null);
+      const result=z.object({success:z.literal(true),company_id:z.string(),employee:z.object({
+        id:z.string(),full_name:z.string(),job_title:z.string(),updated_at:z.number().int()
+      })}).safeParse(payload);
+      if(!response.ok||!result.success||result.data.company_id!==companyId||result.data.employee.id!==editing.id)
+        throw new Error('A edição não foi confirmada. Atualize a lista antes de tentar novamente.');
+      if(active.current){
+        setData(prev=>prev?{...prev,employees:prev.employees.map(e=>e.id===editing.id?{...e,...result.data.employee}:e)}:prev);
+        setEditing(null);onEmployeeCreated?.();
+      }
+    }catch(err){if(active.current){setEditUncertain(true);setError(err instanceof Error?err.message:'Atualize a lista para confirmar o cadastro.');}}
+    finally{if(active.current)setEditBusy(false);}
+  }
+
   return <section className="company-schedules-card" aria-labelledby="employee-access-title">
     <h2 id="employee-access-title">Acesso dos funcionários</h2>
     <p>Cadastre e acompanhe os acessos dos funcionários desta empresa. Senhas provisórias são exibidas uma única vez.</p>
@@ -170,13 +200,28 @@ export function CompanyEmployeeAccess({
     {error&&<p role="alert" className="company-schedules-error">{error}</p>}
     {!data&&!error&&<p role="status">Consultando acessos…</p>}
     {data&&!data.recovery_available&&<p>A recuperação de acesso ainda não está disponível para esta empresa.</p>}
-    {data?.recovery_available&&!selected&&<div className="company-schedules-list">
-      {data.employees.filter(e=>e.status==='active').map(employee=><article key={employee.id} className="company-schedules-item">
+    {editing&&<form onSubmit={saveProfile} className="company-employee-registration">
+      <h3>Editar nome e cargo</h3>
+      <p>Esta alteração é auditada. CPF, matrícula, admissão, jornadas e marcações anteriores são preservados.</p>
+      <label>Nome completo<input required minLength={3} maxLength={140} value={editName} disabled={editBusy||editUncertain}
+        onChange={e=>setEditName(e.target.value)}/></label>
+      <label>Cargo<input maxLength={100} value={editJob} disabled={editBusy||editUncertain}
+        onChange={e=>setEditJob(e.target.value)}/></label>
+      <button type="submit" disabled={editBusy||editUncertain}>{editBusy?'Salvando…':'Salvar nome e cargo'}</button>
+      {editUncertain&&<button type="button" onClick={()=>window.location.reload()}>Atualizar lista</button>}
+      <button type="button" className="company-schedules-secondary" disabled={editBusy} onClick={()=>setEditing(null)}>Cancelar edição</button>
+    </form>}
+    {data&&!selected&&!editing&&<div className="company-schedules-list">
+      {data.employees.map(employee=><article key={employee.id} className="company-schedules-item">
         <strong>{employee.full_name}</strong>
         <p>Matrícula: {employee.registration}</p>
-        <button type="button" className="company-schedules-secondary" onClick={()=>{
+        <p>{employee.job_title||'Cargo não informado'}</p>
+        {data.registration_available&&Number.isSafeInteger(employee.updated_at)&&<button type="button" className="company-schedules-secondary" onClick={()=>{
+          setEditing(employee);setEditName(employee.full_name);setEditJob(employee.job_title||'');setError('');setEditUncertain(false);
+        }}>Editar nome e cargo</button>}
+        {data.recovery_available&&employee.status==='active'&&<button type="button" className="company-schedules-secondary" onClick={()=>{
           setSelected(employee);setPassword('');setError('');setRecovery(null);
-        }}>Redefinir acesso</button>
+        }}>Redefinir acesso</button>}
       </article>)}
       {!data.employees.some(e=>e.status==='active')&&<p>Nenhum funcionário ativo disponível.</p>}
     </div>}
