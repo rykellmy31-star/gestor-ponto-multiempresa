@@ -80,7 +80,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/vendas" element={<SalesPage/>}/>
           <Route path="/planos" element={<Navigate to="/vendas" replace/>}/>
           <Route path="/superadmin/vendas" element={<PlatformPage/>}/>
-          <Route path="/empresa" element={<Navigate to="/empresa/jornadas" replace/>}/>
+          <Route path="/empresa" element={<CompanySchedulesPage/>}/>
           <Route path="/empresa/entrar" element={<Navigate to="/admin/entrar" replace/>}/>
           <Route path="/empresa/jornadas" element={<CompanySchedulesPage/>}/>
           <Route path="/funcionario" element={<EmployeeCpfPage/>}/>
