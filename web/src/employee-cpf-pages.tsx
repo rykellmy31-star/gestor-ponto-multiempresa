@@ -118,6 +118,21 @@ export function EmployeeCpfPage() {
     setPassword('');
   }
 
+  // A logomarca e obtida da sessao autenticada e nunca por ID passado no navegador.
+  useEffect(()=>{
+    const companyId=session?.company.id;
+    if(!companyId||session?.user.must_change_password)return;
+    let active=true;
+    requestEmployee<{company:{id:string;name:string;logo_url:string|null;
+      primary_color:string;timezone:'America/Bahia'|'America/Sao_Paulo'}}>('/branding')
+      .then(result=>{
+        if(!active||result.company.id!==companyId)return;
+        setSession(previous=>previous?.company.id===companyId?
+          {...previous,company:{...previous.company,...result.company}}:previous);
+      }).catch(()=>{});
+    return ()=>{active=false;};
+  },[session?.company.id,session?.user.must_change_password]);
+
   useEffect(() => {
     let active = true;
     requestEmployee<EmployeeSession>('/session').then(data => {
