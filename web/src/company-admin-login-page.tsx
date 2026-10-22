@@ -23,7 +23,7 @@ export function CompanyAdminLoginPage() {
     let active = true;
     jsonRequest<CompanySession>('/company/auth/session')
       .then(() => {
-        if (active) navigate('/empresa/jornadas', { replace: true });
+        if (active) navigate('/empresa', { replace: true });
       })
       .catch(() => {})
       .finally(() => { if (active) setChecking(false); });
@@ -47,7 +47,7 @@ export function CompanyAdminLoginPage() {
       if (session.company.slug.toLowerCase() !== slug) {
         throw new Error('A empresa da sessão não corresponde à informada. Entre novamente.');
       }
-      navigate('/empresa/jornadas', { replace: true });
+      navigate('/empresa', { replace: true });
     } catch (err) {
       setError(err);
     } finally {
