@@ -43,10 +43,6 @@ export type CompanyAdminSession = {
   last_seen_at: number;
   token_hash: string;
   slug: string;
-  company_name: string;
-  company_logo_url: string | null;
-  company_primary_color: string;
-  company_timezone: string;
   must_change_password: number;
   temporary_password_expires_at: number | null;
 };
@@ -74,11 +70,7 @@ async function getSession(
       s.expires_at,
       s.last_seen_at,
       s.token_hash,
-      co.slug,
-      co.name AS company_name,
-      co.logo_url AS company_logo_url,
-      co.primary_color AS company_primary_color,
-      co.timezone AS company_timezone
+      co.slug
     FROM company_admin_sessions s
     JOIN company_admins a
       ON a.id = s.admin_id
@@ -343,11 +335,7 @@ companyAuthRoutes.get('/session', async c => {
 
     company: {
       id: session.company_id,
-      slug: session.slug,
-      name: session.company_name,
-      logo_url: session.company_logo_url,
-      primary_color: session.company_primary_color,
-      timezone: session.company_timezone
+      slug: session.slug
     },
 
     csrf_token: session.csrf_token,
@@ -355,6 +343,20 @@ companyAuthRoutes.get('/session', async c => {
     expires_at: session.expires_at,
     server_now: Date.now()
   });
+});
+
+// Marca do tenant: consulta separada para nao modificar contratos de login ja homologados.
+companyAuthRoutes.get('/branding',async c=>{
+  const session=await getSession(c);
+  ensure(session,401,'unauthenticated','Entre na sua empresa.');
+  const company=await c.get('db').prepare(
+    "SELECT id,name,logo_url,primary_color,timezone FROM companies WHERE id=? AND status='active'"
+  ).bind(session.company_id).first<{
+    id:string;name:string;logo_url:string|null;primary_color:string;timezone:string
+  }>();
+  ensure(company,401,'unauthenticated','Sua empresa nao esta ativa.');
+  c.header('Cache-Control','private, no-store');
+  return c.json({company});
 });
 
 // ENCERRAR SESSAO EMPRESARIAL
