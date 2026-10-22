@@ -661,6 +661,7 @@ export function PlatformPage() {
   const archivedCount = companies.filter(
     company => company.status === 'archived'
   ).length;
+  const registeredCount = activeCount + suspendedCount;
 
   if (loading) {
     return (
@@ -851,9 +852,9 @@ export function PlatformPage() {
           <article className="platform-stat">
             <span>Empresas cadastradas</span>
             <strong>
-              {companiesLoading ? '...' : companies.length}
+              {companiesLoading ? '...' : registeredCount}
             </strong>
-            <small>Total de cadastros, incluindo arquivadas</small>
+            <small>Empresas ativas e suspensas; excluídas à parte</small>
           </article>
 
           <article className="platform-stat">

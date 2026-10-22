@@ -718,6 +718,10 @@ try {
       await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
       await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
       const row=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
+      const registeredMetric=page.locator('.platform-stat').filter({hasText:'Empresas cadastradas'});
+      const archivedMetric=page.locator('.platform-stat').filter({hasText:'Empresas excluídas'});
+      const registeredBefore=Number(await registeredMetric.locator('strong').innerText());
+      const archivedBefore=Number(await archivedMetric.locator('strong').innerText());
       const archiveButton=row.getByRole('button',{name:'Excluir cadastro',exact:true});
       verify(await archiveButton.isEnabled(),'botao de exclusao esta disponivel para empresa ativa');
       const archiveResponsePromise=page.waitForResponse(response=>
@@ -730,6 +734,15 @@ try {
       verify(archiveResponse.status()===200,
         'API do painel confirma exclusao logica: HTTP '+archiveResponse.status());
       await row.waitFor({state:'detached'});
+      await page.waitForFunction(expected=>{
+        const card=[...document.querySelectorAll('.platform-stat')].find(el=>el.textContent.includes('Empresas cadastradas'));
+        return card?.querySelector('strong')?.textContent?.trim()===String(expected);
+      },registeredBefore-1);
+      await page.waitForFunction(expected=>{
+        const card=[...document.querySelectorAll('.platform-stat')].find(el=>el.textContent.includes('Empresas excluídas'));
+        return card?.querySelector('strong')?.textContent?.trim()===String(expected);
+      },archivedBefore+1);
+      verify(true,'contador de cadastradas diminui e o de excluidas aumenta apos arquivar');
       await page.getByLabel('Filtrar empresas por situação',{exact:true}).selectOption('archived');
       const archivedRow=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
       await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
