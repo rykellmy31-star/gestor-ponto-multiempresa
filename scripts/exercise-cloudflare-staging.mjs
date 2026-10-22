@@ -724,9 +724,16 @@ try {
         if(dialog.type()==='prompt')await dialog.accept(a.name);
         else await dialog.accept();
       });
+      const archiveResponsePromise=page.waitForResponse(response=>
+        new URL(response.url()).pathname===`/api/platform/companies/${a.id}/archive`);
       await row.getByRole('button',{name:'Excluir cadastro',exact:true}).click();
+      const archiveResponse=await archiveResponsePromise;
+      verify(archiveResponse.status()===200,
+        'API do painel confirma exclusao logica: HTTP '+archiveResponse.status());
+      await row.waitFor({state:'detached'});
       await page.getByLabel('Filtrar empresas por situação',{exact:true}).selectOption('archived');
       const archivedRow=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
+      await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
       await archivedRow.getByText('Arquivada',{exact:true}).waitFor();
       verify(true,'Superadmin exclui empresa suspensa pelo painel e encontra o cadastro preservado em Arquivadas');
     } finally {await context.close();}
