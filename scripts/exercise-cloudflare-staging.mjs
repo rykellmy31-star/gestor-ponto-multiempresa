@@ -707,7 +707,35 @@ try {
   const expectedAssignmentDates=[today,DateTime.fromISO(today,{zone:'utc'}).plus({days:1}).toISODate(),'2026-10-26','2026-10-27'].sort();
   verify(assignments.length===4&&JSON.stringify(assignments.map(row=>row.effective_from))===JSON.stringify(expectedAssignmentDates),
     'D1 confirma quatro atribuicoes, incluindo a alteracao feita pela aba funcionarios sem perder o historico');
-  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, visao geral, escala do funcionario e arquivo de modelos, solicitacoes e pesquisa de humor por empresa, apuracao provisoria com snapshots, login visual Superadmin/funcionario e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
+  await root.call('/api/platform/companies/' + a.id + '/status', {method:'PATCH',body:{status:'suspended'}});
+  const platformArchiveBrowser=await chromium.launch({headless:true});
+  try {
+    const context=await platformArchiveBrowser.newContext();
+    try {
+      const page=await context.newPage();
+      await page.goto(STAGING_ORIGIN+'/superadmin');
+      await page.getByLabel('Usuário',{exact:true}).fill('qa-staging');
+      await page.getByLabel('Senha',{exact:true}).fill(qaPassword);
+      await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
+      const row=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
+      const archiveDialogs=page;
+      archiveDialogs.on('dialog',async dialog=>{
+        if(dialog.type()==='prompt')await dialog.accept(a.name);
+        else await dialog.accept();
+      });
+      await row.getByRole('button',{name:'Excluir cadastro',exact:true}).click();
+      await page.getByLabel('Filtrar empresas por situação',{exact:true}).selectOption('archived');
+      const archivedRow=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
+      await archivedRow.getByText('Arquivada',{exact:true}).waitFor();
+      verify(true,'Superadmin exclui empresa suspensa pelo painel e encontra o cadastro preservado em Arquivadas');
+    } finally {await context.close();}
+  } finally {await platformArchiveBrowser.close();}
+  const archivedCompany=(await root.call('/api/platform/companies/'+a.id)).company;
+  verify(archivedCompany.status==='archived','API confirma arquivamento da empresa QA sem apagar seu cadastro');
+  const preservedArchive=await query('SELECT COUNT(*) AS total FROM employees WHERE company_id=?',[a.id]);
+  verify(preservedArchive[0].total===1,'arquivamento preserva os dados de funcionarios ficticios');
+  const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, visao geral, escala do funcionario e arquivo de modelos, solicitacoes e pesquisa de humor por empresa, apuracao provisoria com snapshots, login visual Superadmin/funcionario, suspensao e exclusao logica com preservacao do historico. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, report);
 } catch (error) {

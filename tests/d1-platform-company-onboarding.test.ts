@@ -471,6 +471,52 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect((await preservedB.json() as any).company).toMatchObject({
         name:'Empresa Fictícia B',status:'archived'
       });
+      // Excluir do cadastro operacional arquiva (sem apagar) e só é
+      // permitido após suspender, confirmar nome exato e validar CSRF.
+      const archiveWhileActive=await call('/api/platform/companies/'+companyA.id+'/archive',
+        'POST',{confirm_name:companyA.name},superCookie,csrf);
+      expect(archiveWhileActive.status).toBe(409);
+      expect((await archiveWhileActive.json() as any).error.code)
+        .toBe('company_must_be_suspended');
+      expect((await call('/api/platform/companies/'+companyA.id+'/archive',
+        'POST',{confirm_name:companyA.name},superCookie,'csrf-invalido')).status)
+        .toBe(403);
+      expect((await call('/api/platform/companies/'+companyA.id+'/status',
+        'PATCH',{status:'suspended'},superCookie,csrf)).status).toBe(200);
+      const companyAName=(await db.prepare('SELECT name FROM companies WHERE id=?')
+        .bind(companyA.id).first<{name:string}>())?.name;
+      const wrongArchiveName=await call('/api/platform/companies/'+companyA.id+'/archive',
+        'POST',{confirm_name:'Outra empresa'},superCookie,csrf);
+      expect(wrongArchiveName.status).toBe(409);
+      expect((await wrongArchiveName.json() as any).error.code)
+        .toBe('confirmation_mismatch');
+      const archived=await call('/api/platform/companies/'+companyA.id+'/archive',
+        'POST',{confirm_name:companyAName},superCookie,csrf);
+      expect(archived.status, await archived.clone().text()).toBe(200);
+      expect(await archived.json()).toMatchObject({
+        success:true,status:'archived',data_preserved:true
+      });
+      expect((await call('/api/platform/companies/'+companyA.id+'/archive',
+        'POST',{confirm_name:companyA.name},superCookie,csrf)).status).toBe(409);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,finalCookie)).status).toBe(401);
+      expect((await call('/api/company/auth/session','GET',
+        undefined,cookieB)).status).toBe(401);
+      const archivedCompany=await db.prepare(
+        'SELECT id,name,status FROM companies WHERE id=?'
+      ).bind(companyA.id).first<any>();
+      expect(archivedCompany).toEqual({
+        id:companyA.id,name:companyAName,status:'archived'
+      });
+      expect((await db.prepare(
+        'SELECT COUNT(*) AS total FROM company_admins WHERE company_id=?'
+      ).bind(companyA.id).first<any>()).total).toBe(2);
+      expect((await db.prepare(
+        'SELECT COUNT(*) AS total FROM company_admin_sessions WHERE company_id=?'
+      ).bind(companyA.id).first<any>()).total).toBe(0);
+      expect((await db.prepare(
+        'SELECT COUNT(*) AS total FROM company_admin_sessions WHERE company_id=?'
+      ).bind(companyB.id).first<any>()).total).toBe(1);
       const events=await db.prepare(
         'SELECT action,entity_type,entity_id,details_json FROM platform_audit_log ORDER BY created_at,id'
       ).all<any>();
@@ -486,7 +532,14 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(accessEvents.every(x=>x.entity_id===thirdId)).toBe(true);
       expect(accessEvents.every(x=>JSON.parse(x.details_json).company_id===companyA.id))
         .toBe(true);
-      expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(2);
+      expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(3);
+      const companyArchiveEvents=events.results!.filter(
+        x=>x.action==='company.archived'&&x.entity_id===companyA.id
+      );
+      expect(companyArchiveEvents).toHaveLength(1);
+      expect(JSON.parse(companyArchiveEvents[0].details_json)).toMatchObject({
+        name:companyAName,previous_status:'suspended',new_status:'archived',data_preserved:true
+      });
       expect(JSON.stringify(events.results)).not.toContain(managerPass);
       expect(JSON.stringify(events.results)).not.toContain(managerNew);
       expect(JSON.stringify(events.results)).not.toContain(resetData.temporary_password);

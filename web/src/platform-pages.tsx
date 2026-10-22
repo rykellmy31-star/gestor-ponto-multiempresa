@@ -255,6 +255,7 @@ export function PlatformPage() {
 
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
+  const [companyView, setCompanyView] = useState<'operational'|'archived'|'all'>('operational');
 
   const [managingCompany, setManagingCompany] = useState<Company | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -598,7 +599,52 @@ export function PlatformPage() {
     }
   }
 
+  async function archiveCompany(company: Company) {
+    if (!session || company.status !== 'suspended') return;
+    const confirmed = window.confirm(
+      `Excluir "${company.name}" do cadastro operacional?\n\nA empresa será arquivada e não poderá mais acessar o sistema. Os registros e históricos serão preservados.`
+    );
+    if (!confirmed) return;
+    const typedName = window.prompt(
+      `Para confirmar, digite exatamente o nome da empresa:\n${company.name}`
+    );
+    if (typedName === null) return;
+    setChangingId(company.id);
+    setCompaniesError('');
+    setNotice('');
+    try {
+      const response = await fetch(
+        `/api/platform/companies/${company.id}/archive`,
+        {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': session.csrf_token
+          },
+          body: JSON.stringify({confirm_name: typedName})
+        }
+      );
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(
+          response, 'Não foi possível excluir a empresa do cadastro.'
+        ));
+      }
+      setCompanyView('operational');
+      setNotice(`"${company.name}" foi excluída do cadastro operacional. Os dados foram preservados.`);
+      await loadCompanies();
+    } catch (err) {
+      setCompaniesError(err instanceof Error
+        ? err.message
+        : 'Erro ao excluir empresa do cadastro.');
+    } finally {
+      setChangingId(null);
+    }
+  }
+
   const filteredCompanies = companies.filter(company => {
+    if (companyView === 'operational' && company.status === 'archived') return false;
+    if (companyView === 'archived' && company.status !== 'archived') return false;
     const term = search.toLowerCase().trim();
 
     return (
@@ -614,6 +660,9 @@ export function PlatformPage() {
 
   const suspendedCount = companies.filter(
     company => company.status === 'suspended'
+  ).length;
+  const archivedCount = companies.filter(
+    company => company.status === 'archived'
   ).length;
 
   if (loading) {
@@ -807,7 +856,7 @@ export function PlatformPage() {
             <strong>
               {companiesLoading ? '...' : companies.length}
             </strong>
-            <small>Total de cadastros</small>
+            <small>Total de cadastros, incluindo arquivadas</small>
           </article>
 
           <article className="platform-stat">
@@ -824,6 +873,11 @@ export function PlatformPage() {
               {companiesLoading ? '...' : suspendedCount}
             </strong>
             <small>Cadastros suspensos</small>
+          </article>
+          <article className="platform-stat">
+            <span>Empresas excluídas</span>
+            <strong>{companiesLoading ? '...' : archivedCount}</strong>
+            <small>Arquivadas com dados preservados</small>
           </article>
         </div>
 
@@ -911,6 +965,17 @@ export function PlatformPage() {
                 }}
               />
             </div>
+
+            <select
+              aria-label="Filtrar empresas por situação"
+              value={companyView}
+              onChange={event => setCompanyView(event.target.value as typeof companyView)}
+              style={{padding:'10px 12px',borderRadius:10,minWidth:190}}
+            >
+              <option value="operational">Ativas e suspensas</option>
+              <option value="archived">Excluídas / arquivadas</option>
+              <option value="all">Todas as empresas</option>
+            </select>
 
             <button
               type="button"
@@ -1119,6 +1184,27 @@ export function PlatformPage() {
                             ? 'Ativar'
                             : 'Arquivada'}
                     </button>
+
+                    {company.status !== 'archived' && (
+                      <button
+                        type="button"
+                        onClick={() => void archiveCompany(company)}
+                        disabled={changingId === company.id || company.status !== 'suspended'}
+                        title={company.status === 'suspended'
+                          ? 'Excluir do cadastro operacional e preservar os históricos'
+                          : 'Suspenda a empresa antes de excluí-la do cadastro'}
+                        style={{
+                          padding: '9px 12px',
+                          borderRadius: 9,
+                          cursor: company.status === 'suspended' ? 'pointer' : 'not-allowed',
+                          color: '#991b1b',
+                          border: '1px solid #fecaca',
+                          background: '#fff7f7'
+                        }}
+                      >
+                        {changingId === company.id ? 'Aguarde...' : 'Excluir cadastro'}
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -1129,7 +1215,11 @@ export function PlatformPage() {
             companies.length > 0 &&
             filteredCompanies.length === 0 && (
               <p>
-                Nenhuma empresa corresponde à pesquisa.
+                {companyView === 'operational' && archivedCount === companies.length
+                  ? 'Não há empresas em operação. Consulte as empresas excluídas / arquivadas para ver os cadastros preservados.'
+                  : companyView === 'archived' && archivedCount === 0
+                    ? 'Nenhuma empresa foi excluída do cadastro.'
+                    : 'Nenhuma empresa corresponde à pesquisa.'}
               </p>
             )}
         </section>

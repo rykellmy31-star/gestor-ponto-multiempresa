@@ -463,6 +463,57 @@ platformCompaniesRoutes.patch('/:id/status', async c => {
   });
 });
 
+// Excluir do cadastro operacional sem apagar o historico empresarial.
+// A empresa precisa estar suspensa, e a confirmacao exige o nome exato.
+const archiveCompanySchema = z.object({
+  confirm_name: z.string().trim().min(2).max(150)
+}).strict();
+
+platformCompaniesRoutes.post('/:id/archive', async c => {
+  const admin = await requirePlatformAdmin(c, true);
+  const id = c.req.param('id');
+  const parsed = archiveCompanySchema.safeParse(
+    await c.req.json().catch(() => null)
+  );
+  ensure(parsed.success, 400, 'invalid_confirmation',
+    'Informe o nome exato da empresa para confirmar a exclusao do cadastro.');
+
+  const db = c.get('db');
+  const existing = await db.prepare(`
+    SELECT id, name, status FROM companies WHERE id = ?
+  `).bind(id).first<{id:string;name:string;status:string}>();
+  ensure(existing, 404, 'company_not_found', 'Empresa nao encontrada.');
+  ensure(existing.status !== 'archived', 409, 'company_archived',
+    'Esta empresa ja foi excluida do cadastro operacional.');
+  ensure(existing.status === 'suspended', 409, 'company_must_be_suspended',
+    'Suspenda a empresa antes de exclui-la do cadastro.');
+  ensure(parsed.data.confirm_name === existing.name, 409, 'confirmation_mismatch',
+    'O nome informado nao corresponde ao cadastro da empresa.');
+
+  const now = Date.now();
+  await companyAdminWrite(db, [
+    db.prepare(`
+      UPDATE companies SET status = 'archived', updated_at = ?
+      WHERE id = ? AND name = ? AND status = 'suspended'
+    `).bind(now, id, existing.name),
+    db.prepare('DELETE FROM company_admin_sessions WHERE company_id = ?').bind(id),
+    db.prepare('DELETE FROM employee_company_sessions WHERE company_id = ?').bind(id),
+    db.prepare(`
+      INSERT INTO platform_audit_log (
+        id, actor_id, action, entity_type, entity_id, details_json, created_at
+      ) VALUES (?, ?, 'company.archived', 'company', ?, ?, ?)
+    `).bind(crypto.randomUUID(), admin.id, id, JSON.stringify({
+      name: existing.name,
+      previous_status: existing.status,
+      new_status: 'archived',
+      data_preserved: true
+    }), now)
+  ], 'company_archive_conflict');
+
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({success:true,status:'archived',data_preserved:true});
+});
+
 
 // CR JORNADA: cadastro de administradores vinculados a uma empresa.
 // A autenticação destes administradores será habilitada apenas após
