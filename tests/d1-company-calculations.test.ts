@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { DateTime } from 'luxon';
 import { Miniflare,convertV4MiniflareOptions } from 'miniflare';
 import server from '../server/index';
+import { closureReadiness } from '../server/routes/company-closures';
 import { sha256,hashPassword } from '../server/core/crypto';
 import { DEFAULT_RULES } from '../server/core/calculations';
 const at=(date:string,time:string)=>DateTime.fromISO(date+'T'+time,{zone:'America/Bahia'}).toMillis();
@@ -122,6 +123,10 @@ print(json.dumps(files))
       expect((await closureGet('eb')).status).toBe(404);
       const preview=await (await closureGet()).json() as any;
       expect(preview.problems).toEqual([]);
+      const incompleteOriginal=structuredClone(preview.report);
+      const originalDay=incompleteOriginal.days.find((d:any)=>d.date==='2026-09-01');
+      originalDay.result.raw_marks[3]=null;originalDay.result.adjusted=true;
+      expect(closureReadiness(incompleteOriginal)).toContain('Existem turnos originais incompletos; confira o fluxo de ponto antes de fechar.');
       const closeBody={employee_id:'ea2',month:'2026-09',state:'closed',expected_revision:0,expected_source_version:preview.report.source_version,reason:'Conferencia ficticia do fechamento mensal',current_password:'Closure-QA!123'};
       expect((await closurePost(closeBody,'invalid')).status).toBe(403);
       expect((await closurePost({...closeBody,current_password:'wrong'})).status).toBe(403);

@@ -30,6 +30,7 @@ export function closureReadiness(data:Awaited<ReturnType<typeof loadCompanyCalcu
   if(data.coverage.review_days>0)problems.push('Existem dias sem histórico suficiente; faça a conciliação antes de fechar.');
   if(data.coverage.future_days>0)problems.push('Existem datas futuras.');
   if(data.days.some(d=>d.result&&(d.result.incomplete||['working','on_break','not_started'].includes(d.result.status))))problems.push('Existem dias abertos ou incompletos.');
+  if(data.days.some(d=>{const n=d.result?.raw_marks.filter(m=>m!==null).length??0;return n>0&&n<4;}))problems.push('Existem turnos originais incompletos; confira o fluxo de ponto antes de fechar.');
   if(data.totals.overtime_pending_minutes>0||data.totals.pending_occurrences>0)problems.push('Existem horas extras ou ocorrências pendentes de decisão.');
   if(data.coverage.calculated_days===0)problems.push('Não há dias calculados neste período.');
   return problems;
