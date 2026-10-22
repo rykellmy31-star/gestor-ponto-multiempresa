@@ -26,8 +26,10 @@ function EmployeeWeek({companyId,employeeId,timezone}:{
   useEffect(()=>{
     const ctrl=new AbortController();
     const today=new Date();
-    const local=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,
-      year:'numeric',month:'2-digit',day:'2-digit'}).format(today);
+    const parts=new Intl.DateTimeFormat('en-US',{timeZone:timezone,
+      year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(today);
+    const value=(key:string)=>parts.find(p=>p.type===key)?.value||'';
+    const local=value('year')+'-'+value('month')+'-'+value('day');
     const [year,month,day]=local.split('-').map(Number);
     const current=new Date(Date.UTC(year,month-1,day));
     const weekday=(current.getUTCDay()+6)%7;
