@@ -79,3 +79,96 @@ companyAttendanceRoutes.get('/attendance', async c => {
   }
   return c.json({success:true,company_id:company.id,employee,month,rows});
 });
+
+
+// Dashboard classico com dados do tenant autenticado. Rotas antigas continuam isoladas.
+companyAttendanceRoutes.get('/overview',async c=>{
+  const company=c.get('company'),admin=c.get('companyAdminId'),token=c.get('companyAdminTokenHash');
+  ensure(company&&admin&&token,401,'unauthenticated','Entre na empresa.');
+  ensure(Object.entries(c.req.queries()).every(([key,values])=>
+    ['date','month'].includes(key)&&values.length===1),
+    400,'invalid_overview_query','Confira os filtros.');
+  const date=c.req.query('date')||'',month=c.req.query('month')||'';
+  const chosen=DateTime.fromISO(date,{zone:'utc'});
+  ensure(/^\d{4}-\d{2}-\d{2}$/.test(date)&&chosen.isValid&&chosen.toISODate()===date&&
+    /^20\d{2}-(0[1-9]|1[0-2])$/.test(month),
+    400,'invalid_overview_query','Informe data e mês válidos.');
+  const start=DateTime.fromISO(month+'-01',{zone:'utc'});
+  ensure(start.isValid,400,'invalid_overview_query','Mês inválido.');
+  const db=c.get('db'),now=Date.now();
+  const auth=companyAdminWriteParams(token,admin,company.id,now);
+  type EmployeeRow={id:string;full_name:string;registration:string;status:string;next_seq:number|null;
+    timezone:string|null;seq:number|null;recorded_at:number|null};
+  type MonthRow={work_date:string;employee_id:string;seq:number|null;recorded_at:number|null};
+  // Em ambas consultas, a empresa vem apenas da sessao e a autenticacao e revalidada no SQL.
+  const [today,period]=await db.batch([
+    db.prepare('SELECT e.id,e.full_name,'+
+      'COALESCE(e.company_registration,e.registration) AS registration,'+
+      'e.status,d.next_seq,d.timezone,p.seq,p.recorded_at '+
+      'FROM employees e JOIN companies co ON co.id=e.company_id AND co.status=\'active\' '+
+      'LEFT JOIN work_days d ON d.employee_id=e.id AND d.company_id=e.company_id AND d.work_date=? '+
+      'LEFT JOIN punches p ON p.work_day_id=d.id AND p.employee_id=e.id '+
+      'WHERE e.company_id=? AND e.deleted_at IS NULL AND '+VALID_COMPANY_ADMIN_WRITE_SQL+
+      ' ORDER BY e.full_name,p.seq LIMIT 4000').bind(date,company.id,...auth),
+    db.prepare('SELECT d.work_date,d.employee_id,p.seq,p.recorded_at '+
+      'FROM work_days d JOIN employees e ON e.id=d.employee_id AND e.company_id=d.company_id '+
+      'JOIN companies co ON co.id=e.company_id AND co.status=\'active\' '+
+      'LEFT JOIN punches p ON p.work_day_id=d.id AND p.employee_id=e.id '+
+      'WHERE d.company_id=? AND d.work_date>=? AND d.work_date<? '+
+      'AND e.deleted_at IS NULL AND '+VALID_COMPANY_ADMIN_WRITE_SQL+
+      ' ORDER BY d.work_date,d.employee_id,p.seq LIMIT 4000')
+      .bind(company.id,start.toISODate(),start.plus({months:1}).toISODate(),...auth)
+  ]);
+  const employees=(today.results||[]) as EmployeeRow[];
+  const marks=(period.results||[]) as MonthRow[];
+  ensure(employees.length<4000&&marks.length<4000,409,'overview_limit',
+    'O volume exige consulta por lotes.');
+  function worked(times:(number|null)[]):number {
+    const first=times[0]!=null&&times[1]!=null?Math.max(0,times[1]!-times[0]!):0;
+    const second=times[2]!=null&&times[3]!=null?Math.max(0,times[3]!-times[2]!):0;
+    // Nunca presume tempo aberto, retroativo ou sem os pares de batidas confirmados.
+    return Math.floor((first+second)/60000);
+  }
+  const people=new Map<string,{employee:{id:string;full_name:string;registration:string};
+    day:{status:string;timezone:string;marks:(number|null)[];worked_minutes:number;next_seq:number}}>();
+  for(const item of employees){
+    let entry=people.get(item.id);
+    if(!entry){
+      const seq=item.next_seq??0;
+      entry={employee:{id:item.id,full_name:item.full_name,registration:item.registration},
+        day:{status:item.status!=='active'?'inactive':seq===4?'completed':
+          seq===2?'on_break':seq===1||seq===3?'working':'not_started',
+          timezone:item.timezone||'America/Sao_Paulo',marks:[null,null,null,null],
+          worked_minutes:0,next_seq:seq}};
+      people.set(item.id,entry);
+    }
+    if(item.seq!==null&&item.seq>=0&&item.seq<=3)
+      entry.day.marks[item.seq]=item.recorded_at;
+  }
+  const rows=[...people.values()].map(item=>{
+    item.day.worked_minutes=worked(item.day.marks);return item;
+  });
+  const active=rows.filter(item=>item.day.status!=='inactive').length;
+  const days=new Map<string,Map<string,(number|null)[]>>();
+  for(const item of marks){
+    let day=days.get(item.work_date);
+    if(!day){day=new Map();days.set(item.work_date,day);}
+    let times=day.get(item.employee_id);
+    if(!times){times=[null,null,null,null];day.set(item.employee_id,times);}
+    if(item.seq!==null&&item.seq>=0&&item.seq<=3)times[item.seq]=item.recorded_at;
+  }
+  const trend=[] as Array<{date:string;worked_minutes:number}>;
+  for(let d=start;d<start.plus({months:1});d=d.plus({days:1})){
+    const day=days.get(d.toISODate()!);
+    trend.push({date:d.toISODate()!,worked_minutes:day?
+      [...day.values()].reduce((sum,t)=>sum+worked(t),0):0});
+  }
+  const entered=rows.filter(r=>r.day.next_seq>0&&r.day.status!=='inactive').length;
+  const countStatus=(status:string)=>rows.filter(r=>r.day.status===status).length;
+  c.header('Cache-Control','private, no-store');
+  return c.json({company_id:company.id,date,month,rows,trend,
+    counts:{active_employees:active,entered,not_entered:Math.max(0,active-entered),
+      on_break:countStatus('on_break'),completed:countStatus('completed'),
+      incomplete:null,late_employees:null,pending:null,
+      worked_minutes:trend.reduce((sum,d)=>sum+d.worked_minutes,0)}});
+});
