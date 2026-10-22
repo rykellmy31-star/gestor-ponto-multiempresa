@@ -61,6 +61,8 @@ export type ActiveSession = {
   company_name: string;
   company_slug: string;
   company_timezone: 'America/Bahia' | 'America/Sao_Paulo';
+  company_logo_url: string | null;
+  company_primary_color: string;
   display_name: string;
   csrf_token: string;
   token_hash: string;
@@ -137,7 +139,8 @@ export async function getEmployeeCpfSession(c: Ctx): Promise<ActiveSession | nul
       s.user_id, s.employee_id, s.company_id, s.csrf_token,
       s.token_hash, s.expires_at, s.last_seen_at,
       u.display_name, u.must_change_password,
-      co.name AS company_name, co.slug AS company_slug, co.timezone AS company_timezone
+      co.name AS company_name, co.slug AS company_slug, co.timezone AS company_timezone,
+      co.logo_url AS company_logo_url, co.primary_color AS company_primary_color
     FROM employee_company_sessions s
     JOIN users u
       ON u.id = s.user_id AND u.employee_id = s.employee_id
@@ -361,7 +364,8 @@ employeeCpfAuthRoutes.get('/session', async c => {
     },
     company: {
       id: session.company_id, name: session.company_name,
-      slug: session.company_slug, timezone: session.company_timezone
+      slug: session.company_slug, timezone: session.company_timezone,
+      logo_url: session.company_logo_url, primary_color: session.company_primary_color
     },
     csrf_token: session.csrf_token,
     expires_at: session.expires_at,
