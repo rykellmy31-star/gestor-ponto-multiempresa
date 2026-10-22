@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { DateTime } from 'luxon';
-import type { App } from '../types';
+import type { App,Ctx } from '../types';
 import { ensure } from '../core/errors';
 import { requireCompanyAdmin } from './company-auth';
 import { VALID_COMPANY_ADMIN_WRITE_SQL,companyAdminWriteParams } from '../core/company-admin-write-guard';
@@ -10,19 +10,9 @@ import { companyCalculationStatuses } from '../../shared/company-calculation-sta
 import { csvCell } from './company-attendance';
 import type { CompanyDayEvent } from '../../shared/company-day-events';
 
-export const companyCalculationsRoutes=new Hono<App>();
-companyCalculationsRoutes.use('*',requireCompanyAdmin);
-companyCalculationsRoutes.get('/calculations',async c=>{
-  ensure(c.env.ENABLE_COMPANY_SCHEDULES==='true',503,'company_reports_unavailable','Apuração ainda em homologação.');
-  ensure(Object.entries(c.req.queries()).every(([key,values])=>
-    ['employee_id','month','format'].includes(key) && values.length===1),400,
-    'invalid_report_query','Confira os filtros da apuração.');
-  const employeeId=c.req.query('employee_id')??'',month=c.req.query('month')??'';
-  const format=c.req.query('format')??'json';
-  ensure(employeeId.length>0 && employeeId.length<=128 && /^20\d{2}-(0[1-9]|1[0-2])$/.test(month) &&
-    ['json','csv'].includes(format),400,'invalid_report_query','Selecione funcionário e mês válidos.');
+export async function loadCompanyCalculation(c:Ctx,employeeId:string,month:string,now=Date.now()) {
   const company=c.get('company')!,admin=c.get('companyAdminId')!,token=c.get('companyAdminTokenHash')!;
-  const now=Date.now(),db=c.get('db'),first=month+'-01';
+  const db=c.get('db'),first=month+'-01';
   const from=DateTime.fromISO(first,{zone:'utc'}),end=from.plus({months:1}).toISODate()!;
   const lower=from.minus({days:2}).toMillis(),upper=from.plus({months:1,days:2}).toMillis();
   // Each data query is scoped to the same employee/company AND revalidates
@@ -80,7 +70,8 @@ companyCalculationsRoutes.get('/calculations',async c=>{
       AND d.work_date>=? AND d.work_date<? AND ${owned}
       AND NOT EXISTS(SELECT 1 FROM company_day_events n WHERE n.company_id=d.company_id AND n.scope_key=d.scope_key
         AND n.work_date=d.work_date AND n.kind=d.kind AND n.revision>d.revision)
-      ORDER BY d.work_date,d.kind LIMIT 94`).bind(company.id,employeeId,first,end,...params)
+      ORDER BY d.work_date,d.kind LIMIT 94`).bind(company.id,employeeId,first,end,...params),
+    db.prepare('SELECT version FROM company_report_clock WHERE company_id=?').bind(company.id)
   ]);
   const employee=results[0].results[0] as unknown as {id:string;full_name:string;registration:string;
     admission_date:string;employment_end:string|null;timezone:string}|undefined;
@@ -96,6 +87,23 @@ companyCalculationsRoutes.get('/calculations',async c=>{
     punches:results[2].results as unknown as CalculationPunch[],
     schedules:results[3].results as unknown as CalculationSchedule[],
     policies:results[4].results as unknown as CalculationPolicy[],events:results[6].results as unknown as CompanyDayEvent[]});
+  return {company_id:company.id,employee,month,generated_at:now,provisional:true as const,
+    notice:'Confira ocorrências e feriados antes de usar estes valores no fechamento. Dias sem histórico suficiente não geram faltas presumidas.',...report,source_version:(results[7].results[0] as {version:number}).version};
+}
+
+export const companyCalculationsRoutes=new Hono<App>();
+companyCalculationsRoutes.use('*',requireCompanyAdmin);
+companyCalculationsRoutes.get('/calculations',async c=>{
+  ensure(c.env.ENABLE_COMPANY_SCHEDULES==='true',503,'company_reports_unavailable','Apuração ainda em homologação.');
+  ensure(Object.entries(c.req.queries()).every(([key,values])=>
+    ['employee_id','month','format'].includes(key) && values.length===1),400,
+    'invalid_report_query','Confira os filtros da apuração.');
+  const employeeId=c.req.query('employee_id')??'',month=c.req.query('month')??'';
+  const format=c.req.query('format')??'json';
+  ensure(employeeId.length>0 && employeeId.length<=128 && /^20\d{2}-(0[1-9]|1[0-2])$/.test(month) &&
+    ['json','csv'].includes(format),400,'invalid_report_query','Selecione funcionário e mês válidos.');
+  const data=await loadCompanyCalculation(c,employeeId,month);
+  const {employee,...report}=data;
   c.header('Cache-Control','private, no-store');
   if(format==='csv') {
     const lines=[['Apuração provisória — conferir ocorrências e feriados antes do fechamento'],
@@ -109,6 +117,5 @@ companyCalculationsRoutes.get('/calculations',async c=>{
     c.header('Content-Disposition',`attachment; filename="apuracao-${month}.csv"`);
     return c.body('\uFEFF'+lines.map(line=>line.map(csvCell).join(';')).join('\r\n')+'\r\n');
   }
-  return c.json({company_id:company.id,employee,month,generated_at:now,provisional:true,
-    notice:'Confira ocorrências e feriados antes de usar estes valores no fechamento. Dias sem histórico suficiente não geram faltas presumidas.',...report});
+  return c.json(data);
 });

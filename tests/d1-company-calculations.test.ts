@@ -3,10 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { DateTime } from 'luxon';
 import { Miniflare,convertV4MiniflareOptions } from 'miniflare';
 import server from '../server/index';
-import { sha256 } from '../server/core/crypto';
+import { sha256,hashPassword } from '../server/core/crypto';
 import { DEFAULT_RULES } from '../server/core/calculations';
 const at=(date:string,time:string)=>DateTime.fromISO(date+'T'+time,{zone:'America/Bahia'}).toMillis();
-describe('apuracao empresarial com 40 migrations reais no D1',()=>{
+describe('apuracao empresarial com 41 migrations reais no D1',()=>{
   it('isola dados, aplica snapshots, filtra cancelamentos e exige conciliacao de legado',async()=>{
     const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'test',modules:true,
       script:'export default {fetch(){return new Response("ok")}}',d1Databases:['DB']}]}));
@@ -27,7 +27,7 @@ for p in sorted(Path('migrations').glob('*.sql')):
   files.append(statements)
 print(json.dumps(files))
 `],{encoding:'utf8'})) as string[][];
-      expect(migrations).toHaveLength(40);
+      expect(migrations).toHaveLength(41);
       for(const statements of migrations)if(statements.length)await db.batch(statements.map(s=>db.prepare(s)));
       const token='a'.repeat(64),now=Date.now(),created=at('2026-09-01','00:00');
       const schedule={start:'07:00',break_start:'11:00',break_end:'12:00',end:'16:00',weekdays:[1,2,3,4,5],paid_break:false};
@@ -108,6 +108,44 @@ print(json.dumps(files))
       expect((await db.prepare("SELECT recorded_at FROM punches WHERE id='p0'").first<any>()).recorded_at).toBe(at('2026-10-05','07:12'));
       const eventsRead=await server.request('/api/company/day-events?employee_id=ea&month=2026-10',{headers:{Cookie:'cr_jornada_company_dev='+token}},env);
       expect(eventsRead.status).toBe(200);expect((await eventsRead.json() as any).events).toHaveLength(3);
+      // Close a fully covered past month, retaining prior snapshots on reopening.
+      await db.prepare("UPDATE employees SET admission_date='2026-09-01',employment_end='2026-09-30' WHERE id='ea2'").run();
+      await db.prepare("INSERT INTO schedule_assignments(id,employee_id,schedule_id,effective_from,created_at) VALUES('assign-a2-past','ea2','sa-afternoon','2026-09-01',?)").bind(created).run();
+      await db.prepare("UPDATE company_admins SET password_hash=? WHERE id='aa'").bind(await hashPassword('Closure-QA!123',env.AUTH_PEPPER)).run();
+      const closureGet=(employee='ea2',month='2026-09')=>server.request('/api/company/closures?employee_id='+employee+'&month='+month,{headers:{Cookie:'cr_jornada_company_dev='+token}},env);
+      const closurePost=(body:object,csrf='csrf')=>server.request('/api/company/closures',{method:'POST',headers:{Cookie:'cr_jornada_company_dev='+token,Origin:'http://localhost','X-CSRF-Token':csrf,'Content-Type':'application/json'},body:JSON.stringify(body)},env);
+      expect((await closureGet('eb')).status).toBe(404);
+      const preview=await (await closureGet()).json() as any;
+      expect(preview.problems).toEqual([]);
+      const closeBody={employee_id:'ea2',month:'2026-09',state:'closed',expected_revision:0,expected_source_version:preview.report.source_version,reason:'Conferencia ficticia do fechamento mensal',current_password:'Closure-QA!123'};
+      expect((await closurePost(closeBody,'invalid')).status).toBe(403);
+      expect((await closurePost({...closeBody,current_password:'wrong'})).status).toBe(403);
+      expect((await event({...holiday,work_date:'2026-09-02'})).status).toBe(201);
+      expect((await closurePost(closeBody)).status).toBe(409);
+      const freshPreview=await (await closureGet()).json() as any;
+      env.DB={withSession:()=>({prepare:(sql:string)=>db.prepare(sql),async batch(statements:any[]){
+        if(statements.length===3)await db.prepare("UPDATE employees SET job_title='Alterado durante fechamento' WHERE id='ea2'").run();
+        return db.batch(statements);
+      }})};
+      expect((await closurePost({...closeBody,expected_source_version:freshPreview.report.source_version})).status).toBe(409);
+      env.DB=binding;
+      const currentPreview=await (await closureGet()).json() as any;
+      const concurrent=await Promise.all([closurePost({...closeBody,expected_source_version:currentPreview.report.source_version}),closurePost({...closeBody,expected_source_version:currentPreview.report.source_version})]);
+      expect(concurrent.map(r=>r.status).sort()).toEqual([201,409]);
+      const closed=await (await closureGet()).json() as any;
+      expect(closed).toMatchObject({state:'closed',revision:1,report:{provisional:false}});
+      expect(closed.snapshot_hash).toHaveLength(64);
+      expect((await event({...holiday,work_date:'2026-09-03'})).status).toBe(409);
+      await expect(db.prepare("UPDATE company_monthly_closures SET reason='Indevido' WHERE employee_id='ea2'").run()).rejects.toThrow();
+      await expect(db.prepare("DELETE FROM company_monthly_closures WHERE employee_id='ea2'").run()).rejects.toThrow();
+      expect((await closurePost({...closeBody,state:'open',expected_revision:1})).status).toBe(201);
+      expect((await event({...holiday,work_date:'2026-09-03'})).status).toBe(201);
+      const reopened=await (await closureGet()).json() as any;
+      expect(reopened).toMatchObject({state:'open',revision:2});
+      expect((await closurePost({...closeBody,expected_revision:2,expected_source_version:reopened.report.source_version})).status).toBe(201);
+      const retained=await db.prepare("SELECT snapshot_hash FROM company_monthly_closures WHERE employee_id='ea2' AND revision=1").first<any>();
+      expect(retained.snapshot_hash).toBe(closed.snapshot_hash);
+      expect((await db.prepare("SELECT COUNT(*) n FROM company_monthly_closures WHERE employee_id='ea2'").first<any>()).n).toBe(3);
       env.DB={withSession:()=>({prepare:(sql:string)=>db.prepare(sql),async batch(statements:any[]){
         await db.prepare("UPDATE company_admins SET auth_version=1 WHERE id='aa'").run();
         return db.batch(statements);

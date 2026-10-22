@@ -65,10 +65,12 @@ companyDayEventsRoutes.post('/',async c=>{
       AND (? IS NULL OR EXISTS(SELECT 1 FROM employees e WHERE e.id=? AND e.company_id=? AND e.deleted_at IS NULL))
       AND NOT EXISTS(SELECT 1 FROM monthly_closures m JOIN employees e ON e.id=m.employee_id
         WHERE e.company_id=? AND m.month=substr(?,1,7) AND m.status='closed' AND (? IS NULL OR e.id=?))
+      AND NOT EXISTS(SELECT 1 FROM company_closed_periods c WHERE c.company_id=? AND c.month=substr(?,1,7) AND (? IS NULL OR c.employee_id=?))
       ${adjustmentGuard}`)
       .bind(id,co.id,employee,scopeKey,data.work_date,data.kind,data.expected_revision,JSON.stringify(data.value),data.reason,admin,now,
         co.id,scopeKey,data.work_date,data.kind,data.expected_revision,co.id,company.timezone,
         ...companyAdminWriteParams(token,admin,co.id,now),employee,employee,co.id,co.id,data.work_date,employee,employee,
+        co.id,data.work_date,employee,employee,
         ...(adjustmentGuard?[employee,co.id,data.work_date,company.timezone]:[]))],'day_event_conflict');
   }catch(error){
     if(error instanceof Error&&/day_event_revision_conflict|UNIQUE constraint/.test(error.message))throw new ApiError(409,'day_event_conflict','O tratamento foi alterado. Atualize os dados.');

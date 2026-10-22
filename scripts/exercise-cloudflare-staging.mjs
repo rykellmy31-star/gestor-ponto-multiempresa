@@ -502,6 +502,67 @@ try {
   await a.client.call(treatmentPath+'?employee_id='+b.employee.id+'&month='+treatmentMonth,{expected:404});
   const isolated=await a.client.call(treatmentPath+'?employee_id='+a.employee.id+'&month='+treatmentMonth);
   verify(isolated.events.length===0,'empresa A nao consulta tratamentos da empresa B');
+  // Past-month source fixture: synthetic historical marks, not server-time punches.
+  // Only staging's new fictitious company B is touched; close/reopen uses real UI/API.
+  const closureEmployee=randomUUID(),closureDay=randomUUID();
+  const historicalDate=DateTime.fromISO(today,{zone:'America/Bahia'}).minus({months:1}).startOf('month').toISODate();
+  const historicalMonth=historicalDate.slice(0,7);
+  const historicalMarks=['07:00','11:00','12:00','16:00'].map(t=>DateTime.fromISO(historicalDate+'T'+t,{zone:'America/Bahia'}).toMillis());
+  await query(`INSERT INTO employees(id,company_id,full_name,registration,company_registration,status,admission_date,employment_end,created_at,updated_at)
+    VALUES(?,?,'Funcionario ficticio de fechamento',?,?,'terminated',?,?,?,?)`,[closureEmployee,b.id,'qa-closure-'+tag,'FECH-'+tag,historicalDate,historicalDate,Date.now(),Date.now()]);
+  const baseRules=(await query('SELECT rules_json FROM work_days WHERE company_id=? AND employee_id=?',[b.id,b.employee.id]))[0].rules_json;
+  await query(`INSERT INTO work_days(id,employee_id,work_date,timezone,schedule_json,rules_json,company_id,created_at)
+    VALUES(?,?,?,'America/Bahia',?,?,?,?)`,[closureDay,closureEmployee,historicalDate,JSON.stringify({start:'07:00',break_start:'11:00',break_end:'12:00',end:'16:00',weekdays:[0,1,2,3,4,5,6],paid_break:false}),baseRules,b.id,historicalMarks[0]]);
+  for(let seq=0;seq<4;seq++)await query(`INSERT INTO punches(id,work_day_id,employee_id,seq,type,recorded_at,idempotency_key,ip_hash,receipt_hash)
+    VALUES(?,?,?,?,?,?,?,'qa-historical-fixture','qa-historical-fixture')`,[randomUUID(),closureDay,closureEmployee,seq,['entry','break_start','break_end','exit'][seq],historicalMarks[seq],randomUUID()]);
+  const closurePath='/api/company/closures?employee_id='+closureEmployee+'&month='+historicalMonth;
+  await a.client.call(closurePath,{expected:404});
+  const closurePreview=await b.client.call(closurePath);
+  verify(closurePreview.problems.length===0&&closurePreview.report.totals.worked_minutes===480,'mes historico ficticio tem cobertura completa para fechamento');
+  const closureRequest={employee_id:closureEmployee,month:historicalMonth,state:'closed',expected_revision:0,expected_source_version:closurePreview.report.source_version,
+    reason:'Conferencia ficticia de fechamento pelo gestor',current_password:finalPassword};
+  await b.client.call('/api/company/closures',{method:'POST',csrf:'invalid',body:closureRequest,expected:403});
+  await b.client.call('/api/company/closures',{method:'POST',body:{...closureRequest,current_password:'senha-incorreta'},expected:403});
+  const closureBrowser=await chromium.launch({headless:true});
+  try {
+    const context=await closureBrowser.newContext();
+    try {
+      const page=await context.newPage();await page.goto(STAGING_ORIGIN+'/admin/entrar');
+      await page.getByLabel('Identificador da empresa',{exact:true}).fill(b.slug);
+      await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
+      await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
+      await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      const panel=page.locator('section').filter({has:page.getByRole('heading',{name:'Fechamento mensal',exact:true})});
+      await panel.getByLabel('Funcionário do fechamento',{exact:true}).selectOption(closureEmployee);
+      await panel.getByLabel('Mês do fechamento',{exact:true}).fill(historicalMonth);
+      await panel.getByRole('button',{name:'Consultar fechamento',exact:true}).click();
+      await panel.getByText('Período aberto · revisão 0',{exact:true}).waitFor();
+      async function confirmPeriod(button,expected){
+        await panel.getByLabel('Justificativa do fechamento ou reabertura',{exact:true}).fill('Conferencia e reabertura ficticias na homologacao');
+        await panel.getByLabel('Senha para confirmar o período',{exact:true}).fill(finalPassword);
+        await panel.getByLabel('Conferi os dados e confirmo esta operação no período selecionado.',{exact:true}).check();
+        await panel.getByRole('button',{name:button,exact:true}).click();
+        await panel.getByText(expected,{exact:true}).waitFor();
+      }
+      await confirmPeriod('Confirmar fechamento do mês','Período fechado · revisão 1');
+      const frozen=await b.client.call(closurePath);
+      verify(frozen.report.provisional===false&&frozen.snapshot_hash.length===64,'snapshot real fechado possui identificacao SHA256');
+      await b.client.call('/api/company/closures',{method:'POST',body:closureRequest,expected:409});
+      const frozenEvent={kind:'occurrence',employee_id:closureEmployee,work_date:historicalDate,expected_revision:0,
+        reason:'Ocorrencia ficticia apos conferencia do periodo',value:{kind:'medical',paid:false}};
+      await b.client.call('/api/company/day-events',{method:'POST',body:frozenEvent,expected:409});
+      await confirmPeriod('Reabrir mês com auditoria','Período aberto · revisão 2');
+      await b.client.call('/api/company/day-events',{method:'POST',body:frozenEvent,expected:201});
+      // A new consultation is required because the source version changed.
+      await panel.getByRole('button',{name:'Consultar fechamento',exact:true}).click();
+      await panel.getByText('Período aberto · revisão 2',{exact:true}).waitFor();
+      await confirmPeriod('Confirmar fechamento do mês','Período fechado · revisão 3');
+      const history=await query('SELECT revision,state,snapshot_hash FROM company_monthly_closures WHERE company_id=? AND employee_id=? ORDER BY revision',[b.id,closureEmployee]);
+      verify(history.length===3&&history[0].snapshot_hash===frozen.snapshot_hash&&history[1].state==='open'&&history[2].state==='closed','D1 conserva fechamento original, reabertura e novo fechamento auditados');
+      verify((await query('SELECT COUNT(*) total FROM punches WHERE work_day_id=?',[closureDay]))[0].total===4,'fechamento e reabertura preservam quatro marcacoes historicas ficticias');
+      verify(true,'ciclo de fechamento e reabertura aprovado pelo navegador real');
+    } finally {await context.close();}
+  } finally {await closureBrowser.close();}
   await root.call('/api/platform/companies/' + a.id + '/status', { method: 'PATCH', body: { status: 'suspended' } });
   await a.client.call('/api/company/reports/attendance?employee_id=' + a.employee.id + '&month=' + today.slice(0,7), {expected:401});
   await a.client.call('/api/company/reports/calculations?employee_id='+a.employee.id+'&month='+today.slice(0,7),{expected:401});
@@ -513,7 +574,7 @@ try {
   await a.client.call('/api/company/auth/session', { expected: 401 });
   await employeeClients[0].call('/api/employee/cpf-auth/session', { expected: 401 });
   const count = await query('SELECT COUNT(*) AS total FROM employees WHERE company_id IN (?,?)', [a.id,b.id]);
-  verify(count[0].total === 2, 'D1 confirma dois funcionarios ficticios');
+  verify(count[0].total === 3, 'D1 confirma dois funcionarios CPF e um vinculo historico ficticio');
   const assignments = await query('SELECT COUNT(*) AS total FROM schedule_assignments WHERE employee_id=?', [a.employee.id]);
   verify(assignments[0].total === 3, 'D1 confirma historico de atribuicoes');
   const report = 'Homologacao HTTP real: ' + checks + ' verificacoes aprovadas. Duas empresas ficticias; autenticacao, CSRF, origem, CPF, jornadas, ponto, relatorios JSON/CSV, painel real de relatorios, apuracao provisoria com snapshots, login visual Superadmin/funcionario e suspensao. Politicas de ponto configuradas pelo painel real, auditoria versionada e preservacao de snapshots confirmadas no D1.\n';

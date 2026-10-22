@@ -1,5 +1,6 @@
 import { CompanyPunchPolicy } from './company-punch-policy';
 import { CompanyCalculations } from './company-calculations';
+import { CompanyClosures } from './company-closures';
 import { CompanyDayEvents } from './company-day-events';
 import { CompanyAttendance } from './company-attendance';
 import { CompanyEmployeeAccess } from './company-employee-access';
@@ -379,6 +380,8 @@ export function CompanySchedulesPage() {
 
       <CompanyCalculations key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>
+      <CompanyClosures key={session.company.id+':closures:'+session.csrf_token}
+        companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
       <CompanyDayEvents key={session.company.id+':events:'+session.csrf_token}
         companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
 
