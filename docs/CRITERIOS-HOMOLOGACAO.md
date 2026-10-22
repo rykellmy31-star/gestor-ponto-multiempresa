@@ -7,7 +7,7 @@ Situação atual: **85,00% — 17 de 20 blocos aprovados**. Calendário e tratam
 | # | Bloco e limite da comprovação | Estado |
 |---|---|---|
 | 1 | Worker e D1 staging reais e exclusivos | Aprovado |
-| 2 | Migrações e guardas de destinos; staging 40, produção 38 (última comprovação) | Aprovado |
+| 2 | Migrações e guardas de destinos; staging 41, produção 38 (última comprovação) | Aprovado |
 | 3 | Tipos, build, testes gerais e três grupos D1 | Aprovado |
 | 4 | Superadmin: login, empresas, gestores, suspensão/reativação por API | Aprovado |
 | 5 | Login empresarial e troca obrigatória da senha inicial | Aprovado |
@@ -21,9 +21,9 @@ Situação atual: **85,00% — 17 de 20 blocos aprovados**. Calendário e tratam
 | 13 | Relatório empresarial de marcações no painel, JSON e CSV | Aprovado |
 | 14 | Apuração provisória de horas; não é fechamento definitivo | Aprovado |
 | 15 | Página comercial: rascunho, publicação e retirada; captação real desabilitada | Aprovado |
-| 16 | Backup staging cifrado, adulteração rejeitada e restauração de 53 tabelas em clone | Aprovado |
+| 16 | Backup staging cifrado, adulteração rejeitada e restauração de 55 tabelas em clone | Aprovado |
 | 17 | Feriados, ocorrências aprovadas pelo administrador e ajustes por empresa na apuração provisória | Aprovado |
-| 18 | Fechamento mensal definitivo, reconciliação e reabertura auditada | Pendente |
+| 18 | Fechamento mensal definitivo, reconciliação e reabertura auditada | Parcial: fechamento/reabertura aprovados; reconciliação e decisões pendentes |
 | 19 | Revisão integral de segurança e demais fluxos visuais; decisões sobre rotas legadas | Pendente |
 | 20 | Backup operacional durável, cofre, primeiro Superadmin e publicação autorizada com teste posterior | Pendente |
 
@@ -38,3 +38,9 @@ A configuração de produção e o preflight permanecem bloqueados até os bloco
 Avanço do bloco 17: código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`, staging `39704886478`, **285 verificações aprovadas**. Ajuste no navegador, isolamento A/B, abono, cancelamento, revisão e preservação de pontos comprovados. Recuperação do schema 40: **53 tabelas**, schema/hashes idênticos; clone `33121b53-b6a4-4160-bd86-82975de380c4`. Ocorrências são aprovadas diretamente pelo gestor; ajustes não fecham o estado bruto de turnos incompletos. Limites em `TRATAMENTOS-EMPRESARIAIS.md`.
 
 CI do código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29` integralmente aprovado no Actions `39704886537`: compilação/testes gerais e três grupos D1. Instalação inicial em produção permaneceu desativada.
+
+Avanço parcial do bloco 18: fechamento/reabertura empresarial no navegador e histórico imutável aprovados em `39706943984` (298 verificações), com recuperação do schema 41 em clone de 55 tabelas. O bloco permanece pendente: reconciliação de dados legados/sem histórico e decisões de extras pendentes exigem entrega adicional. **O percentual permanece 85,00%**, sem reclassificar o bloco ou substituir faltas de evidência por uma estimativa de esforço.
+
+Homologação final do fechamento: `39707152663`, código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff`, 298 verificações reais aprovadas. Inclui a proteção adicional para não fechar turno original incompleto mesmo ajustado.
+
+CI final do código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff` aprovado em `39707152635`: compilação/testes gerais e três grupos D1. A instalação inicial de produção permaneceu desativada.

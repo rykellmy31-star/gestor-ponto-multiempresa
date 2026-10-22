@@ -52,3 +52,10 @@ O token D1 Edit temporario de producao foi revogado pelo proprietario. Qualquer 
 ## Complemento — tratamentos empresariais
 
 Código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`, Actions `39704886478`, **285 verificações reais aprovadas**. `/api/company/day-events` usa empresa da sessão, CSRF/origem, revisão esperada, limite de frequência e revalidação SQL transacional. Diário imutável com proprietário composto; consultas mensais limitadas e isoladas. Testes D1 com 40 migrations cobrem imutabilidade, abono, cancelamento, ajuste, preservação de pontos e recusa em mês fechado. Staging recebeu 0040 e recuperação de 53 tabelas passou em clone. As referências anteriores a 39 migrations são históricas; produção não recebeu 0039/0040 nesta entrega. Não certifica auditoria integral nem fechamento definitivo.
+
+
+## Complemento — fechamento e reabertura
+
+Código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff`, staging `39707152663`: **298 verificações reais aprovadas**. `/api/company/closures` exige sessão empresarial, CSRF/origem na escrita, senha atual, motivo, revisão e fonte conferida. SQL revalida autorização e versões na transação. Snapshot imutável com SHA256 verificado na leitura; reabertura cria versão auditada, preservando o fechamento anterior. Triggers protegem o período e o relógio de alterações é próprio de cada empresa. D1 local cobre concorrência e alterações após/durante confirmação. Turno original incompleto impede fechamento mesmo ajustado.
+
+Staging tem 41 migrations. Recuperação do schema em `39706943984`: **55 tabelas**, schema/hashes idênticos; clone `1d348877-5fa7-4b8b-b733-c5d094cd62d9`. Produção não alterada. Reconciliação de históricos legados/insuficientes, decisões de extras e revisão integral de todas as rotas continuam pendentes; não é certificação integral de segurança.

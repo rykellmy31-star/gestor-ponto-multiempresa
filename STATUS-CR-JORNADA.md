@@ -1,10 +1,10 @@
 # CR JORNADA — estado real do desenvolvimento
 
-Estado atual: staging real em funcionamento, 40 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
+Estado atual: staging real em funcionamento, 41 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
 
-Evidência atual: código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`, homologação `39704886478`: **285 verificações reais aprovadas**. Recuperação do novo schema aprovada: **53 tabelas**, schema/hashes idênticos e adulteração rejeitada, clone `33121b53-b6a4-4160-bd86-82975de380c4`. A chave do ensaio é efêmera. CI `39704886537` integralmente aprovado: compilação/testes gerais e três grupos D1.
+Evidência atual: código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff`, homologação `39707152663`: **298 verificações reais aprovadas**, incluindo o ciclo visual de fechamento e reabertura. Recuperação do schema 41 aprovada no Actions `39706943984`: **55 tabelas**, schema/hashes idênticos, SHA256/AES-256-GCM e adulteração rejeitada, clone `1d348877-5fa7-4b8b-b733-c5d094cd62d9`. A chave do ensaio é efêmera, não substitui backup operacional. CI `39707152635` aprovado: compilação/testes gerais e três grupos D1. Instalação inicial de produção permaneceu desativada.
 
-Progresso por checklist: **85,00% (17/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). A apuração continua provisória; ajustes não modificam comprovantes nem fecham turnos originais incompletos. Publicação de produção bloqueada: fechamento definitivo, auditoria integral, backup operacional durável, credenciais iniciais do proprietário e liberação autorizada permanecem pendentes.
+Progresso por checklist: **85,00% (17/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). A apuração aberta continua provisória; o fechamento guarda um snapshot imutável. Ajustes não modificam comprovantes e turnos originais incompletos impedem o fechamento. Fechamento e reabertura com snapshots foram homologados em `39706943984`: 298 verificações e restauração de 55 tabelas. O bloco 18 permanece parcial: reconciliação de históricos e decisões de extras ainda pendentes. Publicação de produção bloqueada até completar esse bloco, auditoria integral, backup operacional durável, credenciais iniciais do proprietário e liberação autorizada.
 
 ## Registro histórico — 19/10/2026
 

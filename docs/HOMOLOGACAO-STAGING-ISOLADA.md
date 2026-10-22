@@ -71,3 +71,14 @@ O token temporario `CLOUDFLARE_D1_SETUP_TOKEN` permanece sem uso. As escritas de
 Actions `39704886478`, código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`: **285 verificações reais aprovadas**. Feriados por empresa, cancelamento versionado, ocorrências abonadas, ajuste pelo painel, isolamento A/B e preservação das marcações originais confirmados. Staging: 40 migrations no D1 `41604781-5fbf-4287-beca-64e20ce1ee1f`. Produção não foi migrada ou publicada nesta entrega.
 
 Restauração do novo schema aprovada no mesmo workflow: **53 tabelas**, schema e hashes de conteúdo idênticos, SHA256/AES-256-GCM/adulteração aprovados. Clone `cr-jornada-staging-restore-3c8477ba6eac`, ID `33121b53-b6a4-4160-bd86-82975de380c4`. Este ensaio não substitui backup durável. Limites funcionais em `TRATAMENTOS-EMPRESARIAIS.md`; fechamento ainda provisório.
+
+
+## Fechamento e reabertura empresariais — schema 41
+
+Actions `39706943984`, código `152cf1f656dce5f54b2ab5d553eb1945fa93de62`: **298 verificações reais aprovadas**. Fechamento, bloqueio de alterações, reabertura e novo fechamento exercidos pelo navegador e confirmados no D1, com retenção das três revisões e das quatro marcações originais. A preparação do mês anterior usa fixture histórica fictícia, distinguida das batidas com hora real do servidor. A primeira rodada `39706418243` rejeitou corretamente preparar pontos após desligamento; corrigida a ordem da fixture.
+
+Staging recebeu 0041, total **41 migrations**. Recuperação de **55 tabelas** aprovada no mesmo workflow; schema/hashes idênticos e AES-256-GCM/SHA256/adulteração aprovados. Clone `cr-jornada-staging-restore-40e6a62e6616`, ID `1d348877-5fa7-4b8b-b733-c5d094cd62d9`. Produção não migrada, exportada ou restaurada nesta entrega. A prova é de recuperação de staging, não backup operacional durável.
+
+Alterações na própria configuração do workflow também exigem ensaio de recuperação. Detalhes e limites em `FECHAMENTO-EMPRESARIAL.md`.
+
+Rodada final `39707152663`, código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff`: **298 verificações reais aprovadas**, já com proteção contra fechamento de turno original incompleto mesmo ajustado. CI `39707152635` aprovado integralmente, incluindo três grupos D1. A recuperação de 55 tabelas foi comprovada em `39706943984`, no mesmo schema 41.
