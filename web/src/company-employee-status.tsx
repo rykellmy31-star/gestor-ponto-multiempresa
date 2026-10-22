@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { z } from 'zod';
 
 type Employee={id:string;full_name:string;status:string;updated_at?:number;employment_end?:string|null};
@@ -10,6 +10,7 @@ export function CompanyEmployeeStatus({employee,companyId,csrf,onUpdated,onSessi
   onUpdated:(change:{status:string;employment_end:string|null;updated_at:number})=>void;
   onSessionExpired?:()=>void;
 }) {
+  const fieldId=useId();
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false);
   const [status,setStatus]=useState(employee.status==='active'?'blocked':'active');
   const [reason,setReason]=useState(''),[password,setPassword]=useState(''),[end,setEnd]=useState('');
@@ -46,11 +47,12 @@ export function CompanyEmployeeStatus({employee,companyId,csrf,onUpdated,onSessi
     {open&&<form onSubmit={save} className="company-employee-registration">
       <h3>Situação do vínculo</h3>
       <p>Bloqueio e desligamento encerram os acessos deste vínculo. A reativação exige novo login. Os pontos e jornadas anteriores são preservados.</p>
-      <label>Nova situação<select value={status} disabled={busy||uncertain} onChange={e=>setStatus(e.target.value)}>
+      <label htmlFor={fieldId+'-status'}>Nova situação</label>
+      <select id={fieldId+'-status'} value={status} disabled={busy||uncertain} onChange={e=>setStatus(e.target.value)}>
         {employee.status==='blocked'&&<option value="active">Reativar acesso</option>}
         {employee.status==='active'&&<option value="blocked">Bloquear acesso</option>}
         <option value="terminated">Desligar funcionário</option>
-      </select></label>
+      </select>
       {status==='terminated'&&<>
         <label>Data de desligamento<input type="date" required value={end} disabled={busy||uncertain} onChange={e=>setEnd(e.target.value)}/></label>
         <p>Conclua os dias de ponto abertos. A data não pode anteceder pontos já registrados. Este fluxo não reabre um desligamento.</p>
