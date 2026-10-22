@@ -1,4 +1,4 @@
-import {useEffect,useState,type FormEvent} from 'react';
+import {useEffect,useState,type FormEvent,type CSSProperties} from 'react';
 import {BookOpen,Building2,ChevronRight,Clock3,FileSpreadsheet,
   HelpCircle,LogOut,Menu,MessageSquareText,ShieldCheck,
   UserRound,X,KeyRound} from 'lucide-react';
@@ -120,7 +120,8 @@ export function EmployeeOriginalWorkspace({session,historyVersion,onSessionExpir
   const switchView=(id:typeof view)=>{setView(id);setMenu(false);setError('');window.scrollTo(0,0);};
   const dateText=new Intl.DateTimeFormat('pt-BR',{timeZone:timezone,
     day:'2-digit',month:'long',year:'numeric'}).format(new Date());
-  return <div className="app-shell cr-classic-shell cr-employee-original-portal">
+  return <div className="app-shell cr-classic-shell cr-employee-original-portal"
+    style={{'--green':session.company.primary_color||'#087f6f'} as CSSProperties}>
     {menu&&<button className="nav-scrim" aria-label="Fechar menu" onClick={()=>setMenu(false)}/>}
     <aside className={'sidebar '+(menu?'sidebar-open':'')}>
       <div className="sidebar-brand">
