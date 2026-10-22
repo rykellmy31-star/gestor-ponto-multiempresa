@@ -36,7 +36,7 @@ export function WorkspaceRequests({companyId,csrf,employeeId,onSessionExpired}:P
    {r.response&&<p>Resposta: {r.response}</p>}
    {!employeeId&&!r.decision&&<button type="button" onClick={()=>{setSelected(r.id);setAnswer('');}}>Responder solicitação</button>}
    {selected===r.id&&<form onSubmit={save}><fieldset disabled={busy}>
-    <label>Decisão<select value={decision} onChange={e=>setDecision(e.target.value)}><option value="accepted">Acolher justificativa</option><option value="rejected">Não acolher justificativa</option></select></label>
+    <label>Decisão<select aria-label="Decisão" value={decision} onChange={e=>setDecision(e.target.value)}><option value="accepted">Acolher justificativa</option><option value="rejected">Não acolher justificativa</option></select></label>
     <label>Resposta ao funcionário<textarea required minLength={3} maxLength={1000} value={answer} onChange={e=>setAnswer(e.target.value)}/></label><button>Confirmar resposta</button>
     <button type="button" onClick={()=>setSelected('')}>Cancelar</button></fieldset></form>}
   </article>)}

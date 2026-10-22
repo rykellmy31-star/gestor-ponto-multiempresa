@@ -28,3 +28,5 @@ As 38 migrações antigas permanecem intactas. O provisionamento só aceita o in
 Progresso geral permanece estimado em 85,00% (17/20 critérios). Esta entrega não encerra automaticamente os critérios amplos de segurança, conciliação e publicação final.
 
 Primeira execução remota `39764709999`: migração 0043 e publicação realizadas; os fluxos de ponto, relatórios, escala atribuída, solicitações, humor e liberação do ponto passaram. O ensaio parou ao procurar um modelo criado por API sem atualizar o catálogo já carregado no navegador. O script foi corrigido para usar o botão Atualizar antes da exclusão; a homologação completa deve ser repetida.
+
+Segunda rodada `39765638820`: os tipos e testes prévios passaram; a automação identificou que o rótulo do seletor Nova escala incluía o texto das opções. O campo recebeu nome acessível explícito. A edição de horários agora conserva também o funcionário selecionado ao abrir a nova versão. O CI completo da primeira implementação (`39764710023`) aprovou 381 testes (324 gerais + 57 D1 em três grupos).

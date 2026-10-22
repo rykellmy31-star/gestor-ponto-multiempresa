@@ -33,9 +33,9 @@ export function EmployeeAssignedSchedule({companyId,employeeId,csrf,timezone,onS
   <button type="button" className="company-schedules-secondary" onClick={()=>void edit()}>Ver e alterar escala</button>
   {open&&<div><label>Consultar a partir de<input type="date" min="1900-01-01" max="2100-12-24" value={from} onChange={e=>{if(e.target.value)setFrom(e.target.value);}}/></label>
    <ul>{days.map(d=><li key={d.date}>{d.date.split('-').reverse().join('/')} · {d.schedule_name||'Sem escala'} · {d.shift?d.shift.start+'–'+d.shift.end:'Folga ou sem expediente'}</li>)}</ul>
-   {days[0]?.schedule_id&&onEdit&&<button type="button" onClick={()=>onEdit(days[0].schedule_id!)}>Editar horários em nova versão</button>}
+   {days[0]?.schedule_id&&onEdit&&choices.some(s=>s.id===days[0]?.schedule_id)&&<button type="button" onClick={()=>onEdit(days[0].schedule_id!)}>Editar horários em nova versão</button>}
    <form onSubmit={assign}><fieldset disabled={busy}><legend>Alterar escala deste funcionário</legend>
-    <label>Nova escala<select required value={schedule} onChange={e=>setSchedule(e.target.value)}><option value="">Selecione</option>{choices.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+    <label>Nova escala<select aria-label="Nova escala" required value={schedule} onChange={e=>setSchedule(e.target.value)}><option value="">Selecione</option>{choices.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <label>Válida a partir de<input required type="date" value={effective} onChange={e=>setEffective(e.target.value)}/></label>
     <p>Se já houver outra atribuição na mesma data, escolha a próxima data de mudança. Dias com ponto confirmado conservam o horário registrado.</p>
     <button>Salvar escala do funcionário</button></fieldset></form>

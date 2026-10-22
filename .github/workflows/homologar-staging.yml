@@ -94,7 +94,7 @@ jobs:
           npm run typecheck
           npm run build:web
       - name: Validar cadastro e isolamento antes de publicar staging
-        run: npx vitest run tests/d1-company-workspace.test.ts tests/employee-cpf-punch-route.test.ts tests/company-logo.test.ts tests/d1-platform-company-onboarding.test.ts tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts tests/d1-sales-trigger-routes.test.ts tests/d1-company-attendance.test.ts tests/d1-company-punch-policy.test.ts tests/company-calculations.test.ts tests/d1-company-calculations.test.ts --maxWorkers=1 --no-file-parallelism
+        run: npx vitest run tests/employee-cpf-punch-route.test.ts tests/d1-company-workspace.test.ts tests/company-logo.test.ts tests/d1-platform-company-onboarding.test.ts tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts tests/d1-sales-trigger-routes.test.ts tests/d1-company-attendance.test.ts tests/d1-company-punch-policy.test.ts tests/company-calculations.test.ts tests/d1-company-calculations.test.ts --maxWorkers=1 --no-file-parallelism
       - name: Instalar navegador para validar o painel no staging real
         run: npx playwright install --with-deps chromium
       - name: Validar token, identificar recursos e provisionar staging separado

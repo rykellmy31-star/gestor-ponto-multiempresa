@@ -454,7 +454,7 @@ export function CompanySchedulesPage() {
       {view==='employees'&&<div id="cr-gestao-equipe" className="cr-legacy-group">
       <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} csrf={session.csrf_token} timezone={session.company.timezone}
-        onEditSchedule={id=>{const item=schedules.find(s=>s.id===id);if(item){setView('schedules');duplicate(item);}}}
+        onEditSchedule={(id,employeeId)=>{const item=schedules.find(s=>s.id===id);if(item){setSelectedEmployee(employeeId);setAssignAll(false);setSelectedSchedule(id);setView('schedules');duplicate(item);}}}
         onEmployeeCreated={()=>void load()}
         onSessionExpired={onSessionExpired}/>
       </div>}

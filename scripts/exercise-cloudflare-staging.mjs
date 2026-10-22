@@ -311,7 +311,12 @@ try {
         const upcoming=await company.client.call('/api/company/schedules/employee/'+company.employee.id+'/week?from='+changeDate);
         verify(upcoming.days[0].schedule_name==='Janela QA de ponto'&&upcoming.days[0].shift.start==='00:00',
           'alteracao da escala pela aba funcionarios confirmada na API e no D1');
-        await access.getByRole('button',{name:'Fechar escala',exact:true}).click();
+        await access.getByRole('button',{name:'Editar horários em nova versão',exact:true}).click();
+        verify((await page.getByLabel('Nome da escala',{exact:true}).inputValue()).includes('nova versão'),
+          'editar horarios pela aba funcionarios abre uma nova versao preservando o modelo anterior');
+        verify(await page.locator('#company-schedules-assignment select').last().inputValue()===company.employee.id,
+          'edicao de horarios conserva o funcionario selecionado');
+        await page.getByRole('button',{name:'Funcionários',exact:true}).click();
         verify(true,'funcionario no painel mostra escala atribuida e permite consultar sete dias');
         await access.getByRole('button',{name:'Editar nome e cargo',exact:true}).click();
         const editor=access.locator('form').filter({has:page.getByRole('heading',{name:'Editar nome e cargo',exact:true})});
