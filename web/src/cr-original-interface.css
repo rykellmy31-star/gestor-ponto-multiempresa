@@ -169,3 +169,18 @@
  .cr-employee-original-portal .punch-buttons{grid-template-columns:1fr}
  .cr-employee-original-portal .punch-panel{padding:0 17px}
 }
+
+/* Personalizacao por empresa a partir do cadastro Superadmin. */
+.cr-employee-original-portal .punch-button.punch-enabled,
+.cr-employee-original-portal .punch-button.punch-enabled:hover{
+  background:var(--green)!important;border-color:var(--green)!important;color:#fff!important}
+.cr-employee-original-portal .sidebar .nav-link.active{color:var(--green)!important}
+.company-schedules-page .cr-original-nav button.nav-link.active{
+  color:var(--green)!important;border-left:2px solid var(--green)!important}
+.company-schedules-page .cr-original-page-content .cr-link-button{color:var(--green)!important}
+.company-schedules-page .cr-original-page-content .company-schedules-shortcuts button[aria-pressed="true"]{
+  background:var(--green)!important;border-color:var(--green)!important;color:#fff!important}
+.company-schedules-page .cr-original-page-content .company-schedules-item strong{
+  color:var(--green)!important}
+.company-schedules-page .cr-original-page-content button:not(.company-schedules-secondary):not(.btn):not(.cr-link-button){
+  background:var(--green)!important;border-color:var(--green)!important}
