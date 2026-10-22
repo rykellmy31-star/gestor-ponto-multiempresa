@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - desenvolvimento-cr-jornada
+      - restaurar-interface-original-pagpouco
     paths-ignore:
       - '**/*.md'
   workflow_dispatch:
