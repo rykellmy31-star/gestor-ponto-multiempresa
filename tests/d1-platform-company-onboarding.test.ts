@@ -471,18 +471,16 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect((await preservedB.json() as any).company).toMatchObject({
         name:'Empresa Fictícia B',status:'archived'
       });
-      // Excluir do cadastro operacional arquiva (sem apagar) e só é
-      // permitido após suspender, confirmar nome exato e validar CSRF.
+      // Excluir do cadastro operacional arquiva (sem apagar), confirma o
+      // nome exato e valida CSRF mesmo quando a empresa ainda esta ativa.
       const archiveWhileActive=await call('/api/platform/companies/'+companyA.id+'/archive',
-        'POST',{confirm_name:companyA.name},superCookie,csrf);
+        'POST',{confirm_name:'Nome incorreto'},superCookie,csrf);
       expect(archiveWhileActive.status).toBe(409);
       expect((await archiveWhileActive.json() as any).error.code)
-        .toBe('company_must_be_suspended');
+        .toBe('confirmation_mismatch');
       expect((await call('/api/platform/companies/'+companyA.id+'/archive',
         'POST',{confirm_name:companyA.name},superCookie,'csrf-invalido')).status)
         .toBe(403);
-      expect((await call('/api/platform/companies/'+companyA.id+'/status',
-        'PATCH',{status:'suspended'},superCookie,csrf)).status).toBe(200);
       const companyAName=(await db.prepare('SELECT name FROM companies WHERE id=?')
         .bind(companyA.id).first<{name:string}>())?.name;
       const wrongArchiveName=await call('/api/platform/companies/'+companyA.id+'/archive',
@@ -532,13 +530,13 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(accessEvents.every(x=>x.entity_id===thirdId)).toBe(true);
       expect(accessEvents.every(x=>JSON.parse(x.details_json).company_id===companyA.id))
         .toBe(true);
-      expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(3);
+      expect(actions?.filter(x=>x==='company.status_changed')).toHaveLength(2);
       const companyArchiveEvents=events.results!.filter(
         x=>x.action==='company.archived'&&x.entity_id===companyA.id
       );
       expect(companyArchiveEvents).toHaveLength(1);
       expect(JSON.parse(companyArchiveEvents[0].details_json)).toMatchObject({
-        name:companyAName,previous_status:'suspended',new_status:'archived',data_preserved:true
+        name:companyAName,previous_status:'active',new_status:'archived',data_preserved:true
       });
       expect(JSON.stringify(events.results)).not.toContain(managerPass);
       expect(JSON.stringify(events.results)).not.toContain(managerNew);

@@ -707,7 +707,6 @@ try {
   const expectedAssignmentDates=[today,DateTime.fromISO(today,{zone:'utc'}).plus({days:1}).toISODate(),'2026-10-26','2026-10-27'].sort();
   verify(assignments.length===4&&JSON.stringify(assignments.map(row=>row.effective_from))===JSON.stringify(expectedAssignmentDates),
     'D1 confirma quatro atribuicoes, incluindo a alteracao feita pela aba funcionarios sem perder o historico');
-  await root.call('/api/platform/companies/' + a.id + '/status', {method:'PATCH',body:{status:'suspended'}});
   const platformArchiveBrowser=await chromium.launch({headless:true});
   try {
     const context=await platformArchiveBrowser.newContext();
@@ -719,14 +718,14 @@ try {
       await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
       await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
       const row=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
-      const archiveDialogs=page;
-      archiveDialogs.on('dialog',async dialog=>{
-        if(dialog.type()==='prompt')await dialog.accept(a.name);
-        else await dialog.accept();
-      });
+      const archiveButton=row.getByRole('button',{name:'Excluir cadastro',exact:true});
+      verify(await archiveButton.isEnabled(),'botao de exclusao esta disponivel para empresa ativa');
       const archiveResponsePromise=page.waitForResponse(response=>
         new URL(response.url()).pathname===`/api/platform/companies/${a.id}/archive`);
-      await row.getByRole('button',{name:'Excluir cadastro',exact:true}).click();
+      await archiveButton.click();
+      await page.getByRole('dialog',{name:'Excluir cadastro da empresa?'}).waitFor();
+      await page.getByLabel('Digite o nome da empresa para confirmar',{exact:true}).fill(a.name);
+      await page.getByRole('dialog').getByRole('button',{name:'Confirmar exclusão',exact:true}).click();
       const archiveResponse=await archiveResponsePromise;
       verify(archiveResponse.status()===200,
         'API do painel confirma exclusao logica: HTTP '+archiveResponse.status());
@@ -737,7 +736,7 @@ try {
       const archivedButton=archivedRow.getByRole('button',{name:'Arquivada',exact:true});
       await archivedButton.waitFor();
       verify(await archivedButton.isDisabled(),'empresa arquivada nao permite novas alteracoes operacionais');
-      verify(true,'Superadmin exclui empresa suspensa pelo painel e encontra o cadastro preservado em Arquivadas');
+      verify(true,'Superadmin exclui empresa ativa pelo painel e encontra o cadastro preservado em Arquivadas');
     } finally {await context.close();}
   } finally {await platformArchiveBrowser.close();}
   const archivedCompany=(await root.call('/api/platform/companies/'+a.id)).company;

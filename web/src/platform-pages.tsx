@@ -270,6 +270,8 @@ export function PlatformPage() {
   const [logoBusy,setLogoBusy]=useState(false);
   const [changingId, setChangingId] =
     useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Company | null>(null);
+  const [archiveConfirmName, setArchiveConfirmName] = useState('');
 
   async function refreshSession() {
     const result = await requestSession();
@@ -599,16 +601,9 @@ export function PlatformPage() {
     }
   }
 
-  async function archiveCompany(company: Company) {
-    if (!session || company.status !== 'suspended') return;
-    const confirmed = window.confirm(
-      `Excluir "${company.name}" do cadastro operacional?\n\nA empresa será arquivada e não poderá mais acessar o sistema. Os registros e históricos serão preservados.`
-    );
-    if (!confirmed) return;
-    const typedName = window.prompt(
-      `Para confirmar, digite exatamente o nome da empresa:\n${company.name}`
-    );
-    if (typedName === null) return;
+  async function archiveCompany() {
+    const company = archiveTarget;
+    if (!session || !company || archiveConfirmName.trim() !== company.name) return;
     setChangingId(company.id);
     setCompaniesError('');
     setNotice('');
@@ -622,7 +617,7 @@ export function PlatformPage() {
             'Content-Type': 'application/json',
             'X-CSRF-Token': session.csrf_token
           },
-          body: JSON.stringify({confirm_name: typedName})
+          body: JSON.stringify({confirm_name: archiveConfirmName.trim()})
         }
       );
       if (!response.ok) {
@@ -631,6 +626,8 @@ export function PlatformPage() {
         ));
       }
       setCompanyView('operational');
+      setArchiveTarget(null);
+      setArchiveConfirmName('');
       setNotice(`"${company.name}" foi excluída do cadastro operacional. Os dados foram preservados.`);
       await loadCompanies();
     } catch (err) {
@@ -1188,15 +1185,13 @@ export function PlatformPage() {
                     {company.status !== 'archived' && (
                       <button
                         type="button"
-                        onClick={() => void archiveCompany(company)}
-                        disabled={changingId === company.id || company.status !== 'suspended'}
-                        title={company.status === 'suspended'
-                          ? 'Excluir do cadastro operacional e preservar os históricos'
-                          : 'Suspenda a empresa antes de excluí-la do cadastro'}
+                        onClick={() => {setArchiveConfirmName('');setArchiveTarget(company);}}
+                        disabled={changingId === company.id}
+                        title="Excluir do cadastro operacional e preservar os históricos"
                         style={{
                           padding: '9px 12px',
                           borderRadius: 9,
-                          cursor: company.status === 'suspended' ? 'pointer' : 'not-allowed',
+                          cursor: 'pointer',
                           color: '#991b1b',
                           border: '1px solid #fecaca',
                           background: '#fff7f7'
@@ -1255,6 +1250,26 @@ export function PlatformPage() {
           csrfToken={session.csrf_token}
           onClose={() => setManagingCompany(null)}
         />
+      )}
+
+      {archiveTarget && (
+        <div
+          role="presentation"
+          style={{position:'fixed',inset:0,zIndex:1100,background:'rgba(15,23,42,.68)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="archive-company-title" style={{width:'100%',maxWidth:520,background:'#fff',color:'#0f172a',borderRadius:18,padding:24,boxSizing:'border-box',boxShadow:'0 24px 80px rgba(0,0,0,.2)'}}>
+            <h2 id="archive-company-title">Excluir cadastro da empresa?</h2>
+            <p><strong>{archiveTarget.name}</strong> será retirada do cadastro operacional e os acessos serão encerrados. Funcionários, jornadas, registros e históricos serão preservados em Arquivadas.</p>
+            <label htmlFor="archive-company-confirm">Digite o nome da empresa para confirmar</label>
+            <input id="archive-company-confirm" autoComplete="off" value={archiveConfirmName} onChange={event=>setArchiveConfirmName(event.target.value)} style={{display:'block',width:'100%',marginTop:8,padding:12,boxSizing:'border-box'}} />
+            <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:20,flexWrap:'wrap'}}>
+              <button type="button" onClick={()=>{setArchiveTarget(null);setArchiveConfirmName('');}} disabled={changingId===archiveTarget.id}>Cancelar</button>
+              <button type="button" onClick={()=>void archiveCompany()} disabled={changingId===archiveTarget.id||archiveConfirmName.trim()!==archiveTarget.name} style={{color:'#991b1b'}}>
+                {changingId===archiveTarget.id?'Excluindo...':'Confirmar exclusão'}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {formOpen && (

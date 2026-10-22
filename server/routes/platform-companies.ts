@@ -464,7 +464,7 @@ platformCompaniesRoutes.patch('/:id/status', async c => {
 });
 
 // Excluir do cadastro operacional sem apagar o historico empresarial.
-// A empresa precisa estar suspensa, e a confirmacao exige o nome exato.
+// A confirmacao exige o nome exato; a operacao tambem encerra as sessoes.
 const archiveCompanySchema = z.object({
   confirm_name: z.string().trim().min(2).max(150)
 }).strict();
@@ -485,8 +485,6 @@ platformCompaniesRoutes.post('/:id/archive', async c => {
   ensure(existing, 404, 'company_not_found', 'Empresa nao encontrada.');
   ensure(existing.status !== 'archived', 409, 'company_archived',
     'Esta empresa ja foi excluida do cadastro operacional.');
-  ensure(existing.status === 'suspended', 409, 'company_must_be_suspended',
-    'Suspenda a empresa antes de exclui-la do cadastro.');
   ensure(parsed.data.confirm_name === existing.name, 409, 'confirmation_mismatch',
     'O nome informado nao corresponde ao cadastro da empresa.');
 
@@ -494,8 +492,8 @@ platformCompaniesRoutes.post('/:id/archive', async c => {
   await companyAdminWrite(db, [
     db.prepare(`
       UPDATE companies SET status = 'archived', updated_at = ?
-      WHERE id = ? AND name = ? AND status = 'suspended'
-    `).bind(now, id, existing.name),
+      WHERE id = ? AND name = ? AND status = ?
+    `).bind(now, id, existing.name, existing.status),
     db.prepare('DELETE FROM company_admin_sessions WHERE company_id = ?').bind(id),
     db.prepare('DELETE FROM employee_company_sessions WHERE company_id = ?').bind(id),
     db.prepare(`
