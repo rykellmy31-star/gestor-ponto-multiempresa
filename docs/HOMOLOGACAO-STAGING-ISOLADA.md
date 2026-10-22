@@ -47,6 +47,8 @@ Detalhes, controles e limites em `RELATORIO-MARCACOES-EMPRESARIAL.md`. Este rela
 
 O workflow `verificar-projeto.yml` continua criando uma configuracao com UUID ficticio para `wrangler deploy --dry-run`. O workflow separado `homologar-staging.yml` usa `CLOUDFLARE_STAGING_TOKEN` para provisionar e testar exclusivamente o staging real.
 
+Em pushes de interface ou rotas, `homologar-staging.yml` valida os fluxos reais sem criar mais um clone D1. A recuperação cifrada roda pelo workflow dedicado `recuperar-staging.yml` quando seus scripts mudam ou por acionamento manual; o despacho manual de `homologar-staging.yml` também inclui a recuperação. A prova anterior de 52 tabelas permanece registrada, e nenhum backup efêmero é tratado como cópia operacional.
+
 A configuracao staging e construida por lista positiva. Bindings remotos extras, crons, routes e variaveis da producao sao descartados. O perfil inicial mantem funcoes desligadas; o perfil funcional explicito habilita jornadas, cadastro, recuperacao e batidas apenas apos validar nome, origem, conta e D1 de staging. Leads continuam desligados. O validador padrao ainda recusa flags habilitadas sem esse perfil explicito.
 
 ## Etapas restantes

@@ -183,6 +183,16 @@ function makeEnvironment(scenario: Scenario, registrationFlag?: string) {
 }
 
 describe('CR JORNADA - protecao das rotas', () => {
+  it('serve a entrada empresarial e continua bloqueando as telas administrativas antigas', async () => {
+    const t = makeEnvironment('anonymous');
+    const login = await t.request('/admin/entrar');
+    expect(login.status).toBe(200);
+    expect(await login.text()).toBe('asset');
+    const legacy = await t.request('/admin/funcionarios');
+    expect(legacy.status).toBe(302);
+    expect(legacy.headers.get('location')).toBe('/superadmin');
+  });
+
   it('cadastro explicitamente habilitado chega ao modulo seguro sem pular autenticacao ou CSRF', async () => {
     const anonymous = makeEnvironment('anonymous', 'true');
     expect((await anonymous.request('/api/company/employees', 'POST')).status).toBe(401);

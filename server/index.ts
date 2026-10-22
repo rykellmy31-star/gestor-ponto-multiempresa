@@ -341,7 +341,7 @@ app.get('*', async c => {
   // utilizam isolamento empresarial.
   if (
     path === '/admin' ||
-    path.startsWith('/admin/') ||
+    (path.startsWith('/admin/') && path !== '/admin/entrar') ||
     path === '/app' ||
     path.startsWith('/app/') ||
     path === '/entrar' ||
