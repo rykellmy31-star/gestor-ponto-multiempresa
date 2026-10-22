@@ -3,6 +3,7 @@ import { Building2, CheckCircle2, Clock3, Eye, EyeOff, LogOut, LockKeyhole, Shie
 import { Link } from 'react-router-dom';
 import { EmployeeCpfPointHistory } from './employee-cpf-history';
 import { EmployeeCpfPunch } from './employee-cpf-punch';
+import { EmployeeOriginalWorkspace } from './employee-original-workspace';
 import { employeeCpfSessionEndpointUnavailable } from './employee-cpf-ui-safety';
 
 type CompanyChoice = { id: string; name: string };
@@ -14,7 +15,8 @@ type EmployeeSession = {
     role: 'employee';
     must_change_password: boolean;
   };
-  company: { id: string; name: string; slug: string; timezone?: 'America/Bahia' | 'America/Sao_Paulo' };
+  company: { id: string; name: string; slug: string; timezone?: 'America/Bahia' | 'America/Sao_Paulo';
+    logo_url?:string|null;primary_color?:string };
   csrf_token: string;
   expires_at: number;
 };
@@ -207,6 +209,10 @@ export function EmployeeCpfPage() {
     }
   }
 
+  if(session&&!session.user.must_change_password)return <EmployeeOriginalWorkspace
+    session={session} historyVersion={historyVersion} onSessionExpired={onSessionExpired}
+    onLogout={logout} onPunchConfirmed={()=>setHistoryVersion(v=>v+1)}
+    onPasswordChanged={()=>{setSession(null);setCompanies([]);setError('Senha alterada. Entre novamente.');}}/>;
   return (
     <main className={'cr-legacy-employee-page'+(session&&!session.user.must_change_password?' is-authenticated':'')} style={{
       minHeight: '100dvh', padding: '35px 16px', background: '#fbf7f7',
