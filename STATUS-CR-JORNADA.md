@@ -1,10 +1,10 @@
 # CR JORNADA — estado real do desenvolvimento
 
-Estado atual: staging real em funcionamento, 39 migrations, produção preservada com 38. A edição de nome/cargo foi homologada; o ciclo de bloqueio, reativação e desligamento passou no navegador e no D1 real, em uma rodada com 263 verificações aprovadas.
+Estado atual: staging real em funcionamento, 40 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
 
-Evidência atual: código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, homologação `39702861660` e CI geral `39702861726`, ambos aprovados.
+Evidência atual: código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`, homologação `39704886478`: **285 verificações reais aprovadas**. Recuperação do novo schema aprovada: **53 tabelas**, schema/hashes idênticos e adulteração rejeitada, clone `33121b53-b6a4-4160-bd86-82975de380c4`. A chave do ensaio é efêmera. CI `39704886537` integralmente aprovado: compilação/testes gerais e três grupos D1.
 
-Progresso por checklist: **80,00% (16/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). Publicação de produção ainda bloqueada: ocorrências/feriados/ajustes, fechamento, auditoria integral e preparação operacional permanecem pendentes.
+Progresso por checklist: **85,00% (17/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). A apuração continua provisória; ajustes não modificam comprovantes nem fecham turnos originais incompletos. Publicação de produção bloqueada: fechamento definitivo, auditoria integral, backup operacional durável, credenciais iniciais do proprietário e liberação autorizada permanecem pendentes.
 
 ## Registro histórico — 19/10/2026
 

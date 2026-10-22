@@ -2,12 +2,12 @@
 
 Estimativa por escopo: 20 blocos de mesmo peso, 5 pontos percentuais por bloco aprovado. A referência anterior de 85,20% não era auditada e não é usada neste cálculo. A lista mede entregas verificadas no escopo descrito; não estima esforço restante nem certifica segurança integral. Qualquer bloqueio crítico impede produção, independentemente do percentual.
 
-Situação atual: **80,00% — 16 de 20 blocos aprovados**. O ciclo de vínculos foi homologado no staging real.
+Situação atual: **85,00% — 17 de 20 blocos aprovados**. Calendário e tratamentos empresariais foram homologados no staging real.
 
 | # | Bloco e limite da comprovação | Estado |
 |---|---|---|
 | 1 | Worker e D1 staging reais e exclusivos | Aprovado |
-| 2 | Migrações e guardas de destinos; staging 39, produção 38 | Aprovado |
+| 2 | Migrações e guardas de destinos; staging 40, produção 38 (última comprovação) | Aprovado |
 | 3 | Tipos, build, testes gerais e três grupos D1 | Aprovado |
 | 4 | Superadmin: login, empresas, gestores, suspensão/reativação por API | Aprovado |
 | 5 | Login empresarial e troca obrigatória da senha inicial | Aprovado |
@@ -21,8 +21,8 @@ Situação atual: **80,00% — 16 de 20 blocos aprovados**. O ciclo de vínculos
 | 13 | Relatório empresarial de marcações no painel, JSON e CSV | Aprovado |
 | 14 | Apuração provisória de horas; não é fechamento definitivo | Aprovado |
 | 15 | Página comercial: rascunho, publicação e retirada; captação real desabilitada | Aprovado |
-| 16 | Backup staging cifrado, adulteração rejeitada e restauração de 52 tabelas em clone | Aprovado |
-| 17 | Ocorrências, feriados e ajustes próprios de cada empresa | Pendente |
+| 16 | Backup staging cifrado, adulteração rejeitada e restauração de 53 tabelas em clone | Aprovado |
+| 17 | Feriados, ocorrências aprovadas pelo administrador e ajustes por empresa na apuração provisória | Aprovado |
 | 18 | Fechamento mensal definitivo, reconciliação e reabertura auditada | Pendente |
 | 19 | Revisão integral de segurança e demais fluxos visuais; decisões sobre rotas legadas | Pendente |
 | 20 | Backup operacional durável, cofre, primeiro Superadmin e publicação autorizada com teste posterior | Pendente |
@@ -34,3 +34,7 @@ Avanço do bloco 8: código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, homologa
 CI do mesmo código `39702861726` integralmente aprovado: compilação/testes gerais e os três grupos de integração D1. Instalação inicial em produção permaneceu desativada.
 
 A configuração de produção e o preflight permanecem bloqueados até os blocos pendentes serem comprovados. Nenhuma autorização de publicação foi presumida.
+
+Avanço do bloco 17: código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`, staging `39704886478`, **285 verificações aprovadas**. Ajuste no navegador, isolamento A/B, abono, cancelamento, revisão e preservação de pontos comprovados. Recuperação do schema 40: **53 tabelas**, schema/hashes idênticos; clone `33121b53-b6a4-4160-bd86-82975de380c4`. Ocorrências são aprovadas diretamente pelo gestor; ajustes não fecham o estado bruto de turnos incompletos. Limites em `TRATAMENTOS-EMPRESARIAIS.md`.
+
+CI do código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29` integralmente aprovado no Actions `39704886537`: compilação/testes gerais e três grupos D1. Instalação inicial em produção permaneceu desativada.

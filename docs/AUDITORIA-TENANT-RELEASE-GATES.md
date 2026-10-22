@@ -1,6 +1,6 @@
 # CR JORNADA — auditoria de isolamento e travas de homologacao
 
-**Data:** 2026-10-21. **Branch:** `desenvolvimento-cr-jornada`.
+**Data:** 2026-10-22. **Branch:** `desenvolvimento-cr-jornada`.
 **Escopo:** verificacao de codigo + CI, auditoria de producao somente leitura, 263 verificacoes de fluxo HTTP/navegador em staging real e recuperacao remota de dados ficticios. Isto **nao e** laudo de pentest nem auditoria de backups operacionais de producao.
 
 Atualização: código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, staging `39702861660` e CI `39702861726` aprovados. A edição de nome/cargo e o ciclo do vínculo têm auditoria atômica; bloqueio e desligamento revogam acesso apenas daquele funcionário/empresa. Reativação exige novo login. Desligamento com dia aberto, data incompatível ou legado sem empresa comprovada é recusado. A revisão integral das demais operações continua pendente. Progresso estimado em `CRITERIOS-HOMOLOGACAO.md`.
@@ -47,3 +47,8 @@ Atualização: código `439243efd23cddea0f1ad6cef3a87bc0c8db9e3d`, staging `3970
 ## Politica de proxima fase
 
 O token D1 Edit temporario de producao foi revogado pelo proprietario. Qualquer autorizacao futura para staging deve ser separada, de curta duracao e **nunca autorizar gravacao no D1 de producao** por engano. CI padrao permanece apenas local e read-only.
+
+
+## Complemento — tratamentos empresariais
+
+Código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`, Actions `39704886478`, **285 verificações reais aprovadas**. `/api/company/day-events` usa empresa da sessão, CSRF/origem, revisão esperada, limite de frequência e revalidação SQL transacional. Diário imutável com proprietário composto; consultas mensais limitadas e isoladas. Testes D1 com 40 migrations cobrem imutabilidade, abono, cancelamento, ajuste, preservação de pontos e recusa em mês fechado. Staging recebeu 0040 e recuperação de 53 tabelas passou em clone. As referências anteriores a 39 migrations são históricas; produção não recebeu 0039/0040 nesta entrega. Não certifica auditoria integral nem fechamento definitivo.

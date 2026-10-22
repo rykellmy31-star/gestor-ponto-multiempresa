@@ -47,7 +47,7 @@ Detalhes, controles e limites em `RELATORIO-MARCACOES-EMPRESARIAL.md`. Este rela
 
 O workflow `verificar-projeto.yml` continua criando uma configuracao com UUID ficticio para `wrangler deploy --dry-run`. O workflow separado `homologar-staging.yml` usa `CLOUDFLARE_STAGING_TOKEN` para provisionar e testar exclusivamente o staging real.
 
-Em pushes de interface ou rotas, `homologar-staging.yml` valida os fluxos reais sem criar mais um clone D1. A recuperação cifrada roda pelo workflow dedicado `recuperar-staging.yml` quando seus scripts mudam ou por acionamento manual; o despacho manual de `homologar-staging.yml` também inclui a recuperação. A prova anterior de 52 tabelas permanece registrada, e nenhum backup efêmero é tratado como cópia operacional.
+Em pushes de interface ou rotas, `homologar-staging.yml` valida os fluxos reais sem criar mais um clone D1. Mudanças em migrations ou scripts de recuperação também acionam um ensaio de recuperação após o sucesso dos testes remotos; isso garante que o schema novo seja exportado somente depois de aplicado no staging. A recuperação cifrada roda pelo workflow dedicado `recuperar-staging.yml` quando seus scripts mudam ou por acionamento manual; o despacho manual de `homologar-staging.yml` também inclui a recuperação. A prova anterior de 52 tabelas permanece registrada, e nenhum backup efêmero é tratado como cópia operacional.
 
 A configuracao staging e construida por lista positiva. Bindings remotos extras, crons, routes e variaveis da producao sao descartados. O perfil inicial mantem funcoes desligadas; o perfil funcional explicito habilita jornadas, cadastro, recuperacao e batidas apenas apos validar nome, origem, conta e D1 de staging. Leads continuam desligados. O validador padrao ainda recusa flags habilitadas sem esse perfil explicito.
 
@@ -64,3 +64,10 @@ A configuracao staging e construida por lista positiva. Bindings remotos extras,
 ## Permissoes
 
 O token temporario `CLOUDFLARE_D1_SETUP_TOKEN` permanece sem uso. As escritas de homologacao utilizam somente `CLOUDFLARE_STAGING_TOKEN`; a conta e os destinos sao verificados antes de cada operacao. Acesso a metadados de producao e somente leitura. O preflight de producao permanece bloqueado.
+
+
+## Calendário e tratamentos empresariais — 22/10/2026
+
+Actions `39704886478`, código `65beb4602dc5a1d81e435a1f6cf9eaeace090b29`: **285 verificações reais aprovadas**. Feriados por empresa, cancelamento versionado, ocorrências abonadas, ajuste pelo painel, isolamento A/B e preservação das marcações originais confirmados. Staging: 40 migrations no D1 `41604781-5fbf-4287-beca-64e20ce1ee1f`. Produção não foi migrada ou publicada nesta entrega.
+
+Restauração do novo schema aprovada no mesmo workflow: **53 tabelas**, schema e hashes de conteúdo idênticos, SHA256/AES-256-GCM/adulteração aprovados. Clone `cr-jornada-staging-restore-3c8477ba6eac`, ID `33121b53-b6a4-4160-bd86-82975de380c4`. Este ensaio não substitui backup durável. Limites funcionais em `TRATAMENTOS-EMPRESARIAIS.md`; fechamento ainda provisório.
