@@ -1,4 +1,6 @@
 import { CompanyPunchPolicy } from './company-punch-policy';
+import { CompanyOriginalOverview } from './company-original-dashboard';
+import { CompanyOriginalBrand } from './company-original-brand';
 import { CompanyCalculations } from './company-calculations';
 import { CompanyClosures } from './company-closures';
 import { CompanyDayEvents } from './company-day-events';
@@ -9,7 +11,9 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   CalendarClock, CheckCircle2, Copy, LogOut,
-  Plus, RefreshCw, ShieldCheck, UsersRound
+  Plus, RefreshCw, ShieldCheck, UsersRound, LayoutDashboard, Clock3,
+  FileSpreadsheet, MessageSquareText, HeartHandshake, Settings2,
+  ScrollText, UserRound, HelpCircle, BookOpen, ChevronRight, Building2
 } from 'lucide-react';
 import type { Schedule, ScheduleDay } from '../../server/types';
 import { allWeekdays, applyStandardShiftToAll, resetShiftForDay, selectScheduleDays, shiftForDay, updateShiftForDay } from './company-schedule-editor';
@@ -17,7 +21,8 @@ import './company-schedules-page.css';
 
 type CompanySession = {
   user: { id:string; name:string; login:string };
-  company: { id:string; slug:string };
+  company: { id:string; slug:string;name?:string;logo_url?:string|null;primary_color?:string;
+    timezone?:'America/Bahia'|'America/Sao_Paulo' };
   csrf_token:string;
   must_change_password?: boolean;
 };
@@ -63,6 +68,9 @@ function hours(n:number) {
 }
 export function CompanySchedulesPage() {
   const navigate=useNavigate();
+  const [view,setView]=useState<'overview'|'employees'|'records'|'reports'|'occurrences'|
+    'mood'|'schedules'|'settings'|'administrators'|'audit'|'help'>(
+    ()=>window.location.pathname.endsWith('/jornadas')?'schedules':'overview');
   const pendingScheduleCreate=useRef<{payload:string;key:string}|null>(null);
   const [session,setSession]=useState<CompanySession|null>(null);
   const [checking,setChecking]=useState(true);
@@ -360,56 +368,101 @@ export function CompanySchedulesPage() {
   return <main className="company-schedules-page">
     <div className="company-schedules-shell">
       <aside className="cr-legacy-sidebar" aria-label="Menu administrativo da empresa">
-        <div className="cr-legacy-sidebar-brand"><CalendarClock size={25}/> CR JORNADA</div>
-        <div className="cr-legacy-sidebar-title">PAINEL ADMINISTRATIVO</div>
-        <nav className="cr-legacy-sidebar-nav">
-          <a href="#cr-gestao-equipe"><UsersRound size={17}/> Funcionários</a>
-          <a href="#cr-politica-ponto"><ShieldCheck size={17}/> Regras de ponto</a>
-          <a href="#cr-apuracao"><CalendarClock size={17}/> Folhas e relatórios</a>
-          <a href="#cr-registros"><CheckCircle2 size={17}/> Registros de ponto</a>
-          <a href="#cr-jornadas"><CalendarClock size={17}/> Jornadas e escalas</a>
+        <div className="sidebar-brand"><CompanyOriginalBrand company={session.company}/></div>
+        <div className="portal-label">PAINEL ADMINISTRATIVO</div>
+        <nav className="cr-original-nav" aria-label="Menu principal">
+          {([
+            ['overview','Visão geral',LayoutDashboard],
+            ['employees','Funcionários',UsersRound],
+            ['records','Registros de ponto',Clock3],
+            ['reports','Folhas e relatórios',FileSpreadsheet],
+            ['occurrences','Ocorrências',MessageSquareText],
+            ['mood','Humor da Equipe',HeartHandshake],
+            ['schedules','Jornadas e escalas',CalendarClock]
+          ] as const).map(([key,label,Icon])=>
+            <button key={key} type="button" className={'nav-link '+(view===key?'active':'')}
+              aria-current={view===key?'page':undefined} onClick={()=>setView(key)}>
+              <Icon size={19}/>{label}
+            </button>)}
+          <span className="nav-section">GERENCIAMENTO</span>
+          {([
+            ['settings','Configurações',Settings2],
+            ['administrators','Administradores',ShieldCheck],
+            ['audit','Auditoria',ScrollText]
+          ] as const).map(([key,label,Icon])=>
+            <button key={key} type="button" className={'nav-link '+(view===key?'active':'')}
+              aria-current={view===key?'page':undefined} onClick={()=>setView(key)}>
+              <Icon size={18}/>{label}
+            </button>)}
         </nav>
-        <p className="cr-legacy-sidebar-note">Empresa: {session.company.slug}</p>
+        <div className="sidebar-bottom">
+          <button type="button" className="help-card cr-original-help" onClick={()=>setView('help')}>
+            <span><BookOpen size={18}/> Uma jornada mais simples</span>
+            <small>Consulte o guia de uso do sistema.</small>
+            <span>Abrir guia <ChevronRight size={14}/></span>
+          </button>
+          <div className="sidebar-user"><UserRound size={22}/>
+            <div><strong>{session.user.name}</strong><span>Administrador</span></div></div>
+          <button type="button" className="logout-btn" onClick={()=>void signOut()}>
+            <LogOut size={17}/> Sair da conta</button>
+        </div>
       </aside>
       <div className="cr-legacy-main">
-      <header className="company-schedules-head">
-        <div>
-          <span className="company-schedules-overline"><ShieldCheck size={15}/> Área exclusiva da empresa</span>
-          <h1>Jornadas e escalas</h1>
-          <p>Empresa: <strong>{session.company.slug}</strong> · Administrador: {session.user.name}</p>
+      <header className="topbar cr-original-topbar">
+        <div className="breadcrumb"><Building2 size={16}/>
+          <span>{session.company.name||session.company.slug}</span>
+          <ChevronRight size={13}/>
+          <strong>{({overview:'Visão geral',employees:'Funcionários',records:'Registros de ponto',
+            reports:'Folhas e relatórios',occurrences:'Ocorrências',mood:'Humor da Equipe',
+            schedules:'Jornadas e escalas',settings:'Configurações',
+            administrators:'Administradores',audit:'Auditoria',help:'Ajuda'} as Record<string,string>)[view]}</strong>
         </div>
-        <button type="button" className="company-schedules-secondary" onClick={()=>void signOut()}>
-          <LogOut size={16}/> Sair
-        </button>
+        <div className="topbar-right">
+          <span className="topbar-date">{new Intl.DateTimeFormat('pt-BR',{
+            timeZone:session.company.timezone||'America/Sao_Paulo',
+            day:'2-digit',month:'long',year:'numeric'}).format(new Date())}</span>
+          <button type="button" className="icon-btn" aria-label="Ajuda" onClick={()=>setView('help')}>
+            <HelpCircle size={19}/></button>
+        </div>
       </header>
+      <div className="page-content cr-original-page-content">
+        {view==='overview'&&<CompanyOriginalOverview companyId={session.company.id}
+          timezone={session.company.timezone||'America/Sao_Paulo'}
+          onNavigate={name=>setView(name as typeof view)}
+          onSessionExpired={onSessionExpired}/>}
 
-      <div id="cr-gestao-equipe" className="cr-legacy-group">
+
+      {view==='employees'&&<div id="cr-gestao-equipe" className="cr-legacy-group">
       <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} csrf={session.csrf_token}
         onEmployeeCreated={()=>void load()}
         onSessionExpired={onSessionExpired}/>
-      </div>
+      </div>}
 
-      <div id="cr-politica-ponto" className="cr-legacy-group">
+      {view==='settings'&&<div id="cr-politica-ponto" className="cr-legacy-group">
       <CompanyPunchPolicy key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
-      </div>
+      </div>}
 
-      <div id="cr-apuracao" className="cr-legacy-group">
+      {view==='reports'&&<div id="cr-apuracao" className="cr-legacy-group">
       <CompanyCalculations key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>
       <CompanyClosures key={session.company.id+':closures:'+session.csrf_token}
         companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
-      <CompanyDayEvents key={session.company.id+':events:'+session.csrf_token}
-        companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
-      </div>
+      </div>}
 
-      <div id="cr-registros" className="cr-legacy-group">
+      {view==='occurrences'&&<div className="cr-legacy-group">
+        <CompanyDayEvents key={session.company.id+':events:'+session.csrf_token}
+          companyId={session.company.id} employees={employees} csrf={session.csrf_token}
+          onSessionExpired={onSessionExpired}/>
+      </div>}
+
+      {view==='records'&&<div id="cr-registros" className="cr-legacy-group">
       <CompanyAttendance key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>
-      </div>
+      </div>}
 
-      <div id="cr-jornadas" className="cr-legacy-group">
+      {view==='schedules'&&<div id="cr-jornadas" className="cr-legacy-group">
       <section className="company-schedules-card company-schedules-intro">
         <CalendarClock size={25}/>
         <div>
@@ -619,7 +672,28 @@ export function CompanySchedulesPage() {
           </p>
         </div>}
       </section>
-      <p className="company-schedules-footer">CR JORNADA · Módulo em homologação. Nenhum ponto real é ativado nesta página.</p>
+      <p className="company-schedules-footer">CR JORNADA · Funcionamento sujeito às políticas de homologação e liberação da empresa.</p>
+      </div>}
+      {view==='mood'&&<section className="panel cr-original-pending">
+        <h2>Humor da Equipe</h2>
+        <p>A pesquisa anônima original ainda precisa ser adaptada para vínculos multiempresa.
+          Nenhuma resposta de outra empresa será exibida.</p>
+      </section>}
+      {view==='administrators'&&<section className="panel cr-original-pending">
+        <h2>Administradores</h2>
+        <p>O cadastro e a recuperação de administradores desta empresa são feitos pelo Superadmin,
+          preservando o isolamento e a segurança dos acessos.</p>
+      </section>}
+      {view==='audit'&&<section className="panel cr-original-pending">
+        <h2>Auditoria</h2>
+        <p>O histórico empresarial requer uma consulta com escopo próprio por empresa.
+          Nenhum registro de auditoria de outros clientes será disponibilizado.</p>
+      </section>}
+      {view==='help'&&<section className="panel cr-original-pending">
+        <h2>Guia rápido</h2><p>1. Cadastre funcionários. 2. Defina jornadas por dia.
+          3. Atribua escalas individuais ou coletivas. 4. Configure a política de ponto.
+          5. Confira os registros e as apurações do mês.</p>
+      </section>}
       </div>
       </div>
     </div>
