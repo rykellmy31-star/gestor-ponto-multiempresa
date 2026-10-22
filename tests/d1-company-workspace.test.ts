@@ -63,13 +63,15 @@ print(json.dumps(files))`],{encoding:'utf8'})) as string[][];
    expect((await call('employee/cpf-work/requests?company_id=b')).status).toBe(400);
    expect((await call('employee/cpf-work/mood',{mood:'good'})).status).toBe(201);
    expect((await call('employee/cpf-work/mood',{mood:'sad'})).status).toBe(409);
+   await expect(db.prepare("INSERT OR REPLACE INTO company_employee_moods(id,company_id,employee_id,work_date,mood,created_at) VALUES('other-id','a','e0',?,'sad',?)").bind(today,now).run()).rejects.toThrow();
+   await expect(db.prepare("INSERT INTO company_employee_moods(id,company_id,employee_id,work_date,mood,created_at) VALUES('cross-company','b','e0',?,'sad',?)").bind(today,now).run()).rejects.toThrow();
    expect((await (await call('company/workspace/mood',undefined,'a')).json() as any).results).toEqual([]);
    for(const who of ['e1','e2','e3'])expect((await call('employee/cpf-work/mood',{mood:'good'},who)).status).toBe(201);
    const aggregate=await (await call('company/workspace/mood',undefined,'a')).json() as any;
    expect(aggregate.results).toEqual([{mood:'good',total:3}]);expect(JSON.stringify(aggregate)).not.toMatch(/Pessoa|employee_id/);
    expect((await (await call('company/workspace/mood',undefined,'b')).json() as any).results).toEqual([]);
    const overview=await call('company/reports/overview?date='+today+'&month='+today.slice(0,7),undefined,'a');
-   expect(overview.status).toBe(200);expect(JSON.stringify(await overview.json())).not.toContain('Pessoa 3');
+   expect(overview.status).toBe(200);const dashboard=await overview.json() as any;expect(JSON.stringify(dashboard)).not.toContain('Pessoa 3');expect(dashboard.counts.pending).toBe(0);expect(dashboard.rows[0].day.schedule_name).toBe('Jornada a');
    const clock=await call('employee/cpf-work/today');expect(clock.status).toBe(200);
    expect(await clock.json()).toMatchObject({can_punch:false,schedule:{start:'00:00'},blocked:{code:'company_punch_disabled'}});
    expect((await call('employee/cpf-work/punch',{type:'entry',idempotency_key:crypto.randomUUID()})).status).toBe(409);
@@ -82,7 +84,16 @@ print(json.dumps(files))`],{encoding:'utf8'})) as string[][];
    expect((await db.prepare("SELECT COUNT(*) n FROM company_workspace_audit WHERE company_id='a'").first<any>()).n).toBe(1);
    await expect(db.prepare('UPDATE company_request_decisions SET response=\'alterada\'').run()).rejects.toThrow();
    await expect(db.prepare("INSERT OR REPLACE INTO company_request_decisions(request_id,company_id,admin_id,decision,response,created_at) VALUES(?,'a','admin-a','rejected','Alterada',?)").bind(id,now).run()).rejects.toThrow();
-   await db.prepare("UPDATE companies SET status='suspended' WHERE id='a'").run();
+   // Suspension after middleware, immediately before the write statement.
+   env.DB={withSession:()=>({prepare(sql:string){
+    const statement=db.prepare(sql);if(!sql.includes('INSERT INTO company_employee_requests'))return statement;
+    let bound=statement;return {bind(...values:any[]){bound=statement.bind(...values);return this;},async run(){
+     await db.prepare("UPDATE companies SET status='suspended' WHERE id='a'").run();return bound.run();
+    }};
+   }})};
+   expect((await call('employee/cpf-work/requests',{work_date:today,message:'Não gravar após suspensão'})).status).toBe(409);
+   expect((await db.prepare("SELECT COUNT(*) n FROM company_employee_requests WHERE message='Não gravar após suspensão'").first<any>()).n).toBe(0);
+   env.DB=binding;
    expect((await call('employee/cpf-work/mood')).status).toBe(401);
    expect((await call('company/workspace/requests',undefined,'a')).status).toBe(401);
   }finally{await mf.dispose();}

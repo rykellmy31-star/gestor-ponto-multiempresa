@@ -303,6 +303,14 @@ try {
         await access.getByText('Janela QA de ponto',{exact:false}).first().waitFor();
         await access.getByRole('button',{name:'Ver e alterar escala',exact:true}).click();
         await access.getByText('Alterar escala deste funcionário',{exact:true}).waitFor();
+        const changeDate=DateTime.fromISO(today,{zone:'utc'}).plus({days:1}).toISODate();
+        await access.getByLabel('Nova escala',{exact:true}).selectOption({label:'Janela QA de ponto'});
+        await access.getByLabel('Válida a partir de',{exact:true}).fill(changeDate);
+        await access.getByRole('button',{name:'Salvar escala do funcionário',exact:true}).click();
+        await access.getByText('Escala atribuída. Histórico preservado.',{exact:true}).waitFor();
+        const upcoming=await company.client.call('/api/company/schedules/employee/'+company.employee.id+'/week?from='+changeDate);
+        verify(upcoming.days[0].schedule_name==='Janela QA de ponto'&&upcoming.days[0].shift.start==='00:00',
+          'alteracao da escala pela aba funcionarios confirmada na API e no D1');
         await access.getByRole('button',{name:'Fechar escala',exact:true}).click();
         verify(true,'funcionario no painel mostra escala atribuida e permite consultar sete dias');
         await access.getByRole('button',{name:'Editar nome e cargo',exact:true}).click();
@@ -480,6 +488,9 @@ try {
       verify((await b.client.call('/api/company/punch-policy')).enabled,'gestor libera o ponto pelo botao da visao geral com auditoria');
       await page.getByRole('heading',{name:'Jornada da equipe',exact:true}).waitFor();
       verify(true,'visao geral consulta API real sem bloqueio de homologacao');
+      const dashboardBefore=await b.client.call('/api/company/reports/overview?date='+today+'&month='+today.slice(0,7));
+      verify(dashboardBefore.counts.pending===1&&dashboardBefore.rows[0].day.schedule_name==='Janela QA de ponto',
+        'visao geral mostra escala atribuida e contador real de solicitacoes pendentes');
       await page.getByRole('button',{name:'Ocorrências',exact:true}).click();
       await page.getByRole('button',{name:'Responder solicitação',exact:true}).click();
       await page.getByLabel('Resposta ao funcionário',{exact:true}).fill('Justificativa recebida na homologacao QA.');
@@ -494,6 +505,7 @@ try {
       verify((await b.client.call('/api/company/workspace/mood')).results.length===0,'pesquisa protege respostas individuais de equipe pequena');
       const archived=await b.client.call('/api/company/schedules',{method:'POST',body:{...morning,name:'Modelo QA para excluir'},expected:201});
       await page.getByRole('button',{name:'Jornadas e escalas',exact:true}).click();
+      await page.getByRole('button',{name:'Atualizar',exact:true}).click();
       const card=page.locator('article').filter({has:page.getByRole('heading',{name:'Modelo QA para excluir',exact:true})});
       page.once('dialog',dialog=>dialog.accept());
       await card.getByRole('button',{name:'Excluir escala',exact:true}).click();

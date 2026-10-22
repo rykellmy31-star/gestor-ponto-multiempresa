@@ -75,7 +75,10 @@ employeeWorkspaceRoutes.post('/requests',async c=>{
 companyWorkspaceRoutes.use('*',async(c,next)=>{ready(c);await next();});
 companyWorkspaceRoutes.get('/mood',async c=>{
  const co=c.get('company')!,admin=c.get('companyAdminId')!,token=c.get('companyAdminTokenHash')!;
- const from=DateTime.now().minus({days:6}).toISODate()!;
+ const clock=await c.get('db').prepare(`SELECT timezone FROM companies WHERE id=? AND status='active' AND ${VALID_COMPANY_ADMIN_WRITE_SQL}`)
+ .bind(co.id,...companyAdminWriteParams(token,admin,co.id,Date.now())).first<{timezone:string}>();
+ ensure(clock,401,'unauthenticated','Entre novamente.');
+ const from=DateTime.now().setZone(clock.timezone).minus({days:6}).toISODate()!;
  const rows=await c.get('db').prepare(`SELECT m.mood,COUNT(*) AS total FROM company_employee_moods m
  WHERE m.company_id=? AND m.work_date>=? AND ${adminGuard}
  AND (SELECT COUNT(DISTINCT employee_id) FROM company_employee_moods WHERE company_id=m.company_id AND work_date>=?)>=3 GROUP BY m.mood`)

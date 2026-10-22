@@ -89,7 +89,7 @@ export function CompanyOriginalOverview({companyId,timezone,onNavigate,onSession
         <Stat label="Em intervalo" value={data.counts.on_break} icon={Coffee} detail="Pausa registrada" tone="purple"/>
         <Stat label="Expedientes encerrados" value={data.counts.completed} icon={CheckCircle2} detail="Quatro marcações confirmadas" tone="green"/>
         <Stat label="Registros incompletos" value={data.counts.incomplete??'—'} icon={AlertTriangle} detail="Indicador aguarda reconciliação" tone="orange"/>
-        <Stat label="Análises pendentes" value={data.counts.pending??'—'} icon={MessageSquareText} detail="Solicitações ainda em integração" tone="purple"/>
+        <Stat label="Solicitações pendentes" value={data.counts.pending??'—'} icon={MessageSquareText} detail="Justificativas aguardando resposta" tone="purple"/>
         <Stat label="Horas realizadas no mês" value={hm(data.counts.worked_minutes)} icon={Clock3} detail="Apenas intervalos confirmados"/>
       </div>
       <div className="dashboard-middle">

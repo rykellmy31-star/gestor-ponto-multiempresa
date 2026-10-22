@@ -101,7 +101,7 @@ companyAttendanceRoutes.get('/overview',async c=>{
     timezone:string|null;seq:number|null;recorded_at:number|null;schedule_name:string|null};
   type MonthRow={work_date:string;employee_id:string;seq:number|null;recorded_at:number|null};
   // Em ambas consultas, a empresa vem apenas da sessao e a autenticacao e revalidada no SQL.
-  const [today,period]=await db.batch([
+  const [today,period,pending]=await db.batch([
     db.prepare('SELECT e.id,e.full_name,'+
       'COALESCE(e.company_registration,e.registration) AS registration,'+
       'e.status,d.next_seq,d.timezone,p.seq,p.recorded_at,'+
@@ -120,7 +120,11 @@ companyAttendanceRoutes.get('/overview',async c=>{
       'WHERE d.company_id=? AND d.work_date>=? AND d.work_date<? '+
       'AND e.deleted_at IS NULL AND '+VALID_COMPANY_ADMIN_WRITE_SQL+
       ' ORDER BY d.work_date,d.employee_id,p.seq LIMIT 4000')
-      .bind(company.id,start.toISODate(),start.plus({months:1}).toISODate(),...auth)
+      .bind(company.id,start.toISODate(),start.plus({months:1}).toISODate(),...auth),
+    db.prepare(`SELECT COUNT(*) AS total FROM company_employee_requests r
+      JOIN companies co ON co.id=r.company_id AND co.status='active'
+      WHERE r.company_id=? AND NOT EXISTS(SELECT 1 FROM company_request_decisions d WHERE d.request_id=r.id AND d.company_id=r.company_id)
+      AND ${VALID_COMPANY_ADMIN_WRITE_SQL}`).bind(company.id,...auth)
   ]);
   const employees=(today.results||[]) as EmployeeRow[];
   const marks=(period.results||[]) as MonthRow[];
@@ -172,6 +176,6 @@ companyAttendanceRoutes.get('/overview',async c=>{
   return c.json({company_id:company.id,date,month,rows,trend,
     counts:{active_employees:active,entered,not_entered:Math.max(0,active-entered),
       on_break:countStatus('on_break'),completed:countStatus('completed'),
-      incomplete:null,late_employees:null,pending:null,
+      incomplete:null,late_employees:null,pending:Number((pending.results?.[0] as {total:number}|undefined)?.total??0),
       worked_minutes:trend.reduce((sum,d)=>sum+d.worked_minutes,0)}});
 });
