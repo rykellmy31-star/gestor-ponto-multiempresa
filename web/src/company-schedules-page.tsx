@@ -7,7 +7,7 @@ import { CompanyDayEvents } from './company-day-events';
 import { CompanyAttendance } from './company-attendance';
 import { CompanyEmployeeAccess } from './company-employee-access';
 import { jsonRequest,isExpiredCompanySession } from './company-schedules-network';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type CSSProperties } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   CalendarClock, CheckCircle2, Copy, LogOut,
@@ -370,7 +370,8 @@ export function CompanySchedulesPage() {
   </main>;
 
   const total=weekly(form);
-  return <main className="company-schedules-page">
+  return <main className="company-schedules-page"
+    style={{'--green':session.company.primary_color||'#087f6f'} as CSSProperties}>
     <div className="company-schedules-shell">
       <aside className="cr-legacy-sidebar" aria-label="Menu administrativo da empresa">
         <div className="sidebar-brand"><CompanyOriginalBrand company={session.company}/></div>
