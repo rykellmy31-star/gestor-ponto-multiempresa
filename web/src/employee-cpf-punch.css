@@ -1,0 +1,23 @@
+.cpf-punch-panel{background:#fff;border:1px solid #eadfdf;border-radius:12px;padding:19px;margin:0 0 18px;color:#44353a}
+.cpf-punch-panel header{display:flex;align-items:center;gap:9px;color:#800000;margin-bottom:8px}
+.cpf-punch-panel header h3{font-size:16px;font-weight:800;margin:0}
+.cpf-punch-panel>p{color:#796c71;font-size:12px;line-height:1.7;margin:0 0 14px}
+.cpf-punch-info{background:#faf6f6;border-radius:9px;padding:14px;margin:14px 0;display:grid;gap:7px}
+.cpf-punch-info strong{font-size:15px}
+.cpf-punch-info span,.cpf-punch-muted{color:#77686e;font-size:12px}
+.cpf-punch-warning{display:flex;gap:10px;align-items:flex-start;border:1px solid #e9d7b7;border-radius:9px;background:#fff7e8;color:#795822;font-size:12px;line-height:1.7;padding:11px;margin:11px 0}
+.cpf-punch-warning svg{flex-shrink:0}
+.cpf-punch-error{color:#9c283c!important;padding:11px;background:#fff0f0;border-radius:9px}
+.cpf-punch-success{display:flex;align-items:center;gap:8px;color:#1e794e!important;padding:11px;background:#ebf9f0;border-radius:9px}
+.cpf-punch-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px;margin-bottom:12px}
+.cpf-punch-actions button{min-height:41px;padding:11px 13px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#fff;border:1px solid #dfc9cb;color:#800000;font-weight:800;font-size:12px}
+.cpf-punch-actions .cpf-punch-confirm{background:#800000;border-color:#800000;color:#fff;flex:1;min-width:190px}
+.cpf-punch-actions button:disabled{opacity:.55;cursor:not-allowed}
+.cpf-punch-panel small{display:block;color:#998b90;font-size:10px;line-height:1.6}
+@media(max-width:520px){.cpf-punch-panel{padding:15px}.cpf-punch-actions button{flex:1}}
+
+.cpf-punch-receipt{display:grid;gap:8px;border:1px solid #cfe6d7;background:#f3fbf5;border-radius:10px;padding:15px;margin-top:13px}
+.cpf-punch-receipt strong{font-size:13px;color:#225c3c}
+.cpf-punch-receipt span{font-size:12px;color:#3e5747}
+.cpf-punch-receipt small{color:#64756c;font-size:11px}
+.cpf-punch-receipt code{font-size:10px;color:#354d3e;line-height:1.6;overflow-wrap:anywhere}

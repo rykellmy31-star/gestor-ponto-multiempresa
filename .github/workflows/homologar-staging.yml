@@ -1,0 +1,111 @@
+name: Homologar staging CR JORNADA
+
+on:
+  push:
+    branches: [desenvolvimento-cr-jornada]
+    paths:
+      - '.github/workflows/homologar-staging.yml'
+      - 'scripts/provision-cloudflare-staging.mjs'
+      - 'scripts/test_provision_cloudflare_staging.mjs'
+      - 'scripts/exercise-cloudflare-staging.mjs'
+      - 'server/routes/company-schedules.ts'
+      - 'server/routes/company-employees.ts'
+      - 'server/routes/company-employee-status.ts'
+      - 'web/src/company-employee-status.tsx'
+      - 'web/src/company-employee-access.tsx'
+      - 'server/routes/company-attendance.ts'
+      - 'server/routes/company-calculations.ts'
+      - 'server/core/company-calculations.ts'
+      - 'shared/company-calculation-status.ts'
+      - 'web/src/company-calculations.tsx'
+      - 'web/src/employee-cpf-pages.tsx'
+      - 'web/src/company-admin-login-page.tsx'
+      - 'web/src/auth-pages.tsx'
+      - 'web/src/main.tsx'
+      - 'server/routes/company-punch-policy.ts'
+      - 'web/src/company-punch-policy.tsx'
+      - 'migrations/0039_company_punch_policy_audit.sql'
+      - 'migrations/0040_company_day_events.sql'
+      - 'migrations/0041_company_monthly_closures.sql'
+      - 'server/routes/company-closures.ts'
+      - 'web/src/company-closures.tsx'
+      - 'shared/company-day-events.ts'
+      - 'server/routes/company-day-events.ts'
+      - 'web/src/company-day-events.tsx'
+      - 'web/src/company-attendance.tsx'
+      - 'web/src/company-schedules-page.tsx'
+      - 'server/routes/platform-sales.ts'
+      - 'server/routes/platform-companies.ts'
+      - 'shared/company-logo.ts'
+      - 'web/src/company-logo-upload.tsx'
+      - 'web/src/platform-pages.tsx'
+      - 'server/routes/sales-leads.ts'
+      - 'server/index.ts'
+      - 'server/routes/company-workspace.ts'
+      - 'web/src/company-workspace.tsx'
+      - 'web/src/employee-assigned-schedule.tsx'
+      - 'web/src/employee-cpf-punch.tsx'
+      - 'web/src/employee-original-workspace.tsx'
+      - 'migrations/0043_company_workspace.sql'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cr-jornada-staging
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    name: Provisionar e verificar somente staging
+    if: github.ref == 'refs/heads/desenvolvimento-cr-jornada'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Identificar necessidade de ensaio de recuperacao
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          python3 - <<'PY'
+          import os,subprocess
+          base=os.environ.get('BASE_SHA','')
+          files=subprocess.check_output(['git','diff','--name-only',base,os.environ['GITHUB_SHA']],text=True).splitlines() if base and set(base)!={'0'} else ['migrations/new']
+          required=any(p.startswith('migrations/') or p in ['.github/workflows/homologar-staging.yml','scripts/verify-staging-recovery.mjs','scripts/prepare_d1_restore.py','scripts/backup.mjs','scripts/decrypt-backup.mjs'] for p in files)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('recovery='+str(required).lower()+'\n')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validar guardas e migrations antes de acesso remoto
+        run: |
+          python3 -B scripts/verify_repository_guards.py
+          python3 -B -m unittest discover -s scripts -p 'test_prepare_d1_restore.py' -v
+          node --test scripts/test_staging_guard.mjs scripts/test_prepare_cloudflare_staging.mjs scripts/test_provision_cloudflare_staging.mjs
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Verificar tipos e compilar interface
+        run: |
+          npm run typecheck
+          npm run build:web
+      - name: Validar cadastro e isolamento antes de publicar staging
+        run: npx vitest run tests/employee-cpf-punch-route.test.ts tests/d1-company-workspace.test.ts tests/company-logo.test.ts tests/d1-platform-company-onboarding.test.ts tests/company-routing.test.ts tests/company-employees.test.ts tests/d1-company-employee-onboarding.test.ts tests/d1-sales-trigger-routes.test.ts tests/d1-company-attendance.test.ts tests/d1-company-punch-policy.test.ts tests/company-calculations.test.ts tests/d1-company-calculations.test.ts --maxWorkers=1 --no-file-parallelism
+      - name: Instalar navegador para validar o painel no staging real
+        run: npx playwright install --with-deps chromium
+      - name: Validar token, identificar recursos e provisionar staging separado
+        id: remote
+        env:
+          CLOUDFLARE_STAGING_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/exercise-cloudflare-staging.mjs
+      - name: Validar backup cifrado e restauracao em novo D1 separado
+        if: ${{ (github.event_name == 'workflow_dispatch' || steps.changes.outputs.recovery == 'true') && !cancelled() && steps.remote.outcome == 'success' }}
+        env:
+          CLOUDFLARE_STAGING_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/verify-staging-recovery.mjs

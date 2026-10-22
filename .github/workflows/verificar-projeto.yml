@@ -4,11 +4,18 @@ name: Verificar CR JORNADA
 on:
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
+      - desenvolvimento-cr-jornada
+      - restaurar-interface-original-pagpouco
+    paths-ignore:
+      - '**/*.md'
   workflow_dispatch:
+
+# Verificações automáticas restritas à branch de desenvolvimento.
+# Nenhum deploy, operação remota D1 ou gravação em produção.
+# O cancelamento de versões antigas evita duplicações no mesmo ref.
+concurrency:
+  group: cr-jornada-verificacao-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -28,17 +35,128 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Verificar sequencia SQL e arquivos sensiveis no Git
+        run: |
+          python3 -B -m unittest discover -s scripts -p 'test_verify_repository_guards.py' -v
+          python3 -B scripts/verify_repository_guards.py
+
       - name: Instalar dependencias
         run: npm ci
+
+      - name: Auditar dependencias
+        run: npm audit --audit-level=moderate
+
+      - name: Validar gerador seguro de ambiente staging
+        run: node --test scripts/test_prepare_cloudflare_staging.mjs
+      - name: Bloquear alvos staging que coincidam com a producao
+        run: node --test scripts/test_staging_guard.mjs
+
+      - name: Testar backup cifrado, restauracao local e adulteracao (sem dados reais)
+        run: node --test scripts/test_backup_roundtrip.mjs
+
+      - name: Confirmar alvo de producao sem publicar
+        run: |
+          node --test scripts/test_verify_production_target.mjs
+          node scripts/verify-production-target.mjs
 
       - name: Verificar TypeScript
         run: npm run typecheck
 
-      - name: Executar testes automatizados
-        run: npm test
+      - name: Verificar TypeScript dos testes
+        run: npm run typecheck:tests
+
+      - name: Testes de logica, rotas e autorizacao
+        run: npx vitest run --exclude 'tests/d1-*.test.ts' --no-file-parallelism --maxWorkers=2
 
       - name: Compilar interface React
         run: npm run build:web
 
+      - name: Simular configuracao staging com banco ficticio e sem credenciais
+        run: |
+          node scripts/prepare-cloudflare-staging.mjs --worker cr-jornada-staging --database cr-jornada-staging-db --database-id 018b0f87-4bd3-4ec3-9852-e2566909ac24 --origin https://cr-jornada-staging.example.workers.dev
+      - name: Compilar Worker staging sem deploy e sem acesso remoto ao D1
+        run: npx wrangler deploy --dry-run --config wrangler.staging.jsonc --outdir .worker-staging-bundle
       - name: Verificar Cloudflare Worker
         run: npx wrangler deploy --dry-run --outdir .worker-bundle
+
+      # Auditoria remota OPCIONAL de metadados via token Cloudflare read-only.
+      # Nenhum deploy, SQL, migracao ou alteracao na conta remota.
+      - name: Testar barreiras de inicializacao D1 sem rede
+        run: node --test scripts/test_check_production_d1_init.mjs
+
+      - name: Testar schema D1 apos migrations sem rede
+        run: node --test scripts/test_check_production_d1_after.mjs
+
+      - name: Testar relatorio Cloudflare somente leitura (sem rede)
+        run: node --test scripts/test_cloudflare_readonly.mjs
+
+      - name: Inventario Cloudflare remoto (somente leitura, se autorizado)
+        env:
+          CLOUDFLARE_AUDIT_TOKEN: ${{ secrets.CLOUDFLARE_AUDIT_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_AUDIT_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            node scripts/cloudflare-readonly.mjs
+          else
+            echo "Auditoria remota nao executada: credenciais de leitura ainda nao configuradas."
+          fi
+
+  d1-local:
+    name: Integracao D1 local (parte ${{ matrix.shard }} de 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Testar banco D1 exclusivamente local
+        run: npx vitest run tests/d1- --shard=${{ matrix.shard }}/3 --no-file-parallelism --maxWorkers=1
+
+  # Inicializacao D1 exclusivamente quando o proprietario adicionar o token D1 Edit
+  # e a variavel de aprovacao exata; nunca faz deploy nem altera outro Worker.
+  inicializar-d1-existente:
+    name: Inicializar D1 existente — autorizacao explicita
+    if: ${{ false }} # Inicialização D1 concluída em 2026-10-21; bloqueia reexecução
+    needs: [verificar, d1-local]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Baixar codigo revisado
+        uses: actions/checkout@v4
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Verificar testes do bloqueio de inicializacao
+        run: node --test scripts/test_check_production_d1_init.mjs
+      - name: Verificar conta, banco, vinculacao e bookmark sem modificar D1
+        env:
+          CLOUDFLARE_AUDIT_TOKEN: ${{ secrets.CLOUDFLARE_AUDIT_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_SETUP_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/check-production-d1-init.mjs
+      - name: Aplicar exclusivamente migrations D1 aprovadas
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_SETUP_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply DB --remote --config wrangler.jsonc
+      - name: Confirmar esquema completo e 38 migrations no D1 real
+        env:
+          CLOUDFLARE_AUDIT_TOKEN: ${{ secrets.CLOUDFLARE_AUDIT_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/check-production-d1-after.mjs

@@ -1,17 +1,33 @@
 import { DateTime } from 'luxon';
-import type { Schedule } from '../types';
+import type { Schedule, ScheduleDay } from '../types';
 export const localDate = (ms: number, zone: string) => DateTime.fromMillis(ms,{zone}).toISODate()!;
 export const localTime = (ms: number | null, zone: string) => ms === null ? '—' : DateTime.fromMillis(ms,{zone}).toFormat('HH:mm');
 export const dateBr = (date: string) => DateTime.fromISO(date).toFormat('dd/MM/yyyy');
 export const minutesOf = (hhmm: string) => +hhmm.slice(0,2)*60 + +hhmm.slice(3);
-export function scheduleMinutes(s: Schedule) {
+export function scheduleForWeekday(s: Schedule, weekday: number): Schedule {
+  const override = s.day_overrides?.[String(weekday) as keyof NonNullable<Schedule['day_overrides']>];
+  return override ? { ...s, ...override } : s;
+}
+export function scheduleForDate(s: Schedule, date: string): Schedule {
+  const weekday = DateTime.fromISO(date).weekday % 7;
+  return scheduleForWeekday(s, weekday);
+}
+function dayMinutes(s: ScheduleDay) {
   const start=minutesOf(s.start);
   const offset=(v:string)=>minutesOf(v)<start?minutesOf(v)+1440:minutesOf(v);
   const end=minutesOf(s.end)<=start?minutesOf(s.end)+1440:minutesOf(s.end);
   const pause=offset(s.break_end)-offset(s.break_start);
-  return { daily:end-start-(s.paid_break?0:pause), weekly:(end-start-(s.paid_break?0:pause))*s.weekdays.length, pause, overnight:end>1440 };
+  return {daily:end-start-(s.paid_break?0:pause),pause,overnight:end>1440};
+}
+export function scheduleMinutes(s: Schedule) {
+  const base=dayMinutes(s);
+  const weekly=s.weekdays.reduce((total,weekday)=>{
+    return total+dayMinutes(scheduleForWeekday(s,weekday)).daily;
+  },0);
+  return {...base,weekly};
 }
 export function shiftBounds(date: string, s: Schedule, zone: string) {
+  s=scheduleForDate(s,date);
   const start=DateTime.fromISO(`${date}T${s.start}`,{zone});
   const relative=(t:string,isEnd=false)=>{
     let d=DateTime.fromISO(`${date}T${t}`,{zone});
@@ -22,7 +38,15 @@ export function shiftBounds(date: string, s: Schedule, zone: string) {
 }
 export function anchorDate(now:number,s:Schedule|null,zone:string) {
   const d=DateTime.fromMillis(now,{zone});
-  if (s && minutesOf(s.end)<minutesOf(s.start) && d.hour*60+d.minute < Math.min(minutesOf(s.end)+240,minutesOf(s.start))) return d.minus({days:1}).toISODate()!;
+  if (s) {
+    // A madrugada pertence ao turno da vespera, inclusive com horario especial.
+    const previousDate=d.minus({days:1}).toISODate()!;
+    const previous=scheduleForDate(s,previousDate);
+    if (minutesOf(previous.end)<minutesOf(previous.start) &&
+        d.hour*60+d.minute < Math.min(minutesOf(previous.end)+240,minutesOf(previous.start))) {
+      return previousDate;
+    }
+  }
   return d.toISODate()!;
 }
 export function fromLocal(input:string,zone:string) {

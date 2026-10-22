@@ -1,0 +1,565 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowLeft, CheckCircle2, ExternalLink, Eye, EyeOff, MessageCircle,
+  Plus, Save, ShieldCheck, Trash2
+} from 'lucide-react';
+import {
+  defaultSalesPage, salesPageSchema, whatsappUrl,
+  type SalesPageConfig
+} from '../../shared/sales-page';
+import { SalesPageView } from './sales-page';
+import { SalesLeadsInbox } from './sales-leads-inbox';
+import './sales-editor.css';
+
+type AdminResponse = {
+  config: SalesPageConfig;
+  published: boolean;
+  revision: number;
+  updated_at: number | null;
+};
+
+function textLines(lines: string[]) { return lines.join('\n'); }
+function fromLines(raw: string) {
+  return raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+}
+function ensureHttps(url: string) {
+  return !url || url.startsWith('https://');
+}
+
+export function SalesPageEditor({ csrfToken }: { csrfToken: string }) {
+  const [config, setConfig] = useState<SalesPageConfig>(defaultSalesPage);
+  const [published, setPublished] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/platform/sales-page', {
+      credentials: 'same-origin', cache: 'no-store'
+    }).then(async r => {
+      if (!r.ok) throw new Error('Não foi possível carregar a configuração. O backend e a migração 0021 são necessários.');
+      return r.json() as Promise<AdminResponse>;
+    }).then(data => {
+      if (!active) return;
+      const parsed = salesPageSchema.safeParse(data.config);
+      if (!parsed.success) throw new Error('A configuração recebida é inválida.');
+      // Configuracoes anteriores a inclusao dos recursos detalhados
+      // continuam editaveis e recebem sugestoes iniciais.
+      setConfig({
+        ...defaultSalesPage, ...parsed.data,
+        features: parsed.data.features ?? defaultSalesPage.features,
+        steps: parsed.data.steps ?? defaultSalesPage.steps
+      });
+      setPublished(data.published);
+      setRevision(data.revision);
+    }).catch(err => {
+      if (active) setError(err instanceof Error ? err.message : 'Falha de conexão.');
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  function update<K extends keyof SalesPageConfig>(
+    name: K, value: SalesPageConfig[K]
+  ) {
+    setConfig(prev => ({ ...prev, [name]: value }));
+    setNotice('');
+  }
+  function updatePlan(index: number,
+    name: keyof SalesPageConfig['plans'][number], value: unknown
+  ) {
+    setConfig(prev => ({
+      ...prev,
+      plans: prev.plans.map((plan, i) =>
+        i === index ? { ...plan, [name]: value } : plan)
+    }));
+    setNotice('');
+  }
+  function updateFaq(index: number, name: 'question' | 'answer', value: string) {
+    setConfig(prev => ({
+      ...prev, faq: prev.faq.map((item, i) =>
+        i === index ? { ...item, [name]: value } : item)
+    }));
+  }
+  function updateFeature(index: number,
+    field: keyof NonNullable<SalesPageConfig['features']>[number],
+    value: string
+  ) {
+    setConfig(prev => ({
+      ...prev,
+      features: (prev.features ?? defaultSalesPage.features ?? []).map(
+        (item, i) => i === index ? { ...item, [field]: value } : item
+      )
+    }));
+    setNotice('');
+  }
+  function updateStep(index: number,
+    field: keyof NonNullable<SalesPageConfig['steps']>[number],
+    value: string
+  ) {
+    setConfig(prev => ({
+      ...prev,
+      steps: (prev.steps ?? defaultSalesPage.steps ?? []).map(
+        (item, i) => i === index ? { ...item, [field]: value } : item
+      )
+    }));
+    setNotice('');
+  }
+  function addFeature() {
+    const existing = config.features ?? defaultSalesPage.features ?? [];
+    if (existing.length >= 6) return;
+    update('features', [...existing, {
+      title: 'Novo recurso da plataforma',
+      description: 'Explique aqui a funcionalidade e como ela será útil para a rotina da empresa.',
+      stage: 'planned'
+    }]);
+  }
+  function addStep() {
+    const existing = config.steps ?? defaultSalesPage.steps ?? [];
+    if (existing.length >= 5) return;
+    update('steps', [...existing, {
+      title: 'Nova etapa do processo',
+      description: 'Explique de maneira simples o que acontece nesta etapa da implantação.'
+    }]);
+  }
+
+  function addPlan() {
+    if (config.plans.length >= 4) return;
+    setConfig(prev => ({
+      ...prev, plans: [...prev.plans, {
+        id: 'plano-' + Date.now().toString(36),
+        name: 'Novo plano', description: '',
+        price: 'Sob consulta', frequency: '',
+        highlights: ['Descreva uma vantagem do plano'],
+        featured: false, checkout_url: ''
+      }]
+    }));
+  }
+  function addFaq() {
+    if (config.faq.length >= 8) return;
+    update('faq', [...config.faq, {
+      question: 'Qual é a sua dúvida?',
+      answer: 'Escreva uma resposta para os visitantes.'
+    }]);
+  }
+
+  async function save(makePublic: boolean) {
+    setError(''); setNotice('');
+    const validated = salesPageSchema.safeParse(config);
+    if (!validated.success) {
+      setError('Confira os campos. ' + validated.error.issues[0]?.message);
+      return;
+    }
+    if (makePublic && config.lead_form_enabled && !config.privacy_url) {
+      setError('Para publicar o formulário, informe a URL HTTPS da política de privacidade.');
+      return;
+    }
+    if (makePublic && !config.lead_form_enabled && !config.whatsapp &&
+      !config.plans.some(plan => plan.checkout_url)) {
+      setError('Para publicar, habilite o formulário de interesse ou configure uma forma de contato/compra.');
+      return;
+    }
+    if (!ensureHttps(config.logo_url) ||
+      config.plans.some(plan => !ensureHttps(plan.checkout_url))) {
+      setError('Links de imagem e compra devem usar HTTPS.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const response = await fetch('/api/platform/sales-page', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({
+          config: validated.data,
+          published: makePublic,
+          expected_revision: revision
+        })
+      });
+      const result = await response.json().catch(() => null) as
+        { success?: boolean; revision?: number; published?: boolean; error?: { message?: string } } | null;
+      if (!response.ok || !result?.success || typeof result.revision !== 'number') {
+        throw new Error(result?.error?.message ||
+          (response.status === 409
+            ? 'Outra edição foi salva. Recarregue a página antes de continuar.'
+            : 'Não foi possível salvar. Nenhuma alteração foi confirmada.'));
+      }
+      setRevision(result.revision);
+      setPublished(result.published === true);
+      setNotice(makePublic
+        ? 'Página de vendas publicada! O conteúdo foi atualizado no servidor.'
+        : 'Rascunho salvo. A versão já publicada, se houver, permanece no ar.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar.');
+    } finally { setBusy(false); }
+  }
+
+  async function unpublish() {
+    if (!window.confirm(
+      'Deseja retirar a página de vendas do ar? O rascunho será preservado.'
+    )) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const response = await fetch('/api/platform/sales-page/unpublish', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({ expected_revision: revision })
+      });
+      const payload = await response.json().catch(() => null) as
+        { success?: boolean; revision?: number; error?: { message?: string } } | null;
+      if (!response.ok || !payload?.success || typeof payload.revision !== 'number') {
+        throw new Error(payload?.error?.message ||
+          'Não foi possível retirar a página do ar.');
+      }
+      setRevision(payload.revision);
+      setPublished(false);
+      setNotice('Página de vendas retirada do ar. Seu rascunho foi preservado.');
+    } catch(err) {
+      setError(err instanceof Error ? err.message : 'Falha ao despublicar.');
+    } finally { setBusy(false); }
+  }
+
+  const waLink = whatsappUrl(config.whatsapp, config.whatsapp_message);
+  const panelDisabled = loading || busy;
+
+  return <div className="sales-editor">
+    <div className="sales-editor-back">
+      <Link to="/superadmin"><ArrowLeft size={17}/> Voltar ao painel</Link>
+      <button type="button" className="sales-editor-preview-trigger"
+        disabled={loading} onClick={() => setPreviewOpen(true)}>
+        <Eye size={17}/> Prévia das alterações
+      </button>
+      <a href="/vendas" target="_blank" rel="noopener noreferrer">
+        <ExternalLink size={17}/> Ver página pública
+      </a>
+    </div>
+    <div className="sales-editor-top">
+      <div>
+        <p className="sales-editor-eyebrow">CR JORNADA · SUPERADMIN</p>
+        <h2>Configurar página de vendas</h2>
+        <p>Edite textos, benefícios, planos e seus canais de contato. Publique as mudanças sem alterar o código.</p>
+      </div>
+      <span className={'sales-editor-state '+(published?'is-live':'')}>
+        {published ? <><Eye size={16}/> Publicada</> : <><EyeOff size={16}/> Não publicada</>}
+      </span>
+    </div>
+    {loading && <div className="sales-editor-info" role="status">Carregando configurações…</div>}
+    {error && <div className="sales-editor-error" role="alert">{error}</div>}
+    {notice && <div className="sales-editor-success" role="status">
+      <CheckCircle2 size={18}/>{notice}
+    </div>}
+    {!loading && <SalesLeadsInbox csrfToken={csrfToken}/>}
+    {!loading && <form onSubmit={event => { event.preventDefault(); void save(false); }}>
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>01</span><div>
+          <h3>Apresentação da página</h3>
+          <p>Esses textos aparecem na primeira seção e nas buscas da internet.</p>
+        </div></div>
+        <div className="sales-editor-fields">
+          <label>Etiqueta acima do título
+            <input value={config.eyebrow} maxLength={55} required disabled={panelDisabled}
+              onChange={e => update('eyebrow', e.target.value)}/>
+          </label>
+          <label>Título principal
+            <textarea rows={2} value={config.headline} maxLength={115} required disabled={panelDisabled}
+              onChange={e => update('headline', e.target.value)}/>
+          </label>
+          <label>Descrição de destaque
+            <textarea rows={3} value={config.subtitle} maxLength={360} required disabled={panelDisabled}
+              onChange={e => update('subtitle', e.target.value)}/>
+          </label>
+          <label>Descrição para mecanismos de busca
+            <textarea rows={2} value={config.description} maxLength={170} required disabled={panelDisabled}
+              onChange={e => update('description', e.target.value)}/>
+          </label>
+          <div className="sales-editor-cols">
+            <label>Cor principal
+              <div className="sales-editor-color">
+                <input type="color" value={config.primary_color} disabled={panelDisabled}
+                  onChange={e => update('primary_color', e.target.value)}/>
+                <span>{config.primary_color}</span>
+              </div>
+            </label>
+            <label>URL da logomarca (opcional)
+              <input type="url" placeholder="https://exemplo.com/logo.png"
+                value={config.logo_url} disabled={panelDisabled}
+                onChange={e => update('logo_url', e.target.value)}/>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>02</span><div>
+          <h3>Contato comercial</h3>
+          <p>Escolha como os interessados poderão falar com você. O WhatsApp é opcional e pode ser configurado depois.</p>
+        </div></div>
+        <div className="sales-editor-fields">
+          <label className="sales-editor-check">
+            <input type="checkbox"
+              checked={config.lead_form_enabled === true}
+              disabled={panelDisabled}
+              onChange={e => update('lead_form_enabled', e.target.checked)}/>
+            Receber solicitações comerciais pelo formulário do próprio site
+          </label>
+          {config.lead_form_enabled && <label>Endereço HTTPS da política de privacidade
+            <input type="url" value={config.privacy_url || ''}
+              disabled={panelDisabled} required
+              placeholder="https://seudominio.com.br/privacidade"
+              onChange={e => update('privacy_url', e.target.value)}/>
+            <small>A política deve informar como os dados comerciais serão usados e quando serão excluídos.</small>
+          </label>}
+          <p className="sales-editor-form-warning">
+            Desativado por padrão. Antes de publicar, valide o atendimento,
+            a proteção contra spam e o prazo de retenção dos dados dos interessados.
+            Não exige WhatsApp nem gera cobranças.
+          </p>
+        </div>
+        <div className="sales-editor-fields">
+          <div className="sales-editor-cols">
+            <label>WhatsApp com código do Brasil (55 + DDD + número)
+              <input type="tel" inputMode="numeric"
+                value={config.whatsapp} maxLength={13}
+                placeholder="5573999999999" disabled={panelDisabled}
+                onChange={e => update('whatsapp', e.target.value.replace(/\D/g, ''))}/>
+              <small>Somente números. Nenhum telefone é divulgado antes de você preencher e publicar.</small>
+            </label>
+            <label>E-mail comercial (opcional)
+              <input type="email" placeholder="contato@exemplo.com"
+                value={config.contact_email} disabled={panelDisabled}
+                onChange={e => update('contact_email', e.target.value)}/>
+            </label>
+          </div>
+          <label>Mensagem pronta que o cliente enviará no WhatsApp
+            <textarea rows={2} maxLength={250} value={config.whatsapp_message}
+              disabled={panelDisabled}
+              onChange={e => update('whatsapp_message', e.target.value)}/>
+          </label>
+          {waLink && <a className="sales-editor-preview-link"
+            target="_blank" rel="noopener noreferrer" href={waLink}>
+            <MessageCircle size={17}/> Testar abertura do seu WhatsApp
+          </a>}
+        </div>
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>03</span><div>
+          <h3>Benefícios do sistema</h3>
+          <p>Uma vantagem por linha. Entre 3 e 6 vantagens.</p>
+        </div></div>
+        <label className="sales-editor-fields">Benefícios
+          <textarea rows={6} value={textLines(config.benefits)} disabled={panelDisabled}
+            onChange={e => update('benefits', fromLines(e.target.value))}/>
+        </label>
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>04</span><div>
+          <h3>Recursos explicados</h3>
+          <p>Explique cada funcionalidade, seu benefício e o estágio real de desenvolvimento. São permitidos de 3 a 6 recursos.</p>
+        </div></div>
+        <div className="sales-editor-detail-grid">
+          {(config.features ?? defaultSalesPage.features ?? []).map((feature, index) =>
+            <article className="sales-editor-detail-card" key={index}>
+              <header>
+                <strong>Recurso {index + 1}</strong>
+                {(config.features ?? defaultSalesPage.features ?? []).length > 3 &&
+                  <button type="button" disabled={panelDisabled}
+                    onClick={() => update('features',
+                      (config.features ?? defaultSalesPage.features ?? []).filter((_, i) => i !== index)
+                    )}><Trash2 size={15}/> Remover</button>}
+              </header>
+              <label>Nome da funcionalidade
+                <input value={feature.title} maxLength={85} required disabled={panelDisabled}
+                  onChange={e => updateFeature(index, 'title', e.target.value)}/>
+              </label>
+              <label>Descrição para o cliente
+                <textarea rows={5} value={feature.description} maxLength={360}
+                  required disabled={panelDisabled}
+                  onChange={e => updateFeature(index, 'description', e.target.value)}/>
+              </label>
+              <label>Estágio real do recurso
+                <select value={feature.stage} disabled={panelDisabled}
+                  onChange={e => updateFeature(index, 'stage', e.target.value)}>
+                  <option value="planned">Planejado</option>
+                  <option value="testing">Em validação</option>
+                  <option value="available">Disponível — somente após homologação</option>
+                </select>
+              </label>
+            </article>)}
+        </div>
+        {(config.features ?? defaultSalesPage.features ?? []).length < 6 &&
+          <button type="button" className="sales-editor-add" disabled={panelDisabled}
+            onClick={addFeature}><Plus size={18}/> Adicionar recurso</button>}
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>05</span><div>
+          <h3>Como funciona a implantação</h3>
+          <p>Organize uma explicação em etapas, para o cliente compreender todo o processo. De 3 a 5 etapas.</p>
+        </div></div>
+        <div className="sales-editor-detail-grid">
+          {(config.steps ?? defaultSalesPage.steps ?? []).map((step, index) =>
+            <article className="sales-editor-detail-card" key={index}>
+              <header>
+                <strong>Etapa {index+1}</strong>
+                {(config.steps ?? defaultSalesPage.steps ?? []).length > 3 &&
+                  <button type="button" disabled={panelDisabled}
+                    onClick={() => update('steps',
+                      (config.steps ?? defaultSalesPage.steps ?? []).filter((_, i) => i !== index)
+                    )}><Trash2 size={15}/> Remover</button>}
+              </header>
+              <label>Título da etapa
+                <input value={step.title} maxLength={85} required disabled={panelDisabled}
+                  onChange={e => updateStep(index, 'title', e.target.value)}/>
+              </label>
+              <label>O que acontece nesta etapa?
+                <textarea rows={4} value={step.description} maxLength={300}
+                  required disabled={panelDisabled}
+                  onChange={e => updateStep(index, 'description', e.target.value)}/>
+              </label>
+            </article>)}
+        </div>
+        {(config.steps ?? defaultSalesPage.steps ?? []).length < 5 &&
+          <button type="button" className="sales-editor-add" disabled={panelDisabled}
+            onClick={addStep}><Plus size={18}/> Adicionar etapa</button>}
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>06</span><div>
+          <h3>Planos e condições</h3>
+          <p>Cadastre até 4 planos. O link de compra é opcional e deve vir de um checkout externo confiável.</p>
+        </div></div>
+        <div className="sales-editor-plans">
+          {config.plans.map((plan, index) => <article key={plan.id}>
+            <header><strong>Plano {index+1}</strong>
+              {config.plans.length>1 && <button type="button" disabled={panelDisabled}
+                onClick={() => update('plans', config.plans.filter(p => p.id!==plan.id))}>
+                <Trash2 size={15}/> Excluir
+              </button>}
+            </header>
+            <label>Nome do plano
+              <input value={plan.name} required maxLength={65} disabled={panelDisabled}
+                onChange={e => updatePlan(index,'name',e.target.value)}/>
+            </label>
+            <label>Descrição
+              <input value={plan.description} maxLength={180} disabled={panelDisabled}
+                onChange={e => updatePlan(index,'description',e.target.value)}/>
+            </label>
+            <div className="sales-editor-cols">
+              <label>Preço ou condição
+                <input value={plan.price} maxLength={45} required disabled={panelDisabled}
+                  placeholder="Ex.: R$ 99,90 ou Sob consulta"
+                  onChange={e => updatePlan(index,'price',e.target.value)}/>
+              </label>
+              <label>Período (opcional)
+                <input value={plan.frequency} maxLength={35} disabled={panelDisabled}
+                  placeholder="Ex.: por mês"
+                  onChange={e => updatePlan(index,'frequency',e.target.value)}/>
+              </label>
+            </div>
+            <label>O que está incluído (uma linha por item)
+              <textarea rows={4} value={textLines(plan.highlights)} disabled={panelDisabled}
+                onChange={e => updatePlan(index,'highlights',fromLines(e.target.value))}/>
+            </label>
+            <label>Link externo de compra (opcional)
+              <input type="url" value={plan.checkout_url} disabled={panelDisabled}
+                placeholder="https://checkout.exemplo.com/seu-plano"
+                onChange={e => updatePlan(index,'checkout_url',e.target.value)}/>
+            </label>
+            <label className="sales-editor-check">
+              <input type="checkbox" checked={plan.featured} disabled={panelDisabled}
+                onChange={e => updatePlan(index,'featured',e.target.checked)}/>
+              Destacar este plano na página
+            </label>
+          </article>)}
+        </div>
+        {config.plans.length<4 && <button className="sales-editor-add" type="button"
+          disabled={panelDisabled} onClick={addPlan}><Plus size={18}/> Adicionar plano</button>}
+      </section>
+
+      <section className="sales-editor-section">
+        <div className="sales-editor-section-title"><span>07</span><div>
+          <h3>Perguntas frequentes</h3>
+          <p>Ajude o cliente a esclarecer as principais dúvidas antes de entrar em contato.</p>
+        </div></div>
+        {config.faq.map((item,index)=><div className="sales-editor-faq-item" key={index}>
+          <div className="sales-editor-faq-head"><strong>Pergunta {index+1}</strong>
+            <button type="button" disabled={panelDisabled}
+              onClick={()=>update('faq',config.faq.filter((_,i)=>i!==index))}>
+              <Trash2 size={15}/> Remover
+            </button>
+          </div>
+          <label>Pergunta
+            <input value={item.question} maxLength={150} disabled={panelDisabled}
+              onChange={e=>updateFaq(index,'question',e.target.value)}/>
+          </label>
+          <label>Resposta
+            <textarea rows={3} value={item.answer} maxLength={500}
+              disabled={panelDisabled} onChange={e=>updateFaq(index,'answer',e.target.value)}/>
+          </label>
+        </div>)}
+        {config.faq.length<8 && <button className="sales-editor-add" type="button"
+          disabled={panelDisabled} onClick={addFaq}><Plus size={18}/> Adicionar pergunta</button>}
+        <div className="sales-editor-fields">
+          <label>Informação no rodapé da página
+            <textarea rows={2} maxLength={200} value={config.footer_note}
+              disabled={panelDisabled}
+              onChange={e=>update('footer_note',e.target.value)}/>
+          </label>
+        </div>
+      </section>
+
+      <section className="sales-editor-publish">
+        <div><ShieldCheck size={23}/>
+          <div><h3>Revisar e publicar</h3>
+            <p>Com <strong>Salvar e publicar</strong>, a página pública recebe a versão nova automaticamente, sem novo deploy. Com <strong>Salvar como rascunho</strong>, você preserva a versão que já está pública.</p>
+          </div>
+        </div>
+        <div className="sales-editor-publish-actions">
+          {published && <button disabled={panelDisabled} type="button"
+            className="sales-editor-draft" onClick={() => void unpublish()}>
+            <EyeOff size={17}/> Retirar do ar
+          </button>}
+          <button disabled={panelDisabled} type="submit" className="sales-editor-draft">
+            <Save size={17}/>{busy?'Salvando…':'Salvar como rascunho'}
+          </button>
+          <button disabled={panelDisabled} type="button" className="sales-editor-live"
+            onClick={event => {
+              const form = event.currentTarget.closest('form');
+              if (form && !form.reportValidity()) return;
+              void save(true);
+            }}><CheckCircle2 size={17}/>{busy?'Publicando…':'Salvar e publicar'}</button>
+        </div>
+      </section>
+    </form>}
+    {previewOpen && <div className="sales-editor-preview-overlay" role="presentation">
+      <section className="sales-editor-preview-panel" role="dialog"
+        aria-modal="true" aria-label="Prévia privada da página de vendas">
+        <header className="sales-editor-preview-toolbar">
+          <div>
+            <strong>Prévia privada da página de vendas</strong>
+            <span>Mostra o que você está editando, sem salvar ou publicar.</span>
+          </div>
+          <button type="button" onClick={() => setPreviewOpen(false)}>
+            <ArrowLeft size={16}/> Voltar ao editor
+          </button>
+        </header>
+        <div className="sales-editor-preview-scroll">
+          <SalesPageView config={config} status="editing"/>
+        </div>
+      </section>
+    </div>}
+  </div>;
+}

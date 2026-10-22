@@ -74,65 +74,39 @@ platformSetupRoutes.post('/setup', async c => {
     c.env.AUTH_PEPPER
   );
 
-  const result = await c.get('db')
-    .prepare(`
+  const db = c.get('db');
+
+  // O cadastro e sua auditoria devem confirmar juntos. Se a auditoria
+  // falhar (schema ausente, trigger, etc.), o batch D1 reverte tambem
+  // a criacao da conta, evitando um Superadmin sem trilha de auditoria.
+  // O SELECT da auditoria impede eventos de cadastro em disputa duplicada.
+  const result = await db.batch([
+    db.prepare(`
       INSERT INTO platform_admins (
-        id,
-        login,
-        email,
-        display_name,
-        password_hash,
-        active,
-        auth_version,
-        created_at,
-        updated_at
+        id, login, email, display_name, password_hash, active,
+        auth_version, created_at, updated_at
       )
       SELECT ?, ?, ?, ?, ?, 1, 0, ?, ?
-      WHERE NOT EXISTS (
-        SELECT 1 FROM platform_admins
+      WHERE NOT EXISTS (SELECT 1 FROM platform_admins)
+    `).bind(
+      id, input.login, input.email.toLowerCase() || null, input.name,
+      passwordHash, now, now
+    ),
+    db.prepare(`
+      INSERT INTO platform_audit_log (
+        id, actor_id, action, entity_type, entity_id, details_json, created_at
       )
-    `)
-    .bind(
-      id,
-      input.login,
-      input.email.toLowerCase() || null,
-      input.name,
-      passwordHash,
-      now,
-      now
-    )
-    .run();
+      SELECT ?, ?, 'platform.setup_completed', 'platform_admin', ?, '{}', ?
+      WHERE EXISTS (SELECT 1 FROM platform_admins WHERE id = ?)
+    `).bind(crypto.randomUUID(), id, id, now, id)
+  ]);
 
   ensure(
-    result.meta.changes === 1,
+    result[0].meta.changes === 1 && result[1].meta.changes === 1,
     410,
     'platform_setup_completed',
     'O Superadministrador já foi configurado.'
   );
-
-  await c.get('db')
-    .prepare(`
-      INSERT INTO platform_audit_log (
-        id,
-        actor_id,
-        action,
-        entity_type,
-        entity_id,
-        details_json,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
-    .bind(
-      crypto.randomUUID(),
-      id,
-      'platform.setup_completed',
-      'platform_admin',
-      id,
-      '{}',
-      now
-    )
-    .run();
 
   return c.json(
     {

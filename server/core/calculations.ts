@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 import type { DayResult, Occurrence, Rules, Schedule, Totals } from '../types';
-import { scheduleMinutes, shiftBounds } from './time';
+import { scheduleMinutes, shiftBounds, scheduleForWeekday } from './time';
 export const DEFAULT_RULES: Rules = { mark_tolerance:5, daily_tolerance:10, rounding_step:1, rounding_mode:'floor', auto_approve_overtime:false, compensation:'review', max_shift_hours:24 };
 export interface DayInput {
   date:string; timezone:string; schedule:Schedule|null; rules:Rules;
@@ -16,10 +16,11 @@ const roundMinutes=(ms:number,r:Rules)=>{
 export function calculateDay(input: DayInput): DayResult {
   const {date,schedule:s,rules:r,now,marks:m,occurrences:occ,timezone:zone}=input;
   const weekday=DateTime.fromISO(date).weekday%7;
+  const effective=s?scheduleForWeekday(s,weekday):null;
   const approved=occ.filter(o=>o.status==='approved');
   const scheduled=Boolean(input.employed&&s&&s.weekdays.includes(weekday));
   const dayOff=Boolean(input.holiday||approved.some(o=>o.kind==='day_off'));
-  const expected=scheduled&&!dayOff?scheduleMinutes(s!).daily:0;
+  const expected=scheduled&&!dayOff?scheduleMinutes(effective!).daily:0;
   const bounds=s?shiftBounds(date,s,zone):null;
   const present=m.filter(v=>v!==null).length;
   const complete=present===4;
@@ -34,7 +35,7 @@ export function calculateDay(input: DayInput): DayResult {
     if(m[2]!==null&&m[3]===null)workedMs+=Math.max(0,now-m[2]);
   }
   const breakMs=m[1]!==null&&m[2]!==null?Math.max(0,m[2]-m[1]):0;
-  if(s?.paid_break)workedMs+=breakMs;
+  if(effective?.paid_break)workedMs+=breakMs;
   const worked=roundMinutes(workedMs,r);
   const credited=approved.some(o=>o.paid&&['medical','justified_absence'].includes(o.kind))?Math.max(0,expected-worked):0;
   const lateRaw=expected&&bounds&&m[0]!==null?Math.max(0,Math.floor((m[0]-bounds.start)/60000)):0;

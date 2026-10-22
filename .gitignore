@@ -25,3 +25,4 @@ node_modules/
 *.sqlite
 *.sqlite3
 *.db
+wrangler.staging.jsonc

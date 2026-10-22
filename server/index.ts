@@ -1,7 +1,16 @@
+import { employeeWorkspaceRoutes,companyWorkspaceRoutes } from './routes/company-workspace';
+
+// CR JORNADA - Login isolado por CPF e selecao de empresa
+import { employeeCpfAuthRoutes } from './routes/employee-cpf-auth';
+import { employeeCpfHistoryRoutes } from './routes/employee-cpf-history';
+import { employeeCpfPunchRoutes } from './routes/employee-cpf-punch';
 
 import { Hono } from 'hono';
+import { companyClosuresRoutes } from './routes/company-closures';
+import { companyDayEventsRoutes } from './routes/company-day-events';
 import { bodyLimit } from 'hono/body-limit';
-import type { App } from './types';
+import type { App, Env } from './types';
+import { deleteExpiredSalesLeads, parseLeadRetentionDays } from './core/sales-leads-retention';
 import { ApiError } from './core/errors';
 import { auth, originGuard } from './core/security';
 
@@ -39,6 +48,14 @@ import {
 import {
   companyEmployeesRoutes
 } from './routes/company-employees';
+import { companyPunchPolicyRoutes } from './routes/company-punch-policy';
+import { companyCalculationsRoutes } from './routes/company-calculations';
+import { companyAttendanceRoutes } from './routes/company-attendance';
+import { companySchedulesRoutes } from './routes/company-schedules';
+import { salesPublicRoutes, platformSalesRoutes } from './routes/platform-sales';
+import { salesLeadPublicRoutes, salesLeadAdminRoutes } from './routes/sales-leads';
+import { salesPageSchema } from '../shared/sales-page';
+import { renderSalesHead } from './core/sales-seo';
 
 const app = new Hono<App>();
 
@@ -163,21 +180,77 @@ app.use('/api/*', async (c, next) => {
   const isPlatformRoute =
     path.startsWith('/api/platform/');
 
+  const isPublicSalesRoute =
+    (path === '/api/public/sales-page' && c.req.method === 'GET') ||
+    (path === '/api/public/leads' && c.req.method === 'POST');
+
   const isCompanyAuthRoute =
     path.startsWith('/api/company/auth/');
 
   const isCompanyEmployeesList =
-    path === '/api/company/employees' &&
-    c.req.method === 'GET';
+    (path === '/api/company/employees' && c.req.method === 'GET') ||
+    (/^\/api\/company\/employees\/[^/]+\/reset-password$/.test(path) &&
+      c.req.method === 'POST');
+
+  // Somente o novo cadastro empresarial; o modulo ainda exige sessao,
+  // CSRF, flag, isolamento SQL e auditoria antes de qualquer gravacao.
+  const isCompanyEmployeeRegistration =
+    ((path === '/api/company/employees' && c.req.method === 'POST') ||
+      (/^\/api\/company\/employees\/[^/]+$/.test(path) && c.req.method === 'PATCH') ||
+      (/^\/api\/company\/employees\/[^/]+\/status$/.test(path) && c.req.method === 'POST')) &&
+    c.env.ENABLE_COMPANY_EMPLOYEE_REGISTRATION === 'true';
+
+  // Autenticacao empresarial obrigatoria; funcao desligada sem flag.
+  const isCompanySchedulesRoute =
+    path.startsWith('/api/company/schedules/') ||
+    path === '/api/company/schedules';
+
+  const isCompanyPunchPolicyRoute =
+    path === '/api/company/punch-policy' && ['GET','PUT'].includes(c.req.method);
+
+  const isCompanyAttendanceRoute =
+    ['/api/company/reports/attendance','/api/company/reports/calculations','/api/company/reports/overview'].includes(path) && c.req.method === 'GET';
+
+  const isWorkspaceRoute=([
+    '/api/employee/cpf-work/mood','/api/employee/cpf-work/requests',
+    '/api/company/workspace/mood','/api/company/workspace/requests'
+  ].includes(path)&&['GET','POST'].includes(c.req.method))||
+    (/^\/api\/company\/workspace\/requests\/[^/]+\/decision$/.test(path)&&c.req.method==='POST');
 
   const isHealthRoute =
     path === '/api/health';
+  const isCompanyClosureRoute=['/api/company/closures','/api/company/closures/'].includes(path)&&['GET','POST'].includes(c.req.method);
+  const isCompanyDayEventsRoute=['/api/company/day-events','/api/company/day-events/'].includes(path)&&['GET','POST'].includes(c.req.method);
+
+  // Somente o novo acesso por CPF; demais rotas antigas ficam bloqueadas.
+  const isEmployeeCpfAuthRoute =
+    path.startsWith('/api/employee/cpf-auth/');
+
+  // Apenas leitura mensal de ponto, vinculada a sessao CPF verificada.
+  const isEmployeeCpfHistoryRoute =
+    path === '/api/employee/cpf-work/history' &&
+    c.req.method === 'GET';
+
+  // Registros empresariais vinculados a sessao CPF, desligados sem flag.
+  const isEmployeeCpfPunchRoute =
+    (path === '/api/employee/cpf-work/today' && c.req.method === 'GET') ||
+    (path === '/api/employee/cpf-work/punch' && c.req.method === 'POST');
 
   if (
+    !isWorkspaceRoute &&
     !isPlatformRoute &&
+    !isPublicSalesRoute &&
     !isCompanyAuthRoute &&
     !isCompanyEmployeesList &&
+    !isCompanyEmployeeRegistration &&
+    !isCompanySchedulesRoute &&
+    !isCompanyAttendanceRoute &&
+    !isCompanyPunchPolicyRoute &&
+    !isEmployeeCpfAuthRoute &&
+    !isEmployeeCpfHistoryRoute &&
+    !isEmployeeCpfPunchRoute &&
     !isHealthRoute
+    && !isCompanyDayEventsRoute && !isCompanyClosureRoute
   ) {
     return c.json(
       {
@@ -210,14 +283,31 @@ app.route(
   platformCompaniesRoutes
 );
 
+app.route('/api/public', salesPublicRoutes);
+app.route('/api/public', salesLeadPublicRoutes);
+app.route('/api/platform/leads', salesLeadAdminRoutes);
+app.route('/api/platform/sales-page', platformSalesRoutes);
+
 // CR JORNADA - Autenticacao empresarial
 app.route('/api/company/auth', companyAuthRoutes);
+app.route('/api/company/reports', companyAttendanceRoutes);
+app.route('/api/company/reports', companyCalculationsRoutes);
+app.route('/api/company/day-events', companyDayEventsRoutes);
+app.route('/api/company/closures', companyClosuresRoutes);
+app.route('/api/company/punch-policy', companyPunchPolicyRoutes);
 
 // CR JORNADA - Listagem de funcionarios da empresa
 app.route(
   '/api/company/employees',
   companyEmployeesRoutes
 );
+app.route('/api/company/workspace',companyWorkspaceRoutes);
+app.route('/api/employee/cpf-work',employeeWorkspaceRoutes);
+app.route('/api/company/schedules', companySchedulesRoutes);
+
+app.route('/api/employee/cpf-auth', employeeCpfAuthRoutes);
+app.route('/api/employee/cpf-work', employeeCpfHistoryRoutes);
+app.route('/api/employee/cpf-work', employeeCpfPunchRoutes);
 
 // Rotas antigas de funcionarios:
 // permanecem bloqueadas.
@@ -270,7 +360,7 @@ app.get('*', async c => {
   // utilizam isolamento empresarial.
   if (
     path === '/admin' ||
-    path.startsWith('/admin/') ||
+    (path.startsWith('/admin/') && path !== '/admin/entrar') ||
     path === '/app' ||
     path.startsWith('/app/') ||
     path === '/entrar' ||
@@ -278,6 +368,45 @@ app.get('*', async c => {
     path === '/redefinir-senha'
   ) {
     return c.redirect('/superadmin', 302);
+  }
+
+  if (path === '/vendas') {
+    const row = await c.get('db').prepare(
+      'SELECT published,published_json FROM sales_page_settings WHERE id=1'
+    ).first<{ published: number; published_json: string | null }>();
+
+    let salesConfig: {
+      headline: string;
+      description: string;
+    } | null = null;
+    if (row?.published === 1 && row.published_json) {
+      // Nunca inserir dados nao validados na resposta HTML.
+      const parsed = salesPageSchema.safeParse(
+        JSON.parse(row.published_json)
+      );
+      if (parsed.success) {
+        salesConfig = {
+          headline: parsed.data.headline,
+          description: parsed.data.description
+        };
+      }
+    }
+
+    const asset = await c.env.ASSETS.fetch(c.req.raw);
+    if (!asset.ok) return asset;
+
+    const origin = c.env.APP_ORIGIN &&
+      /^https:\/\/[^/]+$/.test(c.env.APP_ORIGIN)
+      ? c.env.APP_ORIGIN
+      : new URL(c.req.url).origin;
+
+    const html = renderSalesHead(
+      await asset.text(), salesConfig, origin + '/vendas'
+    );
+    c.header('Content-Type', 'text/html; charset=utf-8');
+    c.header('X-Robots-Tag', salesConfig ? 'index, follow' : 'noindex, nofollow');
+    c.header('Cache-Control', 'no-store');
+    return c.body(html, 200);
   }
 
   // O painel Superadmin utiliza sua propria
@@ -405,4 +534,29 @@ app.onError((error, c) => {
   );
 });
 
-export default app;
+// A rotina agendada nao é executada na prévia Pages. O serviço
+// fica inativo até ENABLE_SALES_LEADS e SALES_LEADS_RETENTION_DAYS
+// estarem configurados e a migração 0022 homologada.
+export async function runScheduledLeadRetention(env: Env, now = Date.now()): Promise<number> {
+  if (env.ENABLE_SALES_LEADS !== 'true') return 0;
+  const days = parseLeadRetentionDays(env.SALES_LEADS_RETENTION_DAYS);
+  if (days === null) return 0;
+
+  const db = env.DB.withSession('first-primary');
+  let removed = 0;
+  for (let i = 0; i < 20; i++) {
+    const count = await deleteExpiredSalesLeads(db, days, now, 100);
+    removed += count;
+    if (count < 100) break;
+  }
+  return removed;
+}
+
+// Mantem app.request e app.fetch para os testes e a compatibilidade com
+// o Worker, acrescentando somente o handler scheduled.
+export default Object.assign(app, {
+  async scheduled(_controller: ScheduledController, env: Env) {
+    await runScheduledLeadRetention(env);
+  }
+});
+

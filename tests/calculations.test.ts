@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {DateTime} from 'luxon';
 import {calculateDay,DEFAULT_RULES,sumDays,type DayInput} from '../server/core/calculations';
-import {anchorDate,fromLocal,scheduleMinutes,shiftBounds,datesBetween,duration} from '../server/core/time';
+import {anchorDate,fromLocal,scheduleMinutes,shiftBounds,datesBetween,duration,scheduleForDate} from '../server/core/time';
 import {hashPassword,verifyPassword,sha256,encryptPersonal} from '../server/core/crypto';
 import {scheduleSchema,rulesSchema,employeeSchema} from '../server/core/validation';
 const zone='America/Bahia',date='2026-09-07';
@@ -33,6 +33,19 @@ describe('Cálculo real de jornada',()=>{
   it('não cobra faltantes em dia futuro',()=>{const d=calc({now:at('23:00','2026-09-06'),marks:[null,null,null,null]});expect(d.expected_minutes).toBe(480);expect(d.missing_minutes).toBe(0);expect(d.absence).toBe(false);});
   it('turno atravessa meia-noite e virada do mês',()=>{const overnight={...s,start:'22:00',break_start:'02:00',break_end:'03:00',end:'07:00',weekdays:[0,1,2,3,4,5,6]};const d=calc({date:'2026-09-30',schedule:overnight,marks:[at('22:00','2026-09-30'),at('02:00','2026-10-01'),at('03:00','2026-10-01'),at('07:00','2026-10-01')],now:at('12:00','2026-10-01')});expect(d.worked_minutes).toBe(480);expect(d.expected_minutes).toBe(480);expect(d.date).toBe('2026-09-30');expect(anchorDate(at('03:00','2026-10-01'),overnight,zone)).toBe('2026-09-30');});
   it('turno noturno não vira falta à meia-noite',()=>{const overnight={...s,start:'22:00',break_start:'02:00',break_end:'03:00',end:'07:00'};expect(calc({schedule:overnight,marks:[null,null,null,null],now:at('23:00')}).absence).toBe(false);});
+  it('associa madrugada de domingo ao sabado noturno especial',()=>{
+    const saturdayNight={...s,weekdays:[1,2,3,4,5,6],
+      day_overrides:{'6':{start:'22:00',break_start:'02:00',break_end:'03:00',end:'06:00',paid_break:false}}};
+    expect(anchorDate(at('03:00','2026-09-13'),saturdayNight,zone)).toBe('2026-09-12');
+    expect(anchorDate(at('11:00','2026-09-13'),saturdayNight,zone)).toBe('2026-09-13');
+  });
+  it('nao herda turno noturno-base quando sabado tem turno diurno',()=>{
+    const saturdayDay={...s,start:'22:00',break_start:'02:00',break_end:'03:00',end:'07:00',
+      weekdays:[1,2,3,4,5,6],
+      day_overrides:{'6':{start:'07:00',break_start:'10:00',break_end:'10:15',end:'13:00',paid_break:false}}};
+    expect(anchorDate(at('03:00','2026-09-13'),saturdayDay,zone)).toBe('2026-09-13');
+    expect(anchorDate(at('03:00','2026-09-08'),saturdayDay,zone)).toBe('2026-09-07');
+  });
   it('arredonda apenas a duração, preservando horários brutos',()=>{const marks=[at('08:00')+30000,at('12:00'),at('13:00'),at('17:00')];const d=calc({marks,rules:{...DEFAULT_RULES,rounding_step:5,daily_tolerance:0,rounding_mode:'floor'}});expect(d.worked_minutes).toBe(475);expect(d.marks[0]).toBe(marks[0]);});
   it('soma dias, faltas e pendências semanal/mensal sem limitar horas a 24',()=>{const days=Array.from({length:22},()=>calc());const sum=sumDays(days);expect(sum.worked_minutes).toBe(10560);expect(sum.worked_days).toBe(22);expect(duration(sum.worked_minutes)).toBe('176:00');});
 });
@@ -44,6 +57,55 @@ describe('Validações de datas e cadastros',()=>{
   it('meses incluem 28, 29, 30 e 31 dias corretamente',()=>{expect(datesBetween('2024-02-01','2024-02-29')).toHaveLength(29);expect(datesBetween('2026-02-01','2026-02-28')).toHaveLength(28);expect(datesBetween('2026-09-01','2026-09-30')).toHaveLength(30);expect(datesBetween('2026-10-01','2026-10-31')).toHaveLength(31);});
   it('CPF é validado e campo omitido continua omitido',()=>{const e={full_name:'Nome válido',registration:'X1',job_title:'Cargo',admission_date:'2026-01-01',status:'active',notes:'',login:'pessoa'};expect(employeeSchema.safeParse({...e,cpf:'11111111111'}).success).toBe(false);expect(employeeSchema.parse(e).cpf).toBeUndefined();expect(employeeSchema.safeParse({...e,cpf:'52998224725'}).success).toBe(true);});
 });
+describe('Escalas com segunda a sexta agrupados e sabado independente',()=>{
+  const weekly={
+    ...s,weekdays:[1,2,3,4,5,6],
+    day_overrides:{
+      '6':{
+        start:'07:00',break_start:'10:00',break_end:'10:15',
+        end:'13:00',paid_break:true
+      }
+    }
+  };
+  it('calcula 8 horas de segunda a sexta e 6 horas no sabado',()=>{
+    expect(scheduleMinutes(weekly).daily).toBe(480);
+    expect(scheduleMinutes(weekly).weekly).toBe(2760);
+    expect(scheduleForDate(weekly,'2026-09-12').start).toBe('07:00');
+    expect(scheduleForDate(weekly,'2026-09-07').start).toBe('08:00');
+    expect(scheduleForDate(weekly,'2026-09-07').end).toBe('17:00');
+    expect(shiftBounds('2026-09-12',weekly,zone).start)
+      .toBe(at('07:00','2026-09-12'));
+    expect(shiftBounds('2026-09-12',weekly,zone).end)
+      .toBe(at('13:00','2026-09-12'));
+  });
+  it('nao cria hora extra erroneamente quando sabado segue sua propria escala',()=>{
+    const d=calc({
+      date:'2026-09-12',schedule:weekly,
+      marks:['07:00','10:00','10:15','13:00']
+        .map(t=>at(t,'2026-09-12')),
+      now:at('14:00','2026-09-12')
+    });
+    expect(d.expected_minutes).toBe(360);
+    expect(d.worked_minutes).toBe(360);
+    expect(d.raw_balance_minutes).toBe(0);
+    expect(d.absence).toBe(false);
+    expect(d.overtime_pending_minutes).toBe(0);
+  });
+  it('exige carga distinta somente no dia escolhido sem alterar jornadas antigas',()=>{
+    expect(scheduleMinutes(s).weekly).toBe(2400);
+    expect(scheduleSchema.safeParse(s).success).toBe(true);
+    expect(scheduleSchema.safeParse(weekly).success).toBe(true);
+    expect(scheduleSchema.safeParse({
+      ...weekly,day_overrides:{'0':weekly.day_overrides['6']}
+    }).success).toBe(false);
+    expect(scheduleSchema.safeParse({
+      ...weekly,day_overrides:{'6':{
+        ...weekly.day_overrides['6'],break_start:'13:30'
+      }}
+    }).success).toBe(false);
+  });
+});
+
 describe('Criptografia real',()=>{
   it('scrypt tem salt aleatório, aceita senha válida e rejeita inválida',async()=>{const pw='Frase de senha pessoal segura 2026',pepper='a'.repeat(64);const a=await hashPassword(pw,pepper),b=await hashPassword(pw,pepper);expect(a).not.toBe(b);expect(a).not.toContain(pw);expect(await verifyPassword(pw,a,pepper)).toBe(true);expect(await verifyPassword('senha inválida',a,pepper)).toBe(false);expect(await verifyPassword(pw,a,'b'.repeat(64))).toBe(false);},10000);
   it('cifra CPF com IV novo e não contém texto puro',async()=>{const a=await encryptPersonal('52998224725','a'.repeat(64)),b=await encryptPersonal('52998224725','a'.repeat(64));expect(a).not.toContain('52998224725');expect(a).not.toBe(b);expect(sha256('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');});

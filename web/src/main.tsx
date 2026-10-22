@@ -4,8 +4,9 @@ import {createRoot} from 'react-dom/client';
 import {BrowserRouter, Routes, Route, Navigate, Link} from 'react-router-dom';
 import '@fontsource-variable/inter';
 import './styles.css';
+import './cr-original-interface.css';
 
-import {LoginPage, ForgotPage, ResetPage, SetupPage} from './auth-pages';
+import {ForgotPage, ResetPage, SetupPage} from './auth-pages';
 import {ProtectedLayout, HelpPage} from './layout';
 import {ToastProvider, Button, Empty} from './ui';
 import {ClockPage, EmployeeReportPage, EmployeeRequestsPage, AccountPage} from './employee-pages';
@@ -14,6 +15,12 @@ import {RecordsPage, AdminReportsPage, AdminOccurrencesPage} from './admin-recor
 import {SchedulesPage, SettingsPage, AdminUsersPage, AuditPage} from './admin-settings';
 import {AdminMoodPage} from './admin-mood';
 import {PlatformPage} from './platform-pages';
+import {PlatformDemoPage} from './platform-demo';
+import {EmployeeCpfPage} from './employee-cpf-pages';
+import {DeveloperCredit} from './developer-credit';
+import {SalesPage} from './sales-page';
+import {CompanySchedulesPage} from './company-schedules-page';
+import {CompanyAdminLoginPage} from './company-admin-login-page';
 
 class ErrorBoundary extends React.Component<
   {children: React.ReactNode},
@@ -48,7 +55,7 @@ function NotFound() {
       <Empty
         title="Página não encontrada"
         text="Confira o endereço ou retorne ao acesso do sistema."
-        action={<Link to="/entrar" className="btn btn-primary">Ir para o acesso</Link>}
+        action={<Link to="/funcionario" className="btn btn-primary">Ir para o CR JORNADA</Link>}
       />
     </div>
   );
@@ -58,15 +65,25 @@ createRoot(document.getElementById('root')!).render(
   <ErrorBoundary>
     <BrowserRouter>
       <ToastProvider>
+        <div className="cr-site-frame">
+          <div className="cr-site-content">
         <Routes>
-          <Route path="/" element={<Navigate to="/entrar" replace/>}/>
-          <Route path="/entrar" element={<LoginPage realm="employee"/>}/>
-          <Route path="/admin/entrar" element={<LoginPage realm="admin"/>}/>
+          <Route path="/" element={<Navigate to="/funcionario" replace/>}/>
+          <Route path="/entrar" element={<Navigate to="/funcionario" replace/>}/>
+          <Route path="/admin/entrar" element={<CompanyAdminLoginPage/>}/>
           <Route path="/setup" element={<SetupPage/>}/>
           <Route path="/recuperar-senha" element={<ForgotPage/>}/>
           <Route path="/redefinir-senha" element={<ResetPage/>}/>
 
           <Route path="/superadmin" element={<PlatformPage/>}/>
+          <Route path="/demo-superadmin" element={<PlatformDemoPage/>}/>
+          <Route path="/vendas" element={<SalesPage/>}/>
+          <Route path="/planos" element={<Navigate to="/vendas" replace/>}/>
+          <Route path="/superadmin/vendas" element={<PlatformPage/>}/>
+          <Route path="/empresa" element={<CompanySchedulesPage/>}/>
+          <Route path="/empresa/entrar" element={<Navigate to="/admin/entrar" replace/>}/>
+          <Route path="/empresa/jornadas" element={<CompanySchedulesPage/>}/>
+          <Route path="/funcionario" element={<EmployeeCpfPage/>}/>
 
           <Route path="/app" element={<ProtectedLayout realm="employee"/>}>
             <Route index element={<ClockPage/>}/>
@@ -93,6 +110,9 @@ createRoot(document.getElementById('root')!).render(
 
           <Route path="*" element={<NotFound/>}/>
         </Routes>
+          </div>
+          <DeveloperCredit/>
+        </div>
       </ToastProvider>
     </BrowserRouter>
   </ErrorBoundary>

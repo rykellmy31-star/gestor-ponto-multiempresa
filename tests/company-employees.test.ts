@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -12,6 +13,8 @@ vi.mock('../server/core/security', () => ({
 
 vi.mock('../server/core/crypto', () => ({
   hashPassword: async () => 'dummy-hash',
+  encryptPersonal: async () => 'encrypted-cpf-fixture',
+  keyedHash: () => 'f'.repeat(64),
   verifyPassword: async () => true,
   randomToken: () => 'a'.repeat(64),
   sha256: () => 'token-hash',
@@ -49,12 +52,15 @@ type Scenario = 'company-a' | 'company-b' | 'anonymous';
 
 function makeApp(scenario: Scenario) {
   const statements: string[] = [];
+  const recordedBatches: Array<Array<{sql:string;params:unknown[]}>> = [];
 
   const db = {
     prepare(sql: string) {
       let parameters: unknown[] = [];
 
       const statement = {
+        sql,
+        get params() {return [...parameters];},
         bind(...args: unknown[]) {
           parameters = args;
           return statement;
@@ -82,6 +88,7 @@ function makeApp(scenario: Scenario) {
               expires_at: Date.now() + 60000,
               last_seen_at: Date.now(),
               token_hash: 'token-hash',
+              must_change_password: 0,
               slug: scenario
             };
           }
@@ -127,6 +134,10 @@ function makeApp(scenario: Scenario) {
       };
 
       return statement;
+    },
+    async batch(commands:Array<{sql:string;params:unknown[]}>) {
+      recordedBatches.push(commands);
+      return commands.map(()=>({meta:{changes:1}}));
     }
   };
 
@@ -166,7 +177,10 @@ function makeApp(scenario: Scenario) {
   const env = {
     ENVIRONMENT: 'development',
     AUTH_PEPPER: 'test-pepper'.repeat(5),
-    SESSION_HOURS: '8'
+    SESSION_HOURS: '8',
+    ENABLE_COMPANY_EMPLOYEE_REGISTRATION: 'true',
+    CPF_LOOKUP_SECRET: 's'.repeat(64),
+    DATA_KEY:'a'.repeat(64)
   };
 
   const getEmployees = (authenticated = true) =>
@@ -187,11 +201,84 @@ function makeApp(scenario: Scenario) {
   return {
     app,
     statements,
+    recordedBatches,
     getEmployees
   };
 }
 
 describe('CR JORNADA - isolamento de funcionarios', () => {
+  it('gestor cadastra funcionário com CPF protegido e matrícula empresarial', async () => {
+    const t=makeApp('company-a');
+    const response=await t.app.request('/api/company/employees',{
+      method:'POST',
+      headers:{
+        Cookie:'cr_jornada_company_dev='+'a'.repeat(64),
+        'X-CSRF-Token':'csrf-token',
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({
+        full_name:'João Silva',registration:'JOAO-001',
+        cpf:'529.982.247-25',job_title:'Atendente',admission_date:'2026-10-21'
+      })
+    },{
+      ENVIRONMENT:'development',ENABLE_COMPANY_EMPLOYEE_REGISTRATION:'true',
+      AUTH_PEPPER:'test-pepper'.repeat(5),
+      CPF_LOOKUP_SECRET:'s'.repeat(64),DATA_KEY:'a'.repeat(64)
+    } as any);
+    expect(response.status).toBe(201);
+    const data=await jsonBody(response);
+    expect(data.company_id).toBe('company-a');
+    expect(data.employee.registration).toBe('JOAO-001');
+    expect(data.temporary_password).toHaveLength(24);
+    expect(JSON.stringify(data)).not.toContain('52998224725');
+    expect(response.headers.get('Cache-Control')).toContain('no-store');
+    expect(t.recordedBatches).toHaveLength(1);
+    const batch=t.recordedBatches[0];
+    expect(batch).toHaveLength(6);
+    expect(batch[0].sql).toContain('AND '+ 'EXISTS (SELECT 1 FROM company_admin_sessions');
+    expect(batch[0].sql).toContain('co.status=\'active\'');
+    expect(batch[0].params).toContain('company-a');
+    expect(batch[0].params).toContain('JOAO-001');
+    expect(batch[0].params).not.toContain('52998224725');
+    expect(batch[1].sql).toContain('company_employee_write_guards');
+    expect(batch[4].params).toContain('f'.repeat(64));
+    expect(batch[5].sql).toContain('company_employee_registration_audit');
+  });
+
+  it('não registra funcionário com CPF inválido',async ()=>{
+    const t=makeApp('company-a');
+    const response=await t.app.request('/api/company/employees',{
+      method:'POST',
+      headers:{
+        Cookie:'cr_jornada_company_dev='+'a'.repeat(64),
+        'X-CSRF-Token':'csrf-token',
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({
+        full_name:'João Silva',registration:'JOAO-001',
+        cpf:'11111111111',job_title:'Atendente',admission_date:'2026-10-21'
+      })
+    }, {
+      ENVIRONMENT:'development',ENABLE_COMPANY_EMPLOYEE_REGISTRATION:'true',
+      AUTH_PEPPER:'test-pepper'.repeat(5),
+      CPF_LOOKUP_SECRET:'s'.repeat(64),DATA_KEY:'a'.repeat(64)
+    } as any);
+    expect(response.status).toBe(400);
+    expect(t.recordedBatches).toHaveLength(0);
+  });
+
+  it('não cadastra funcionário sem sessão empresarial',async ()=>{
+    const t=makeApp('anonymous');
+    const response=await t.app.request('/api/company/employees',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({full_name:'João',registration:'1',cpf:'52998224725',
+        job_title:'',admission_date:'2026-10-21'})
+    }, {ENVIRONMENT:'development',ENABLE_COMPANY_EMPLOYEE_REGISTRATION:'true'} as any);
+    expect(response.status).toBe(401);
+    expect(t.recordedBatches).toHaveLength(0);
+  });
+
+
   it('empresa A visualiza somente seus funcionarios', async () => {
     const t = makeApp('company-a');
 
@@ -199,7 +286,7 @@ describe('CR JORNADA - isolamento de funcionarios', () => {
 
     expect(res.status).toBe(200);
 
-    const data = await res.json();
+    const data = await jsonBody(res);
 
     expect(data.success).toBe(true);
     expect(data.company_id).toBe('company-a');
@@ -221,7 +308,7 @@ describe('CR JORNADA - isolamento de funcionarios', () => {
 
     expect(res.status).toBe(200);
 
-    const data = await res.json();
+    const data = await jsonBody(res);
 
     expect(data.success).toBe(true);
     expect(data.company_id).toBe('company-b');

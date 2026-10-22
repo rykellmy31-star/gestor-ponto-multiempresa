@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
 import type { App, Ctx } from '../types';
+import { platformInvite,activatePlatformInvite,changePlatformPassword } from './platform-owner-access';
 import { body } from '../core/validation';
 import { ensure } from '../core/errors';
 
@@ -31,6 +32,8 @@ type PlatformAdmin = {
   password_hash: string;
   active: number;
   auth_version: number;
+  must_change_password: number;
+  temporary_password_expires_at:number|null;
 };
 
 type PlatformSession = {
@@ -41,6 +44,8 @@ type PlatformSession = {
   csrf_token: string;
   expires_at: number;
   last_seen_at: number;
+  must_change_password:number;
+  temporary_password_expires_at:number|null;
 };
 
 function platformCookieName(c: Ctx) {
@@ -60,7 +65,7 @@ function platformCookieOptions(c: Ctx) {
   };
 }
 
-async function recordPlatformAudit(
+export async function recordPlatformAudit(
   c: Ctx,
   action: string,
   actorId: string | null,
@@ -95,7 +100,7 @@ async function recordPlatformAudit(
 
 // FUNÇÃO EXPORTADA PARA OUTRAS ROTAS DO SUPERADMIN
 
-export async function getPlatformSession(c: Ctx) {
+export async function getPlatformSession(c: Ctx,allowRestricted=false) {
   const token = getCookie(c, platformCookieName(c));
 
   if (!token || !/^[a-f0-9]{64}$/.test(token)) {
@@ -112,6 +117,7 @@ export async function getPlatformSession(c: Ctx) {
         a.login,
         a.email,
         a.display_name,
+        a.must_change_password,a.temporary_password_expires_at,
         s.csrf_token,
         s.expires_at,
         s.last_seen_at
@@ -131,7 +137,8 @@ export async function getPlatformSession(c: Ctx) {
     )
     .first<PlatformSession>();
 
-  if (!session) {
+  if (!session || (!allowRestricted&&session.must_change_password===1) ||
+      (session.must_change_password===1&&session.temporary_password_expires_at!==null&&session.temporary_password_expires_at<=now)) {
     return null;
   }
 
@@ -177,7 +184,7 @@ platformAuthRoutes.post('/login', async c => {
         display_name,
         password_hash,
         active,
-        auth_version
+        auth_version,must_change_password,temporary_password_expires_at
       FROM platform_admins
       WHERE login = ?
     `)
@@ -198,7 +205,7 @@ platformAuthRoutes.post('/login', async c => {
         false
       );
 
-  if (!valid || !admin || admin.active !== 1) {
+  if (!valid || !admin || admin.active !== 1 || (admin.must_change_password===1&&admin.temporary_password_expires_at!==null&&admin.temporary_password_expires_at<=Date.now())) {
     await recordPlatformAudit(
       c,
       'platform.login_failed',
@@ -229,7 +236,7 @@ platformAuthRoutes.post('/login', async c => {
 
   const expiresAt = now + hours * 3600000;
 
-  await c.get('db')
+  const inserted=await c.get('db')
     .prepare(`
       INSERT INTO platform_sessions (
         token_hash,
@@ -241,7 +248,9 @@ platformAuthRoutes.post('/login', async c => {
         reauth_at,
         auth_version
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS(
+        SELECT 1 FROM platform_admins WHERE id=? AND password_hash=? AND auth_version=? AND active=1
+          AND (must_change_password=0 OR temporary_password_expires_at IS NULL OR temporary_password_expires_at>?))
     `)
     .bind(
       sha256(token),
@@ -251,9 +260,10 @@ platformAuthRoutes.post('/login', async c => {
       expiresAt,
       now,
       now,
-      admin.auth_version
+      admin.auth_version,admin.id,admin.password_hash,admin.auth_version,now
     )
     .run();
+  ensure(inserted.meta.changes===1,409,'platform_login_changed','A conta mudou. Entre novamente.');
 
   setCookie(
     c,
@@ -292,7 +302,7 @@ platformAuthRoutes.post('/login', async c => {
 // CONSULTAR SESSÃO
 
 platformAuthRoutes.get('/session', async c => {
-  const session = await getPlatformSession(c);
+  const session = await getPlatformSession(c,true);
 
   ensure(
     session,
@@ -320,7 +330,8 @@ platformAuthRoutes.get('/session', async c => {
       login: session.login,
       email: session.email,
       name: session.display_name,
-      role: 'superadmin'
+      role: 'superadmin',
+      must_change_password:session.must_change_password===1
     },
     csrf_token: session.csrf_token,
     expires_at: session.expires_at,
@@ -331,7 +342,7 @@ platformAuthRoutes.get('/session', async c => {
 // LOGOUT DO SUPERADMIN
 
 platformAuthRoutes.post('/logout', async c => {
-  const session = await getPlatformSession(c);
+  const session = await getPlatformSession(c,true);
 
   ensure(
     session,
@@ -377,3 +388,7 @@ platformAuthRoutes.post('/logout', async c => {
     message: 'Sessão encerrada com sucesso.'
   });
 });
+
+platformAuthRoutes.post('/invitations',platformInvite);
+platformAuthRoutes.post('/activate',activatePlatformInvite);
+platformAuthRoutes.post('/change-password',changePlatformPassword);

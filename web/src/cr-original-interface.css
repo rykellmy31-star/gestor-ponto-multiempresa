@@ -1,0 +1,186 @@
+/*
+  CR JORNADA: recuperacao da linguagem visual ORIGINAL da folha PagPouco.
+  Os componentes autenticos do app original (styles.css) sao reaproveitados.
+  Nenhum CSS reativa rotas antigas ou altera regras do ponto.
+*/
+.cr-original-brand{display:flex;align-items:center;gap:10px;min-width:0;color:#233442}
+.cr-original-brand img{display:block;max-width:177px;max-height:66px;object-fit:contain;object-position:left}
+.cr-original-brand-icon{display:grid;place-items:center;background:#eaf5f0;color:#218372;
+  width:39px;height:39px;border-radius:9px;flex-shrink:0}
+.cr-original-brand-label{min-width:0;max-width:180px;display:grid;gap:4px}
+.cr-original-brand-label strong{font-size:13px;line-height:1.25;letter-spacing:-.03em;
+  overflow-wrap:anywhere;word-break:normal}
+.cr-original-brand-label small{font-size:8px;color:#96a5a8;line-height:1.4}
+.cr-classic-shell .sidebar-brand{padding-left:6px;padding-right:6px;min-height:94px}
+.cr-classic-shell .sidebar-brand .cr-original-brand img{max-width:190px}
+.cr-classic-shell .nav-link{border:0;background:transparent;text-align:left;width:100%;
+  cursor:pointer;justify-content:flex-start;font-weight:450;min-height:42px}
+.cr-classic-shell .nav-link:hover{background:#f6f9f8;color:#4d7c70}
+.cr-classic-shell .nav-link.active{background:#eaf5f0;color:#218372;font-weight:600}
+.cr-classic-shell .sidebar-user{border-right:0;border-left:0;border-bottom:0;
+  width:100%;background:transparent;text-align:left;cursor:pointer}
+.cr-original-help{display:grid;gap:9px;width:calc(100% - 12px);cursor:pointer;color:#658e82;
+  font:inherit;text-align:left}
+.cr-original-help>span{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:600}
+.cr-original-help small{font-size:9px;color:#9eaea7}
+.cr-original-help>span:last-child{font-size:9px;color:#709d87}
+.cr-employee-original-portal .day-sidebar{min-width:0}
+.cr-employee-original-portal .page-content{min-width:0}
+.cr-employee-original-portal .punch-button:disabled{opacity:1;cursor:not-allowed}
+.cr-employee-original-portal .punch-button.punch-done:disabled{opacity:1}
+.cr-employee-original-portal .cr-employee-original-clock{margin-bottom:24px}
+.cr-employee-original-portal .punch-panel{min-width:0}
+.cr-employee-original-portal .cpf-punch-error,.cr-employee-original-portal .cpf-punch-warning,
+.cr-employee-original-portal .cpf-punch-success,.cr-employee-original-portal .cpf-punch-receipt{
+  margin:15px 0;padding:13px;font-size:12px;border-radius:8px}
+.cr-employee-original-portal .cpf-punch-warning{background:#fffaf1;border:1px solid #f4e5c8}
+.cr-employee-original-portal .cpf-punch-error{background:#fff2ef;border:1px solid #f3d7d3;color:#a53d39}
+.cr-employee-original-portal .cpf-punch-success{background:#f1faf2;border:1px solid #d5e9db}
+.cr-reload-link{display:flex;align-items:center;gap:7px;margin:10px auto 20px;
+  border:0;background:transparent;color:#789e94;font-size:10px;padding:9px}
+.cr-original-week{padding-bottom:20px}
+.cr-original-week .week-bars{padding:18px 24px 24px}
+.cr-original-week .week-total{margin:0 24px}
+.cr-original-week-loading{padding:22px;color:#89969c;font-size:12px}
+.cr-original-account{max-width:620px;padding:25px;display:grid;gap:12px}
+.cr-original-account form{display:grid;gap:17px;margin-top:8px}
+.cr-original-account form label{display:grid;gap:8px;font-size:12px;color:#53626c}
+.cr-original-account form input{padding:12px;border:1px solid #dfe5e9;border-radius:8px;font-size:13px}
+.cr-original-account form button{justify-self:start}
+.cr-original-pending{display:grid;gap:12px;padding:25px;max-width:780px;line-height:1.7}
+.cr-original-pending p{font-size:12px;color:#72828c}
+.cr-original-pending>svg{color:#6b9989}
+
+/* Painel empresarial: a estrutura se torna a mesma sidebar/topbar das telas originais. */
+.company-schedules-page{padding:0!important;background:#f6f8fa!important;
+  min-height:100dvh;color:#233442!important}
+.company-schedules-page .company-schedules-shell{display:block!important;max-width:none!important;
+  min-height:100dvh;margin:0!important}
+.company-schedules-page .cr-legacy-sidebar{width:248px;background:#fff;position:fixed;
+  top:0;left:0;bottom:0;border-right:1px solid #e8edef;z-index:80;
+  display:flex;flex-direction:column;padding:31px 18px 15px;
+  overflow-y:auto;box-shadow:none;color:#233442;gap:0;min-height:0}
+.company-schedules-page .cr-legacy-sidebar .sidebar-brand{padding:4px 6px 28px;min-height:94px;
+  display:flex;align-items:center;justify-content:flex-start}
+.company-schedules-page .cr-legacy-sidebar .portal-label{padding:3px 14px 18px}
+.company-schedules-page .cr-original-nav{display:grid;gap:4px}
+.company-schedules-page .cr-original-nav button.nav-link{display:flex!important;
+  align-items:center!important;justify-content:flex-start!important;
+  gap:11px;min-height:42px;padding:12px 14px;border-radius:7px;
+  background:transparent!important;border:0!important;color:#85949e!important;
+  box-shadow:none!important;font-size:11.5px!important;font-weight:450!important;
+  text-align:left;width:100%;cursor:pointer}
+.company-schedules-page .cr-original-nav button.nav-link:hover{background:#f6f9f8!important;color:#4d7c70!important}
+.company-schedules-page .cr-original-nav button.nav-link.active{
+  background:#eaf5f0!important;color:#218372!important;font-weight:650!important}
+.company-schedules-page .cr-original-nav .nav-section{display:block;padding:24px 15px 12px;
+  font-size:8px;letter-spacing:.12em;color:#b0b9be}
+.company-schedules-page .cr-legacy-sidebar .sidebar-bottom{margin-top:auto;padding-top:24px}
+.company-schedules-page .cr-legacy-sidebar .cr-original-help{display:grid!important;
+  gap:9px!important;width:calc(100% - 12px);background:#f7faf9!important;
+  border:1px solid #edf2ef!important;border-radius:10px;padding:14px!important;
+  text-align:left;color:#709788!important;min-height:90px}
+.company-schedules-page .cr-legacy-sidebar .logout-btn{background:transparent!important;
+  border:0!important;padding:11px 9px;justify-content:flex-start!important;
+  min-height:39px!important;color:#9ba7ad!important;font-size:10px!important;font-weight:400!important}
+.company-schedules-page .cr-legacy-sidebar .sidebar-user{border-top:1px solid #eff2f3;
+  padding:20px 7px 9px;display:flex;gap:10px}
+.company-schedules-page .cr-legacy-sidebar .sidebar-user svg{color:#719988}
+.company-schedules-page .cr-legacy-main{margin-left:248px;min-width:0;width:calc(100% - 248px);
+  padding:0!important;max-width:none!important;display:flex;flex-direction:column;min-height:100dvh}
+.company-schedules-page .cr-original-topbar{min-height:76px!important;background:#ffffffd9;
+  padding:0 37px;gap:20px}
+.company-schedules-page .cr-original-topbar button.icon-btn{background:transparent!important;
+  border:0!important;min-height:32px!important;width:32px;padding:5px;
+  color:#8797a1!important}
+.company-schedules-page .cr-original-page-content{display:block!important;min-height:0;
+  max-width:none;width:100%;padding:34px 37px 38px!important;flex:1}
+.company-schedules-page .cr-legacy-group{display:grid;gap:18px;min-width:0;margin-top:12px}
+.company-schedules-page .cr-original-page-content .btn-secondary{background:#fff!important;
+  color:#415563!important;border:1px solid #e0e6ea!important;box-shadow:none!important}
+.company-schedules-page .cr-original-page-content .cr-link-button{
+  background:transparent!important;border:0!important;min-height:0!important;
+  color:#398675!important;box-shadow:none!important;padding:6px 0!important;
+  font-size:11px!important;justify-content:flex-start!important}
+.company-schedules-page .cr-original-page-content :is(.stats-grid,.dashboard-middle){margin-top:0}
+.company-schedules-page .cr-original-page-content .filter-bar{padding:14px 16px!important;
+  margin:0 0 22px;display:flex!important;flex-wrap:wrap;align-items:center;gap:14px}
+.company-schedules-page .cr-original-page-content .filter-bar label.field{display:flex!important;
+  flex-direction:column;gap:7px;margin:0;min-width:160px;font-weight:400}
+.company-schedules-page .cr-original-page-content .filter-bar label.field input{
+  min-height:40px!important;font-size:11px;max-width:220px}
+.company-schedules-page .cr-original-page-content .filter-bar .filter-hint{margin-left:auto;
+  font-size:9px;color:#8fa5a0}
+.company-schedules-page .cr-original-page-content .table-toolbar{display:flex;align-items:center;
+  gap:12px;flex-wrap:wrap}
+.company-schedules-page .cr-original-page-content .table-toolbar .search-input{
+  display:flex;align-items:center;gap:9px;max-width:360px;flex:1}
+.company-schedules-page .cr-original-page-content .table-toolbar .search-input input{
+  min-width:0}
+.company-schedules-page .cr-original-page-content .table-toolbar select{
+  min-width:170px;width:auto}
+.company-schedules-page .cr-original-page-content .dashboard-tip{min-width:0}
+.company-schedules-page .company-schedules-card,.company-schedules-page .company-schedules-item{
+  border-color:#e7ecef!important;box-shadow:0 3px 14px #16334704!important}
+.company-schedules-page .company-schedules-overline,
+.company-schedules-page :is(.company-schedules-intro>svg,.company-schedules-item strong,.company-schedules-total strong){
+  color:#218372!important}
+.company-schedules-page .company-schedules-saturday{background:#f1f8f5!important;
+  border-color:#d7e7df!important}
+.company-schedules-page .company-schedules-total{background:#f1f8f5!important;
+  border-color:#e1ede7!important}
+.company-schedules-page .company-schedules-page input:focus-visible{outline-color:#087f6f45}
+.company-schedules-page .cr-original-pending{margin:0 auto;width:100%}
+.cr-overview-footnote{display:flex;align-items:center;gap:8px;margin-top:18px;
+  font-size:10px;color:#8a9b9f;line-height:1.6}
+@media(max-width:1040px){
+ .company-schedules-page .cr-original-page-content{padding:25px 20px!important}
+ .company-schedules-page .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .company-schedules-page .dashboard-middle{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+ .company-schedules-page .cr-legacy-sidebar{position:relative;top:auto;left:auto;bottom:auto;
+  width:100%;height:auto;min-height:0;padding:15px 13px;gap:0}
+ .company-schedules-page .cr-legacy-sidebar .sidebar-brand{padding:0 7px 13px;min-height:0}
+ .company-schedules-page .cr-legacy-sidebar .portal-label{padding:7px 8px}
+ .company-schedules-page .cr-original-nav{display:flex;overflow-x:auto;gap:5px;
+  padding:5px 0 12px;scrollbar-width:thin}
+ .company-schedules-page .cr-original-nav .nav-section{display:none}
+ .company-schedules-page .cr-original-nav button.nav-link{white-space:nowrap;min-width:max-content;width:auto;
+  padding:10px!important;font-size:11px!important}
+ .company-schedules-page .cr-legacy-sidebar .sidebar-bottom{padding:0}
+ .company-schedules-page .cr-legacy-sidebar .cr-original-help,
+ .company-schedules-page .cr-legacy-sidebar .sidebar-user{display:none!important}
+ .company-schedules-page .cr-legacy-sidebar .logout-btn{margin:0}
+ .company-schedules-page .cr-legacy-main{width:100%;margin-left:0}
+ .company-schedules-page .cr-original-topbar{padding:14px 18px;min-height:58px!important}
+ .company-schedules-page .cr-original-page-content{padding:20px 13px!important}
+ .company-schedules-page .cr-original-page-content .filter-bar .filter-hint{margin-left:0}
+ .company-schedules-page .cr-original-page-content .filter-bar label.field{flex:1;min-width:140px}
+ .cr-classic-shell .cr-original-brand img{max-width:165px}
+}
+@media(max-width:520px){
+ .company-schedules-page .stats-grid{grid-template-columns:1fr 1fr}
+ .company-schedules-page .cr-original-page-content .stat-card{padding:14px}
+ .company-schedules-page .cr-original-page-content .stat-card>strong{font-size:22px}
+ .company-schedules-page .cr-original-page-content .dashboard-middle{grid-template-columns:1fr}
+ .cr-employee-original-portal .clock-layout{grid-template-columns:1fr}
+ .cr-employee-original-portal .digital-clock{font-size:42px}
+ .cr-employee-original-portal .punch-buttons{grid-template-columns:1fr}
+ .cr-employee-original-portal .punch-panel{padding:0 17px}
+}
+
+/* Personalizacao por empresa a partir do cadastro Superadmin. */
+.cr-employee-original-portal .punch-button.punch-enabled,
+.cr-employee-original-portal .punch-button.punch-enabled:hover{
+  background:var(--green)!important;border-color:var(--green)!important;color:#fff!important}
+.cr-employee-original-portal .sidebar .nav-link.active{color:var(--green)!important}
+.company-schedules-page .cr-original-nav button.nav-link.active{
+  color:var(--green)!important;border-left:2px solid var(--green)!important}
+.company-schedules-page .cr-original-page-content .cr-link-button{color:var(--green)!important}
+.company-schedules-page .cr-original-page-content .company-schedules-shortcuts button[aria-pressed="true"]{
+  background:var(--green)!important;border-color:var(--green)!important;color:#fff!important}
+.company-schedules-page .cr-original-page-content .company-schedules-item strong{
+  color:var(--green)!important}
+.company-schedules-page .cr-original-page-content button:not(.company-schedules-secondary):not(.btn):not(.cr-link-button){
+  background:var(--green)!important;border-color:var(--green)!important}

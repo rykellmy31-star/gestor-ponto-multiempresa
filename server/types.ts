@@ -10,6 +10,13 @@ export interface Env {
   APP_ORIGIN: string;
   AUTH_PEPPER: string;
   DATA_KEY: string;
+  CPF_LOOKUP_SECRET?: string;
+  ENABLE_COMPANY_SCHEDULES?: string;
+  ENABLE_COMPANY_EMPLOYEE_REGISTRATION?: string;
+  ENABLE_EMPLOYEE_PASSWORD_RECOVERY?: string;
+  ENABLE_EMPLOYEE_PUNCHES?: string;
+  ENABLE_SALES_LEADS?: string;
+  SALES_LEADS_RETENTION_DAYS?: string;
   BOOTSTRAP_TOKEN?: string;
   PLATFORM_BOOTSTRAP_TOKEN?: string;
   SESSION_HOURS?: string;
@@ -55,12 +62,22 @@ export type App = {
     // Empresa identificada pela sessao autenticada.
     // O middleware disponibiliza o ID e o slug da empresa.
     company: Pick<Company, 'id' | 'slug'> | null;
+    companyAdminId: string | null;
+    companyAdminTokenHash: string | null;
 
     requestId: string;
   };
 };
 
 export type Ctx = Context<App>;
+
+export interface ScheduleDay {
+  start: string;
+  break_start: string;
+  break_end: string;
+  end: string;
+  paid_break: boolean;
+}
 
 export interface Schedule {
   name?: string;
@@ -70,6 +87,9 @@ export interface Schedule {
   end: string;
   weekdays: number[];
   paid_break: boolean;
+  // Horarios especificos opcionais: 0=domingo ... 6=sabado.
+  // O formato antigo (sem esta propriedade) permanece valido.
+  day_overrides?: Partial<Record<'0'|'1'|'2'|'3'|'4'|'5'|'6', ScheduleDay>>;
 }
 
 export interface Rules {

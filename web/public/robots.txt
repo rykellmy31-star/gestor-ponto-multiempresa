@@ -1,0 +1,15 @@
+# CR JORNADA — somente a pagina comercial e publica.
+# A indexacao do Google ainda depende da publicacao em dominio proprio.
+User-agent: *
+Disallow: /superadmin
+Disallow: /admin
+Disallow: /app
+Disallow: /funcionario
+Disallow: /demo-superadmin
+Disallow: /setup
+Disallow: /entrar
+Disallow: /recuperar-senha
+Disallow: /redefinir-senha
+Disallow: /api/
+Allow: /vendas
+Allow: /planos

@@ -1,6 +1,10 @@
 import {existsSync,readdirSync,readFileSync} from 'node:fs';
 import {config} from './lib.mjs';
+import {validateProductionTarget} from './verify-production-target.mjs';
 const c=config();const failures=[];
+try { validateProductionTarget(c); } catch (error) {
+ failures.push(error instanceof Error ? error.message : 'Destino Cloudflare invalido.');
+}
 failures.push('CR JORNADA: publicação bloqueada até implementação e auditoria do isolamento multiempresa em TODAS as rotas e migrações.');
 if(c.vars?.ENVIRONMENT!=='production')failures.push('ENVIRONMENT deve ser production no arquivo de publicação.');
 let origin;try{origin=new URL(c.vars?.APP_ORIGIN);if(origin.protocol!=='https:'||origin.origin!==c.vars.APP_ORIGIN||origin.hostname.endsWith('.invalid'))throw 0;}catch{failures.push('Configure APP_ORIGIN com a origem HTTPS real, sem caminho ou barra final.');}

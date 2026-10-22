@@ -7,18 +7,10 @@ import {Button,Field,InlineError,Notice,Select} from './ui';
 
 export function Brand({light=false}:{light?:boolean}){
   return (
-    <div className={'brand '+(light?'brand-light':'')}>
-      <img
-        src="/logo-pague-pouco.png"
-        alt="Farmácia Pague Pouco"
-        style={{
-          width:'260px',
-          maxWidth:'100%',
-          height:'auto',
-          objectFit:'contain',
-          display:'block'
-        }}
-      />
+    <div className={'brand '+(light?'brand-light':'')}
+      aria-label="CR JORNADA">
+      <Clock3 size={31} strokeWidth={2} aria-hidden="true"/>
+      <span><strong>CR</strong> JORNADA</span>
     </div>
   );
 }
@@ -31,7 +23,7 @@ export function usePublicConfig(){
   return config;
 }
 
-function AuthFrame({children,admin=false}:{children:ReactNode;admin?:boolean}){
+export function AuthFrame({children,admin=false}:{children:ReactNode;admin?:boolean}){
   return (
     <main className="auth-shell">
       <aside className="auth-story">
@@ -77,7 +69,7 @@ function AuthFrame({children,admin=false}:{children:ReactNode;admin?:boolean}){
           {children}
         </div>
         <footer className="auth-footer">
-          Farmácia Pague Pouco · Controle de ponto e gestão de jornada
+          CR JORNADA · Gestão de ponto para empresas
         </footer>
       </section>
     </main>
@@ -364,7 +356,7 @@ export function SetupPage(){
       <div className="auth-area-tag">
         <ShieldCheck size={15}/> CONFIGURAÇÃO INICIAL
       </div>
-      <h2>Bem-vindo à Farmácia Pague Pouco.</h2>
+      <h2>Bem-vindo ao CR JORNADA.</h2>
       <p className="auth-description">
         Crie o primeiro administrador usando o código de configuração definido pelo responsável pela publicação.
       </p>

@@ -9,14 +9,41 @@ export const password = z.string().min(12, 'Use pelo menos 12 caracteres.').max(
 export const login = z.string().trim().min(3).max(120).regex(/^[a-zA-Z0-9._@+\-]+$/, 'Use letras sem acento, números, ponto, hífen ou @.').transform(v => v.toLowerCase());
 export const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const tm = (v: string) => Number(v.slice(0,2))*60 + Number(v.slice(3));
-export const scheduleSchema = z.object({
+export const shiftFieldsSchema = z.object({
   start: time, break_start: time, break_end: time, end: time,
-  weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).refine(v => new Set(v).size === v.length),
-  paid_break: z.boolean(),
-}).strict().superRefine((v,ctx) => {
-  const s=tm(v.start); const at=(x:string)=>tm(x)<s ? tm(x)+1440:tm(x);
-  const bs=at(v.break_start), be=at(v.break_end), end=tm(v.end)<=s?tm(v.end)+1440:tm(v.end);
-  if (!(s<bs && bs<be && be<end && end-s<1440)) ctx.addIssue({code:'custom',message:'Os horários devem seguir entrada → intervalo → retorno → saída, em um turno menor que 24h.'});
+  paid_break: z.boolean()
+}).strict();
+export const dayOverridesSchema = z.partialRecord(
+  z.enum(['0','1','2','3','4','5','6']),
+  shiftFieldsSchema
+);
+function orderedShift(v: z.infer<typeof shiftFieldsSchema>) {
+  const start=tm(v.start);
+  const at=(x:string)=>tm(x)<start?tm(x)+1440:tm(x);
+  const bs=at(v.break_start),be=at(v.break_end);
+  const end=tm(v.end)<=start?tm(v.end)+1440:tm(v.end);
+  const pause=be-bs;
+  return start<bs && bs<be && be<end && end-start<1440 &&
+    pause<=240 && end-start-(v.paid_break?0:pause)>=60;
+}
+export const scheduleSchema = shiftFieldsSchema.extend({
+  weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7)
+    .refine(v => new Set(v).size === v.length),
+  day_overrides: dayOverridesSchema.optional()
+}).strict().superRefine((v,ctx)=>{
+  if(!orderedShift(v)) ctx.addIssue({
+    code:'custom',message:'A jornada principal deve ter entrada, intervalo e saída em ordem, com até 4h de intervalo.'
+  });
+  for(const [day,shift] of Object.entries(v.day_overrides||{})) {
+    if(!v.weekdays.includes(Number(day))) {
+      ctx.addIssue({code:'custom',path:['day_overrides',day],
+        message:'Só é possível definir horário especial para um dia selecionado.'});
+    }
+    if(!orderedShift(shift)) ctx.addIssue({
+      code:'custom',path:['day_overrides',day],
+      message:'Confira os horários e o intervalo deste dia. O turno deve ter menos de 24h.'
+    });
+  }
 });
 export const rulesSchema = z.object({
   mark_tolerance:z.number().int().min(0).max(30), daily_tolerance:z.number().int().min(0).max(60),

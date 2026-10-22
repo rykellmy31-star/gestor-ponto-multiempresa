@@ -7,8 +7,13 @@ import React, {
 
 import {
   Link,
-  Navigate
+  Navigate,
+  useLocation
 } from 'react-router-dom';
+import { CompanyLogoUpload } from './company-logo-upload';
+import { PlatformPasswordChange } from './platform-password-change';
+import { SalesPageEditor } from './sales-editor';
+import { PlatformCompanyAdmins } from './platform-company-admins';
 
 import {
   Building2,
@@ -16,10 +21,12 @@ import {
   CircleAlert,
   Clock3,
   Edit3,
+  LayoutDashboard,
   LogOut,
   Plus,
   RefreshCw,
   Search,
+  ShoppingBag,
   ShieldCheck,
   X
 } from 'lucide-react';
@@ -30,6 +37,7 @@ type PlatformUser = {
   email: string | null;
   name: string;
   role: string;
+  must_change_password?:boolean;
 };
 
 type Session = {
@@ -209,6 +217,8 @@ function CompanyAvatar({
     >
       {company.logo_url && !failed ? (
         <img
+          loading="lazy"
+          decoding="async"
           src={company.logo_url}
           alt={`Logo de ${company.name}`}
           onError={() => setFailed(true)}
@@ -226,6 +236,7 @@ function CompanyAvatar({
 }
 
 export function PlatformPage() {
+  const location = useLocation();
   const [session, setSession] =
     useState<Session | null>(null);
 
@@ -246,7 +257,10 @@ export function PlatformPage() {
 
   const [notice, setNotice] = useState('');
   const [search, setSearch] = useState('');
+  const [companyView, setCompanyView] = useState<'operational'|'archived'|'all'>('operational');
 
+  const [managingCompany, setManagingCompany] = useState<Company | null>(null);
+  const [adminPickerOpen, setAdminPickerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] =
     useState<string | null>(null);
@@ -256,8 +270,11 @@ export function PlatformPage() {
 
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [logoBusy,setLogoBusy]=useState(false);
   const [changingId, setChangingId] =
     useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Company | null>(null);
+  const [archiveConfirmName, setArchiveConfirmName] = useState('');
 
   async function refreshSession() {
     const result = await requestSession();
@@ -266,7 +283,7 @@ export function PlatformPage() {
   }
 
   const loadCompanies = useCallback(async () => {
-    if (!session) return;
+    if (!session || session.user.must_change_password) return;
 
     setCompaniesLoading(true);
     setCompaniesError('');
@@ -412,6 +429,7 @@ export function PlatformPage() {
       setCompanies([]);
       setPassword('');
       setFormOpen(false);
+      setManagingCompany(null);
     } catch (err) {
       setError(
         err instanceof Error
@@ -422,6 +440,7 @@ export function PlatformPage() {
   }
 
   function openCreate() {
+    setLogoBusy(false);
     setEditingId(null);
     setForm({ ...initialForm });
     setFormError('');
@@ -430,6 +449,7 @@ export function PlatformPage() {
   }
 
   function openEdit(company: Company) {
+    setLogoBusy(false);
     if (company.status === 'archived') return;
 
     setEditingId(company.id);
@@ -461,7 +481,7 @@ export function PlatformPage() {
   ) {
     event.preventDefault();
 
-    if (!session) return;
+    if (!session || logoBusy) return;
 
     setSaving(true);
     setFormError('');
@@ -531,7 +551,7 @@ export function PlatformPage() {
 
     const confirmed = window.confirm(
       nextStatus === 'suspended'
-        ? `Deseja suspender a empresa "${company.name}"?\n\nA suspensão será registrada, mas o bloqueio dos usuários depende da integração multiempresa.`
+        ? `Deseja suspender a empresa "${company.name}"?\n\nAs sessões de gestores e funcionários desta empresa serão encerradas. Após reativar, será necessário entrar novamente.`
         : `Deseja ativar a empresa "${company.name}"?`
     );
 
@@ -569,7 +589,7 @@ export function PlatformPage() {
       setNotice(
         nextStatus === 'active'
           ? 'Empresa ativada com sucesso.'
-          : 'Empresa suspensa no cadastro.'
+          : 'Empresa suspensa. Sessões de gestores e funcionários revogadas.'
       );
 
       await loadCompanies();
@@ -584,7 +604,57 @@ export function PlatformPage() {
     }
   }
 
+  async function archiveCompany() {
+    const company = archiveTarget;
+    if (!session || !company || archiveConfirmName.trim() !== company.name) return;
+    setChangingId(company.id);
+    setCompaniesError('');
+    setNotice('');
+    try {
+      const response = await fetch(
+        `/api/platform/companies/${company.id}/archive`,
+        {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': session.csrf_token
+          },
+          body: JSON.stringify({confirm_name: archiveConfirmName.trim()})
+        }
+      );
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(
+          response, 'Não foi possível excluir a empresa do cadastro.'
+        ));
+      }
+      setCompanyView('operational');
+      setArchiveTarget(null);
+      setArchiveConfirmName('');
+      setNotice(`"${company.name}" foi excluída do cadastro operacional. Os dados foram preservados.`);
+      await loadCompanies();
+    } catch (err) {
+      setCompaniesError(err instanceof Error
+        ? err.message
+        : 'Erro ao excluir empresa do cadastro.');
+    } finally {
+      setChangingId(null);
+    }
+  }
+
+  function openAdminPicker() {
+    const available = companies.filter(company => company.status !== 'archived');
+    if (available.length === 0) {
+      setNotice('Cadastre uma empresa antes de gerenciar seus administradores.');
+      document.getElementById('companies')?.scrollIntoView({behavior: 'smooth'});
+      return;
+    }
+    setAdminPickerOpen(true);
+  }
+
   const filteredCompanies = companies.filter(company => {
+    if (companyView === 'operational' && company.status === 'archived') return false;
+    if (companyView === 'archived' && company.status !== 'archived') return false;
     const term = search.toLowerCase().trim();
 
     return (
@@ -601,6 +671,10 @@ export function PlatformPage() {
   const suspendedCount = companies.filter(
     company => company.status === 'suspended'
   ).length;
+  const archivedCount = companies.filter(
+    company => company.status === 'archived'
+  ).length;
+  const registeredCount = activeCount + suspendedCount;
 
   if (loading) {
     return (
@@ -609,6 +683,8 @@ export function PlatformPage() {
       </main>
     );
   }
+
+  if(session?.user.must_change_password)return <PlatformPasswordChange csrf={session.csrf_token} onComplete={()=>{setSession(null);setPassword('');setNotice('Senha alterada. Entre novamente com sua nova senha.');}}/>;
 
   if (!session) {
     return (
@@ -678,6 +754,24 @@ export function PlatformPage() {
             </button>
           </form>
 
+          <div style={{
+            marginTop: 18, background: '#fff5e8', borderRadius: 10,
+            border: '1px solid #efdcc3', padding: 14, fontSize: 12,
+            lineHeight: 1.7, color: '#6c563d'
+          }}>
+            <strong>Quer conhecer o painel antes de ativar o servidor?</strong>
+            <p style={{ margin: '7px 0' }}>
+              A prévia visual utiliza apenas empresas fictícias, não exige
+              usuário ou senha e não altera o banco de dados.
+            </p>
+            <Link
+              to="/demo-superadmin"
+              style={{ color: '#800000', fontWeight: 700 }}
+            >
+              Abrir demonstração do Superadmin →
+            </Link>
+          </div>
+
           <Link
             to="/admin/entrar"
             className="platform-link"
@@ -700,33 +794,55 @@ export function PlatformPage() {
 
   return (
     <main className="platform-dashboard">
-      <header className="platform-header">
-        <div className="platform-brand">
-          <div className="platform-logo">CR</div>
-          <div>
-            <h1>CR JORNADA</h1>
-            <p>Painel Superadministrador</p>
-          </div>
+      <aside className="platform-sidebar">
+        <Link to="/superadmin" className="platform-sidebar-brand" aria-label="Jornada — painel Superadmin">
+          <span className="platform-sidebar-mark">J</span><span>jornada<span className="platform-brand-dot">.</span></span>
+        </Link>
+        <p className="platform-sidebar-label">SUPERADMINISTRADOR</p>
+        <nav className="platform-sidebar-nav" aria-label="Navegação Superadmin">
+          <Link to="/superadmin" className={location.pathname === '/superadmin' ? 'active' : ''}>
+            <LayoutDashboard size={18}/> Visão geral
+          </Link>
+          <a href="/superadmin#companies"><Building2 size={18}/> Empresas</a>
+          <button type="button" onClick={openAdminPicker}>
+            <ShieldCheck size={18}/> Administradores
+          </button>
+          <Link to="/superadmin/vendas" className={location.pathname === '/superadmin/vendas' ? 'active' : ''}>
+            <ShoppingBag size={18}/> Página de vendas
+          </Link>
+        </nav>
+        <div className="platform-sidebar-spacer"/>
+        <div className="platform-sidebar-note">
+          <ShieldCheck size={17}/>
+          <div><strong>Ambiente protegido</strong><small>Empresas e registros permanecem isolados.</small></div>
         </div>
+        <div className="platform-sidebar-user">
+          <span className="platform-user-avatar">{session.user.name.slice(0,1).toUpperCase()}</span>
+          <span><strong>{session.user.name}</strong><small>Super Administrador</small></span>
+          <button type="button" className="platform-user-logout" onClick={handleLogout} aria-label="Sair da conta"><LogOut size={17}/></button>
+        </div>
+      </aside>
 
-        <button
-          type="button"
-          className="platform-logout"
-          onClick={handleLogout}
-        >
-          <LogOut size={16} />
-          {' '}Sair
-        </button>
+      <div className="platform-main">
+      <header className="platform-header">
+        <div className="platform-breadcrumb"><Building2 size={16}/><span>Super administrador</span><span aria-hidden="true">›</span><strong>{location.pathname === '/superadmin/vendas' ? 'Página comercial' : 'Visão geral'}</strong></div>
+        <div className="platform-header-actions">
+          <span className={'platform-env-badge ' + (window.location.hostname.includes('staging') ? 'staging' : 'production')}>
+            <i/>{window.location.hostname.includes('staging') ? 'HOMOLOGAÇÃO' : ['localhost','127.0.0.1'].includes(window.location.hostname) ? 'DESENVOLVIMENTO' : 'PRODUÇÃO'}
+          </span>
+          <time>{new Intl.DateTimeFormat('pt-BR',{day:'numeric',month:'long',year:'numeric',timeZone:'America/Bahia'}).format(new Date())}</time>
+          <button type="button" className="platform-logout" onClick={handleLogout} aria-label="Sair da conta"><LogOut size={16}/><span>Sair</span></button>
+        </div>
       </header>
 
       <div className="platform-content">
+        {location.pathname === '/superadmin/vendas'
+          ? <SalesPageEditor csrfToken={session.csrf_token}/>
+          : <>
         <div className="platform-welcome">
-          <p>Bem-vindo à plataforma</p>
-          <h2>{session.user.name}</h2>
-          <span>
-            Controle as empresas cadastradas
-            no CR JORNADA.
-          </span>
+          <div><p>PAINEL SUPER ADMIN</p><h2>Visão geral multiempresa</h2>
+          <span>Gerencie empresas e administradores da plataforma em um só lugar.</span></div>
+          <button type="button" className="platform-button platform-welcome-action" onClick={openCreate}><Plus size={17}/> Nova empresa</button>
         </div>
 
         {error && (
@@ -756,13 +872,14 @@ export function PlatformPage() {
           </p>
         )}
 
+        <div className="platform-overview-row">
         <div className="platform-grid">
           <article className="platform-stat">
             <span>Empresas cadastradas</span>
             <strong>
-              {companiesLoading ? '...' : companies.length}
+              {companiesLoading ? '...' : registeredCount}
             </strong>
-            <small>Total de cadastros</small>
+            <small>Empresas ativas e suspensas; excluídas à parte</small>
           </article>
 
           <article className="platform-stat">
@@ -780,9 +897,29 @@ export function PlatformPage() {
             </strong>
             <small>Cadastros suspensos</small>
           </article>
+          <article className="platform-stat">
+            <span>Empresas excluídas</span>
+            <strong>{companiesLoading ? '...' : archivedCount}</strong>
+            <small>Arquivadas com dados preservados</small>
+          </article>
+        </div>
+        <aside className="platform-overview-rail">
+          <section className="platform-section platform-quick-actions">
+            <h3><Plus size={17}/> Ações rápidas</h3>
+            <button type="button" onClick={openCreate}><Plus size={16}/> Cadastrar empresa</button>
+            <a href="/superadmin#companies"><Building2 size={16}/> Gerenciar empresas</a>
+            <button type="button" onClick={openAdminPicker}><ShieldCheck size={16}/> Criar administrador</button>
+            <Link to="/superadmin/vendas"><ShoppingBag size={16}/> Página comercial</Link>
+            <button type="button" onClick={()=>{setCompanyView('archived');document.getElementById('companies')?.scrollIntoView({behavior:'smooth'});}}><ShieldCheck size={16}/> Ver excluídas</button>
+          </section>
+          <section className="platform-section platform-data-note">
+            <h3><ShieldCheck size={17}/> Dados preservados</h3>
+            <p>Empresas excluídas saem dos cadastros operacionais. Funcionários e históricos ficam disponíveis na visão “Excluídas / arquivadas”.</p>
+          </section>
+        </aside>
         </div>
 
-        <section className="platform-section">
+        <section className="platform-section" id="companies">
           <div
             style={{
               display: 'flex',
@@ -822,7 +959,7 @@ export function PlatformPage() {
               }}
             >
               <Plus size={18} />
-              Nova empresa
+              Adicionar empresa
             </button>
           </div>
 
@@ -866,6 +1003,17 @@ export function PlatformPage() {
                 }}
               />
             </div>
+
+            <select
+              aria-label="Filtrar empresas por situação"
+              value={companyView}
+              onChange={event => setCompanyView(event.target.value as typeof companyView)}
+              style={{padding:'10px 12px',borderRadius:10,minWidth:190}}
+            >
+              <option value="operational">Ativas e suspensas</option>
+              <option value="archived">Excluídas / arquivadas</option>
+              <option value="all">Todas as empresas</option>
+            </select>
 
             <button
               type="button"
@@ -940,15 +1088,11 @@ export function PlatformPage() {
             )}
 
           {filteredCompanies.length > 0 && (
-            <div
-              style={{
-                display: 'grid',
-                gap: 12
-              }}
-            >
+            <div className="platform-company-list">
               {filteredCompanies.map(company => (
                 <article
                   key={company.id}
+                  className="platform-company-row"
                   style={{
                     border: '1px solid #e2e8f0',
                     borderRadius: 16,
@@ -1045,6 +1189,16 @@ export function PlatformPage() {
 
                     <button
                       type="button"
+                      className="platform-company-admin-button"
+                      onClick={() => setManagingCompany(company)}
+                      disabled={company.status === 'archived'}
+                      title="Cadastrar e gerenciar administradores desta empresa"
+                    >
+                      <ShieldCheck size={15}/> Administradores
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => void changeStatus(company)}
                       disabled={
                         changingId === company.id ||
@@ -1064,6 +1218,25 @@ export function PlatformPage() {
                             ? 'Ativar'
                             : 'Arquivada'}
                     </button>
+
+                    {company.status !== 'archived' && (
+                      <button
+                        type="button"
+                        onClick={() => {setArchiveConfirmName('');setArchiveTarget(company);}}
+                        disabled={changingId === company.id}
+                        title="Excluir do cadastro operacional e preservar os históricos"
+                        style={{
+                          padding: '9px 12px',
+                          borderRadius: 9,
+                          cursor: 'pointer',
+                          color: '#991b1b',
+                          border: '1px solid #fecaca',
+                          background: '#fff7f7'
+                        }}
+                      >
+                        {changingId === company.id ? 'Aguarde...' : 'Excluir cadastro'}
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -1074,7 +1247,11 @@ export function PlatformPage() {
             companies.length > 0 &&
             filteredCompanies.length === 0 && (
               <p>
-                Nenhuma empresa corresponde à pesquisa.
+                {companyView === 'operational' && archivedCount === companies.length
+                  ? 'Não há empresas em operação. Consulte as empresas excluídas / arquivadas para ver os cadastros preservados.'
+                  : companyView === 'archived' && archivedCount === 0
+                    ? 'Nenhuma empresa foi excluída do cadastro.'
+                    : 'Nenhuma empresa corresponde à pesquisa.'}
               </p>
             )}
         </section>
@@ -1088,22 +1265,67 @@ export function PlatformPage() {
                 marginRight: 8
               }}
             />
-            Administração da plataforma
+            Segurança da plataforma
           </h3>
 
           <p>
-            O cadastro das empresas está integrado à
-            API do Superadmin. A vinculação de
-            administradores, funcionários e registros
-            de ponto por empresa será implementada
-            nas próximas etapas.
+            Cada empresa tem seu próprio cadastro e administradores vinculados. Suspender ou excluir encerra as sessões da empresa, preservando registros e trilhas de auditoria.
           </p>
 
           <span className="platform-pending">
-            Integração multiempresa em desenvolvimento
+            Isolamento por empresa ativo
           </span>
         </section>
-      </div>
+
+      {managingCompany && session && (
+        <PlatformCompanyAdmins
+          key={managingCompany.id}
+          company={managingCompany}
+          csrfToken={session.csrf_token}
+          onClose={() => setManagingCompany(null)}
+        />
+      )}
+
+      {adminPickerOpen && (
+        <div role="presentation" style={{position:'fixed',inset:0,zIndex:1050,background:'rgba(15,23,42,.68)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <section role="dialog" aria-modal="true" aria-labelledby="admin-picker-title" style={{width:'100%',maxWidth:520,maxHeight:'calc(100vh - 32px)',overflowY:'auto',background:'#fff',color:'#0f172a',borderRadius:18,padding:24,boxSizing:'border-box',boxShadow:'0 24px 80px rgba(0,0,0,.2)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
+              <div><h2 id="admin-picker-title">Escolha uma empresa</h2><p>Os administradores são vinculados a uma empresa específica.</p></div>
+              <button type="button" aria-label="Fechar seleção de empresa" onClick={()=>setAdminPickerOpen(false)}><X size={20}/></button>
+            </div>
+            <div style={{display:'grid',gap:10,marginTop:16}}>
+              {companies.filter(company=>company.status!=='archived').map(company=>(
+                <article key={company.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,border:'1px solid #e2e8f0',borderRadius:12,padding:12}}>
+                  <div><strong>{company.name}</strong><small style={{display:'block',marginTop:3,opacity:.7}}>{company.status==='active'?'Ativa':'Suspensa'}</small></div>
+                  <button type="button" className="platform-company-admin-button" onClick={()=>{setAdminPickerOpen(false);setManagingCompany(company);}}>
+                    <ShieldCheck size={15}/> Gerenciar
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {archiveTarget && (
+        <div
+          role="presentation"
+          style={{position:'fixed',inset:0,zIndex:1100,background:'rgba(15,23,42,.68)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="archive-company-title" style={{width:'100%',maxWidth:520,background:'#fff',color:'#0f172a',borderRadius:18,padding:24,boxSizing:'border-box',boxShadow:'0 24px 80px rgba(0,0,0,.2)'}}>
+            <h2 id="archive-company-title">Excluir cadastro da empresa?</h2>
+            <p><strong>{archiveTarget.name}</strong> será retirada do cadastro operacional e os acessos serão encerrados. Funcionários, jornadas, registros e históricos serão preservados em Arquivadas.</p>
+            <label htmlFor="archive-company-confirm">Digite o nome da empresa para confirmar</label>
+            <input id="archive-company-confirm" autoComplete="off" value={archiveConfirmName} onChange={event=>setArchiveConfirmName(event.target.value)} style={{display:'block',width:'100%',marginTop:8,padding:12,boxSizing:'border-box'}} />
+            <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:20,flexWrap:'wrap'}}>
+              <button type="button" onClick={()=>{setArchiveTarget(null);setArchiveConfirmName('');}} disabled={changingId===archiveTarget.id}>Cancelar</button>
+              <button type="button" onClick={()=>void archiveCompany()} disabled={changingId===archiveTarget.id||archiveConfirmName.trim()!==archiveTarget.name} style={{color:'#991b1b'}}>
+                {changingId===archiveTarget.id?'Excluindo...':'Confirmar exclusão'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {formOpen && (
         <div
@@ -1162,7 +1384,7 @@ export function PlatformPage() {
                 type="button"
                 aria-label="Fechar formulário"
                 onClick={() => setFormOpen(false)}
-                disabled={saving}
+                disabled={saving||logoBusy}
                 style={{
                   border: 'none',
                   background: 'transparent',
@@ -1247,23 +1469,7 @@ export function PlatformPage() {
                 para reconhecer a empresa.
               </small>
 
-              <label htmlFor="company-logo">
-                URL da logomarca (opcional)
-              </label>
-
-              <input
-                id="company-logo"
-                type="url"
-                value={form.logo_url}
-                onChange={event =>
-                  updateForm(
-                    'logo_url',
-                    event.target.value
-                  )
-                }
-                placeholder="https://exemplo.com/logo.png"
-                pattern="https://.*"
-              />
+              <CompanyLogoUpload value={form.logo_url} onChange={v=>updateForm('logo_url',v)} onBusy={setLogoBusy} disabled={saving}/>
 
               <label htmlFor="company-color">
                 Cor principal
@@ -1360,7 +1566,7 @@ export function PlatformPage() {
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  disabled={saving}
+                  disabled={saving||logoBusy}
                   style={{
                     padding: '11px 18px',
                     borderRadius: 10,
@@ -1373,7 +1579,7 @@ export function PlatformPage() {
                 <button
                   type="submit"
                   className="platform-button"
-                  disabled={saving}
+                  disabled={saving||logoBusy}
                   style={{ width: 'auto' }}
                 >
                   {saving
@@ -1387,6 +1593,9 @@ export function PlatformPage() {
           </section>
         </div>
       )}
+      </>}
+      </div>
+      </div>
     </main>
   );
 }

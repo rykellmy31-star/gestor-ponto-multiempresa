@@ -1,5 +1,7 @@
 # Publicação Cloudflare — passo a passo
 
+> **CR JORNADA multiempresa (2026):** este guia descreve a instalação antiga de um único tenant, com rotas `/admin` e `/app`. **Não deve ser usado como roteiro de produção da versão multiempresa.** Consulte primeiro [INICIAR-CLOUDFLARE-CR-JORNADA.md](INICIAR-CLOUDFLARE-CR-JORNADA.md). O `scripts/preflight.mjs` bloqueia intencionalmente o deploy de produção enquanto o isolamento, a conformidade e a homologação final não estiverem completos. No Cloudflare Workers Builds, o comando padrão `npx wrangler deploy` **não executa** esse preflight; não ative deploy automático da configuração principal durante a preparação.
+
 **Nenhum recurso remoto foi criado nesta entrega.** Não foram fornecidas credenciais da sua conta, e o conector Cloudflare não está disponível neste ambiente. Faça a autorização no **seu computador/terminal privado**; não envie tokens, senhas ou chaves no chat.
 
 ## 1. Conta e ferramentas

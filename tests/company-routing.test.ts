@@ -1,3 +1,4 @@
+import { jsonBody } from './helpers/json-body';
 
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
@@ -53,7 +54,7 @@ const employees = [
   }
 ];
 
-function makeEnvironment(scenario: Scenario) {
+function makeEnvironment(scenario: Scenario, registrationFlag?: string) {
   const statements: string[] = [];
 
   const db = {
@@ -90,6 +91,7 @@ function makeEnvironment(scenario: Scenario) {
                   expires_at: Date.now() + 60000,
                   last_seen_at: Date.now(),
                   token_hash: 'token-hash',
+                  must_change_password: 0,
                   slug: scenario
                 };
               }
@@ -147,6 +149,7 @@ function makeEnvironment(scenario: Scenario) {
     AUTH_PEPPER: 'test-pepper'.repeat(5),
     DATA_KEY: 'a'.repeat(64),
     SESSION_HOURS: '8',
+    ENABLE_COMPANY_EMPLOYEE_REGISTRATION: registrationFlag,
     ASSETS: {
       fetch: async () => new Response('asset')
     }
@@ -155,7 +158,8 @@ function makeEnvironment(scenario: Scenario) {
   const request = (
     path: string,
     method = 'GET',
-    authenticated = true
+    authenticated = true,
+    csrf?: string
   ) =>
     server.request(
       path,
@@ -164,7 +168,8 @@ function makeEnvironment(scenario: Scenario) {
         headers: authenticated
           ? {
               Cookie:
-                'cr_jornada_company_dev=' + 'a'.repeat(64)
+                'cr_jornada_company_dev=' + 'a'.repeat(64),
+              ...(csrf ? { 'X-CSRF-Token': csrf } : {})
             }
           : {}
       },
@@ -178,6 +183,33 @@ function makeEnvironment(scenario: Scenario) {
 }
 
 describe('CR JORNADA - protecao das rotas', () => {
+  it('serve a entrada empresarial e continua bloqueando as telas administrativas antigas', async () => {
+    const t = makeEnvironment('anonymous');
+    const login = await t.request('/admin/entrar');
+    expect(login.status).toBe(200);
+    expect(await login.text()).toBe('asset');
+    const legacy = await t.request('/admin/funcionarios');
+    expect(legacy.status).toBe(302);
+    expect(legacy.headers.get('location')).toBe('/superadmin');
+  });
+
+  it('cadastro explicitamente habilitado chega ao modulo seguro sem pular autenticacao ou CSRF', async () => {
+    const anonymous = makeEnvironment('anonymous', 'true');
+    expect((await anonymous.request('/api/company/employees', 'POST')).status).toBe(401);
+    for (const scenario of ['company-a', 'company-b'] as const) {
+      const t = makeEnvironment(scenario, 'true');
+      expect((await t.request('/api/company/employees', 'POST')).status).toBe(403);
+      const response = await t.request('/api/company/employees', 'POST', true, 'csrf-token');
+      expect(response.status).toBe(400);
+      expect((await jsonBody(response)).error.code).toBe('invalid_employee');
+      expect(t.statements.some(sql => /INSERT\s+INTO\s+employees/i.test(sql))).toBe(false);
+    }
+    const wrongFlag = makeEnvironment('company-a', 'TRUE');
+    const blocked = await wrongFlag.request('/api/company/employees', 'POST');
+    expect(blocked.status).toBe(503);
+    expect((await jsonBody(blocked)).error.code).toBe('tenant_isolation_pending');
+  });
+
   it('empresa A acessa somente seus funcionarios', async () => {
     const t = makeEnvironment('company-a');
 
@@ -187,7 +219,7 @@ describe('CR JORNADA - protecao das rotas', () => {
 
     expect(response.status).toBe(200);
 
-    const data = await response.json();
+    const data = await jsonBody(response);
 
     expect(data.company_id).toBe('company-a');
     expect(data.employees).toHaveLength(1);
@@ -203,7 +235,7 @@ describe('CR JORNADA - protecao das rotas', () => {
 
     expect(response.status).toBe(200);
 
-    const data = await response.json();
+    const data = await jsonBody(response);
 
     expect(data.company_id).toBe('company-b');
     expect(data.employees).toHaveLength(1);
@@ -238,7 +270,7 @@ describe('CR JORNADA - protecao das rotas', () => {
 
     expect(response.status).toBe(503);
 
-    const data = await response.json();
+    const data = await jsonBody(response);
 
     expect(data.error.code)
       .toBe('tenant_isolation_pending');
@@ -252,6 +284,60 @@ describe('CR JORNADA - protecao das rotas', () => {
     );
 
     expect(response.status).toBe(503);
+  });
+
+  it('recuperação nova exige sessão e não abre o cadastro legado', async()=>{
+    const anonymous=makeEnvironment('anonymous');
+    expect((await anonymous.request('/api/company/employees/employee-a/reset-password','POST')).status).toBe(401);
+    const authenticated=makeEnvironment('company-a');
+    expect((await authenticated.request('/api/company/employees/employee-a/reset-password','POST')).status).toBe(403);
+  });
+
+  it('matriz fail-closed: nenhuma rota legada volta a funcionar nas empresas A/B', async () => {
+    const forbidden: Array<[string, string]> = [
+      ['POST', '/api/employee/punch'],
+      ['GET', '/api/employee/history'],
+      ['GET', '/api/admin/employees'],
+      ['POST', '/api/admin/employees'],
+      ['GET', '/api/admin/reports'],
+      ['GET', '/api/auth/session'],
+      ['POST', '/api/company/employees/employee-a/status'],
+      ['POST', '/api/auth/admin/login'],
+      ['GET', '/api/company/employees/employee-b'],
+      ['PATCH', '/api/company/employees/employee-b'],
+      ['DELETE', '/api/company/employees/employee-b'],
+      ['POST', '/api/company/employees']
+    ];
+    for (const scenario of ['company-a', 'company-b'] as const) {
+      const t = makeEnvironment(scenario);
+      for (const [method, path] of forbidden) {
+        const response = await t.request(path, method);
+        expect(response.status, `${scenario} ${method} ${path}`).toBe(503);
+        const data = await jsonBody(response);
+        expect(data.error.code).toBe('tenant_isolation_pending');
+      }
+      expect(t.statements.some(sql => /FROM\\s+employees\\b/i.test(sql))).toBe(false);
+    }
+  });
+
+  it('cookie de empresa nao concede sessao Superadmin nem CPF', async () => {
+    const company = makeEnvironment('company-a');
+    const platform = await company.request('/api/platform/companies');
+    expect(platform.status).toBe(401);
+    const cpfHistory = await company.request('/api/employee/cpf-work/history');
+    expect(cpfHistory.status).toBe(401);
+    const cpfToday = await company.request('/api/employee/cpf-work/today');
+    expect(cpfToday.status).toBe(401);
+    expect(company.statements.some(sql => /FROM\\s+employees\\b/i.test(sql))).toBe(false);
+  });
+
+  it('rotas de jornada exigem flag mesmo para administrador com sessao valida', async () => {
+    const t = makeEnvironment('company-a');
+    const response = await t.request('/api/company/schedules', 'GET');
+    expect(response.status).toBe(503);
+    const data = await jsonBody(response);
+    expect(data.error.code).toBe('company_schedules_unavailable');
+    expect(t.statements.some(sql => /FROM\\s+schedules\\b/i.test(sql))).toBe(false);
   });
 
   it('nao libera cadastro de funcionarios', async () => {

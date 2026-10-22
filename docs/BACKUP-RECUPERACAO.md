@@ -8,7 +8,7 @@ Mantenha em locais separados:
 
 1. Backup `.jdb` cifrado e seu `.manifest.json`, em armazenamento com controle de acesso e cópia externa.
 2. Frase forte de proteção do backup, em cofre, **não junto do arquivo**.
-3. `AUTH_PEPPER` e `DATA_KEY` originais, no cofre. A restauração do SQL não recupera Secrets do Worker.
+3. `AUTH_PEPPER`, `DATA_KEY` e `CPF_LOOKUP_SECRET` originais, no cofre. A restauração do SQL não recupera Secrets do Worker.
 4. Código/lockfile/migrations correspondentes à versão, configuração do domínio e identificador do D1.
 
 Perder `AUTH_PEPPER` impede verificar senhas existentes. Perder `DATA_KEY` impede recuperar CPFs cifrados. Não “resolva” recriando chaves sem planejamento de migração/recuperação de contas.
@@ -82,7 +82,11 @@ SELECT name FROM sqlite_master WHERE type='trigger';
 8. Em recuperação de incidente de segurança, revogue sessões e links restaurados antes da reabertura. Na conta autorizada e no banco correto: `DELETE FROM sessions; DELETE FROM password_reset_tokens;`. O operador deve registrar externamente o incidente/procedimento, preservando auditoria e evidências.
 9. Elimine o SQL temporário de forma compatível com o meio de armazenamento; não o envie por e-mail, não o coloque no repositório e não o deixe na pasta de downloads compartilhada.
 
-**Validação realizada na entrega:** exportação local real, cifra, descriptografia, restauração em SQLite separado, `foreign_key_check` sem erros, presença de pontos/triggers e recusa de frase errada. **A restauração em D1 remoto não foi executada** e é obrigatória como ensaio antes do uso produtivo.
+**Validação remota em 2026-10-21:** Actions `39666007053`, commit `7c47180043fa5be736f37cc8b931ebe3481e09e2`: exportacao exclusivamente de `cr-jornada-staging-db`, cifra AES-256-GCM, verificacao SHA256, descriptografia autenticada, rejeicao de adulteracao e restauracao em `cr-jornada-staging-restore-e37bdead2e50` (`f2f2decd-0cea-47eb-90b0-640cd9b69e9c`). As 51 tabelas tiveram schema e hashes de conteudo comparados; `foreign_key_check` nao encontrou violacoes. Dados sao ficticios. Producao nao foi exportada nem restaurada.
+
+O ensaio usa `scripts/verify-staging-recovery.mjs` e `scripts/prepare_d1_restore.py`: cria tabelas e indices UNIQUE antes dos dados, respeita dependencias preenchidas, preserva contadores e instala triggers depois dos registros. Lotes estruturados da API D1 sao limitados por tamanho e quantidade. A importacao bulk encontrou `D1_RESET_DO`; a restauracao aprovada usou a API estruturada. Uma falha parcial nunca autoriza apagar tabelas nem repetir inserts sobre dados existentes.
+
+O arquivo cifrado deste ensaio e temporario e sua chave e efemera. **O ensaio aprovado nao e um backup operacional duradouro de producao.** Guardar backups, chave de cifra e os tres Secrets em cofres separados, definir retencao e aprovar a janela de exportacao produtiva continuam pendentes.
 
 ## 4. Time Travel nativo do D1
 
@@ -130,3 +134,17 @@ Não há senha de emergência padrão ou conta secreta. Se a própria conta Clou
 ## 7. Manutenção de dados temporários
 
 Pontos e auditoria não devem ser apagados pelo uso normal. Sessões, tokens de reset e baldes de rate limit expirados podem ser limpos pelo operador após revisar a política de retenção; a aplicação já os considera inválidos por prazo/versão, mesmo enquanto a linha existir. Não foi instalado um cron de limpeza automática. Monitore crescimento, quotas, falhas de backup e logs sem registrar corpos de login, cookies ou links de reset.
+
+## Ensaio após política empresarial versionada
+
+Actions `39671265454`, código `9808e88d5b1848902e816cba4a52d5d64df8c091`: recuperação remota aprovada após aplicar a migration 0039 somente no staging. Foram 52 tabelas de aplicação/migrations, incluindo a nova auditoria de políticas; schema e hashes de conteúdo idênticos; integridade referencial, AES-256-GCM, SHA256 e rejeição de adulteração aprovados. Clone separado `cr-jornada-staging-restore-f0d50ccd371c`, ID `d42feab3-ffa3-4ff3-822b-336fec9adb94`. Produção preservada com 38 migrations, sem exportação ou restauração. O ensaio continua usando chave efêmera e não substitui backup operacional.
+
+## Homologação dos painéis e escalas — 22/10/2026
+
+Código `76fc79cf542a00de0d259591b5010b204ce9ca4b`. [Homologação real 39766727757](https://github.com/rykellmy31-star/gestor-ponto-multiempresa/actions/runs/39766727757) aprovada com **343 verificações**; [CI 39766727804](https://github.com/rykellmy31-star/gestor-ponto-multiempresa/actions/runs/39766727804) integralmente aprovado: **381 testes**, sendo 324 gerais e 57 D1 em três grupos. Produção e main foram preservados.
+
+Visão geral com escala atribuída e contador de solicitações, consulta do ponto com motivo específico de bloqueio, botão de liberação pelo gestor, alteração de escala e edição em nova versão pela aba Funcionários, exclusão de modelos sem apagar histórico, solicitações e respostas empresariais, pesquisa de humor agrupada e envio da logomarca do dispositivo foram verificados no navegador e no D1 real, usando duas empresas fictícias. A interface restaurada foi preservada e incorporada à branch de desenvolvimento.
+
+Staging: Worker `gestor-ponto-multiempresa-staging`, D1 `41604781-5fbf-4287-beca-64e20ce1ee1f`, **43 migrações**. Backup criptografado e restauração aprovados: **60 tabelas**, schema e hashes idênticos, SHA256/AES-256-GCM e rejeição de adulteração. Destino separado `cr-jornada-staging-restore-5bc75a378df4` (`12a82d3d-ed71-4bea-b27d-2ba7fb4b8f4b`). Produção não foi exportada nem restaurada. A chave do ensaio continua efêmera; o cofre e o backup operacional durável de produção permanecem pendentes.
+
+**85,00% = 17/20 critérios aprovados**. Os fluxos novos avançam parcialmente o bloco 19; não encerram a reconciliação do bloco 18 nem a revisão integral de segurança e preparação operacional/publicação dos blocos 19–20. Limites da exclusão e da resposta a justificativas em [CORRECOES-PAINEL-ESCALAS-SOLICITACOES.md](CORRECOES-PAINEL-ESCALAS-SOLICITACOES.md).
