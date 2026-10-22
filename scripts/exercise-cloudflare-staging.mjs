@@ -720,6 +720,14 @@ try {
         'painel real apresenta a navegacao lateral Superadmin');
       verify(await page.getByRole('heading',{name:'Visão geral multiempresa',exact:true}).isVisible(),
         'painel real apresenta a visao geral multiempresa');
+      const adminNavigation=page.getByRole('navigation',{name:'Navegação Superadmin',exact:true});
+      await adminNavigation.getByRole('button',{name:'Administradores',exact:true}).click();
+      const adminPicker=page.getByRole('dialog',{name:'Escolha uma empresa',exact:true});
+      await adminPicker.waitFor();
+      await adminPicker.locator('article').filter({hasText:a.name}).getByRole('button',{name:'Gerenciar',exact:true}).click();
+      await page.getByRole('dialog',{name:'Administradores de '+a.name,exact:true}).waitFor();
+      await page.getByRole('button',{name:'Fechar administradores',exact:true}).click();
+      verify(true,'botao Administradores abre a selecao e o painel da empresa escolhida');
       await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
       const row=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
       const registeredMetric=page.locator('.platform-stat').filter({hasText:'Empresas cadastradas'});

@@ -260,6 +260,7 @@ export function PlatformPage() {
   const [companyView, setCompanyView] = useState<'operational'|'archived'|'all'>('operational');
 
   const [managingCompany, setManagingCompany] = useState<Company | null>(null);
+  const [adminPickerOpen, setAdminPickerOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] =
     useState<string | null>(null);
@@ -641,6 +642,16 @@ export function PlatformPage() {
     }
   }
 
+  function openAdminPicker() {
+    const available = companies.filter(company => company.status !== 'archived');
+    if (available.length === 0) {
+      setNotice('Cadastre uma empresa antes de gerenciar seus administradores.');
+      document.getElementById('companies')?.scrollIntoView({behavior: 'smooth'});
+      return;
+    }
+    setAdminPickerOpen(true);
+  }
+
   const filteredCompanies = companies.filter(company => {
     if (companyView === 'operational' && company.status === 'archived') return false;
     if (companyView === 'archived' && company.status !== 'archived') return false;
@@ -793,8 +804,9 @@ export function PlatformPage() {
             <LayoutDashboard size={18}/> Visão geral
           </Link>
           <a href="/superadmin#companies"><Building2 size={18}/> Empresas</a>
-          <a href="/superadmin#companies"><ShieldCheck size={18}/> Administradores
-          </a>
+          <button type="button" onClick={openAdminPicker}>
+            <ShieldCheck size={18}/> Administradores
+          </button>
           <Link to="/superadmin/vendas" className={location.pathname === '/superadmin/vendas' ? 'active' : ''}>
             <ShoppingBag size={18}/> Página de vendas
           </Link>
@@ -896,6 +908,7 @@ export function PlatformPage() {
             <h3><Plus size={17}/> Ações rápidas</h3>
             <button type="button" onClick={openCreate}><Plus size={16}/> Cadastrar empresa</button>
             <a href="/superadmin#companies"><Building2 size={16}/> Gerenciar empresas</a>
+            <button type="button" onClick={openAdminPicker}><ShieldCheck size={16}/> Criar administrador</button>
             <Link to="/superadmin/vendas"><ShoppingBag size={16}/> Página comercial</Link>
             <button type="button" onClick={()=>{setCompanyView('archived');document.getElementById('companies')?.scrollIntoView({behavior:'smooth'});}}><ShieldCheck size={16}/> Ver excluídas</button>
           </section>
@@ -1271,6 +1284,27 @@ export function PlatformPage() {
           csrfToken={session.csrf_token}
           onClose={() => setManagingCompany(null)}
         />
+      )}
+
+      {adminPickerOpen && (
+        <div role="presentation" style={{position:'fixed',inset:0,zIndex:1050,background:'rgba(15,23,42,.68)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <section role="dialog" aria-modal="true" aria-labelledby="admin-picker-title" style={{width:'100%',maxWidth:520,maxHeight:'calc(100vh - 32px)',overflowY:'auto',background:'#fff',color:'#0f172a',borderRadius:18,padding:24,boxSizing:'border-box',boxShadow:'0 24px 80px rgba(0,0,0,.2)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
+              <div><h2 id="admin-picker-title">Escolha uma empresa</h2><p>Os administradores são vinculados a uma empresa específica.</p></div>
+              <button type="button" aria-label="Fechar seleção de empresa" onClick={()=>setAdminPickerOpen(false)}><X size={20}/></button>
+            </div>
+            <div style={{display:'grid',gap:10,marginTop:16}}>
+              {companies.filter(company=>company.status!=='archived').map(company=>(
+                <article key={company.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,border:'1px solid #e2e8f0',borderRadius:12,padding:12}}>
+                  <div><strong>{company.name}</strong><small style={{display:'block',marginTop:3,opacity:.7}}>{company.status==='active'?'Ativa':'Suspensa'}</small></div>
+                  <button type="button" className="platform-company-admin-button" onClick={()=>{setAdminPickerOpen(false);setManagingCompany(company);}}>
+                    <ShieldCheck size={15}/> Gerenciar
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
       )}
 
       {archiveTarget && (
