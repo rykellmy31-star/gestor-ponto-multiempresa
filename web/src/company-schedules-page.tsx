@@ -359,6 +359,19 @@ export function CompanySchedulesPage() {
   const total=weekly(form);
   return <main className="company-schedules-page">
     <div className="company-schedules-shell">
+      <aside className="cr-legacy-sidebar" aria-label="Menu administrativo da empresa">
+        <div className="cr-legacy-sidebar-brand"><CalendarClock size={25}/> CR JORNADA</div>
+        <div className="cr-legacy-sidebar-title">PAINEL ADMINISTRATIVO</div>
+        <nav className="cr-legacy-sidebar-nav">
+          <a href="#cr-gestao-equipe"><UsersRound size={17}/> Funcionários</a>
+          <a href="#cr-politica-ponto"><ShieldCheck size={17}/> Regras de ponto</a>
+          <a href="#cr-apuracao"><CalendarClock size={17}/> Folhas e relatórios</a>
+          <a href="#cr-registros"><CheckCircle2 size={17}/> Registros de ponto</a>
+          <a href="#cr-jornadas"><CalendarClock size={17}/> Jornadas e escalas</a>
+        </nav>
+        <p className="cr-legacy-sidebar-note">Empresa: {session.company.slug}</p>
+      </aside>
+      <div className="cr-legacy-main">
       <header className="company-schedules-head">
         <div>
           <span className="company-schedules-overline"><ShieldCheck size={15}/> Área exclusiva da empresa</span>
@@ -370,24 +383,33 @@ export function CompanySchedulesPage() {
         </button>
       </header>
 
+      <div id="cr-gestao-equipe" className="cr-legacy-group">
       <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} csrf={session.csrf_token}
         onEmployeeCreated={()=>void load()}
         onSessionExpired={onSessionExpired}/>
+      </div>
 
+      <div id="cr-politica-ponto" className="cr-legacy-group">
       <CompanyPunchPolicy key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
+      </div>
 
+      <div id="cr-apuracao" className="cr-legacy-group">
       <CompanyCalculations key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>
       <CompanyClosures key={session.company.id+':closures:'+session.csrf_token}
         companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
       <CompanyDayEvents key={session.company.id+':events:'+session.csrf_token}
         companyId={session.company.id} employees={employees} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
+      </div>
 
+      <div id="cr-registros" className="cr-legacy-group">
       <CompanyAttendance key={session.company.id+':'+session.user.id+':'+session.csrf_token}
         companyId={session.company.id} employees={employees} onSessionExpired={onSessionExpired}/>
+      </div>
 
+      <div id="cr-jornadas" className="cr-legacy-group">
       <section className="company-schedules-card company-schedules-intro">
         <CalendarClock size={25}/>
         <div>
@@ -598,6 +620,8 @@ export function CompanySchedulesPage() {
         </div>}
       </section>
       <p className="company-schedules-footer">CR JORNADA · Módulo em homologação. Nenhum ponto real é ativado nesta página.</p>
+      </div>
+      </div>
     </div>
   </main>;
 }
