@@ -397,7 +397,7 @@ try {
       await page.getByLabel('Enviar logomarca do dispositivo (opcional)',{exact:true}).setInputFiles(await imageFile('#17424a'));
       const preview=page.getByRole('img',{name:'Prévia da logomarca',exact:true});await preview.waitFor();
       verify(await preview.evaluate(async img=>{await img.decode();return img.naturalWidth>0;}),'arquivo selecionado no navegador produz previa da logomarca');
-      await page.getByRole('button',{name:'Cadastrar empresa',exact:true}).click();
+      await page.getByRole('dialog').getByRole('button',{name:'Cadastrar empresa',exact:true}).click();
       await page.getByText('Código: '+logoSlug,{exact:true}).waitFor();
       let logoCompany=(await root.call('/api/platform/companies')).companies.find(c=>c.slug===logoSlug);
       verify(logoCompany&&logoCompany.logo_url.startsWith('/api/platform/companies/'),'cadastro pelo painel salva referencia autenticada da imagem');
