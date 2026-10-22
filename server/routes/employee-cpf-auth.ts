@@ -61,8 +61,6 @@ export type ActiveSession = {
   company_name: string;
   company_slug: string;
   company_timezone: 'America/Bahia' | 'America/Sao_Paulo';
-  company_logo_url?: string | null;
-  company_primary_color?: string;
   display_name: string;
   csrf_token: string;
   token_hash: string;
@@ -139,8 +137,7 @@ export async function getEmployeeCpfSession(c: Ctx): Promise<ActiveSession | nul
       s.user_id, s.employee_id, s.company_id, s.csrf_token,
       s.token_hash, s.expires_at, s.last_seen_at,
       u.display_name, u.must_change_password,
-      co.name AS company_name, co.slug AS company_slug, co.timezone AS company_timezone,
-      co.logo_url AS company_logo_url, co.primary_color AS company_primary_color
+      co.name AS company_name, co.slug AS company_slug, co.timezone AS company_timezone
     FROM employee_company_sessions s
     JOIN users u
       ON u.id = s.user_id AND u.employee_id = s.employee_id
@@ -364,8 +361,7 @@ employeeCpfAuthRoutes.get('/session', async c => {
     },
     company: {
       id: session.company_id, name: session.company_name,
-      slug: session.company_slug, timezone: session.company_timezone,
-      logo_url: session.company_logo_url, primary_color: session.company_primary_color
+      slug: session.company_slug, timezone: session.company_timezone
     },
     csrf_token: session.csrf_token,
     expires_at: session.expires_at,
@@ -373,6 +369,20 @@ employeeCpfAuthRoutes.get('/session', async c => {
   });
 });
 
+
+// Marca da empresa autorizada pelo CPF: jamais recebe company_id do navegador.
+employeeCpfAuthRoutes.get('/branding',async c=>{
+  const session=await getEmployeeCpfSession(c);
+  ensure(session,401,'unauthenticated','Entre para continuar.');
+  const company=await c.get('db').prepare(
+    "SELECT id,name,logo_url,primary_color,timezone FROM companies WHERE id=? AND status='active'"
+  ).bind(session.company_id).first<{
+    id:string;name:string;logo_url:string|null;primary_color:string;timezone:string
+  }>();
+  ensure(company,401,'unauthenticated','Empresa indisponivel.');
+  c.header('Cache-Control','private, no-store');
+  return c.json({company});
+});
 
 employeeCpfAuthRoutes.post('/password', async c => {
   const session = await getEmployeeCpfSession(c);
