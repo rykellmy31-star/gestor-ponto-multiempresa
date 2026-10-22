@@ -79,7 +79,38 @@ export function EmployeeCpfPunch({
       if(data.company_id!==companyId||data.employee_id!==employeeId){
         throw new Error('A empresa da sessão mudou. Entre novamente.');
       }
-      setToday(data);setDisabled(false);
+      // A linha do tempo usa somente o historico autenticado da mesma empresa.
+      // Falha nessa consulta nao libera outra batida nem altera a ordem autorizada.
+      let hydrated=data;
+      try{
+        const historyResponse=await fetch('/api/employee/cpf-work/history?month='+
+          encodeURIComponent(data.work_date.slice(0,7)),{
+            credentials:'same-origin',cache:'no-store'
+          });
+        if(historyResponse.status===401){
+          setToday(null);onSessionExpired?.();return;
+        }
+        if(historyResponse.ok){
+          const history=await historyResponse.json() as {
+            company_id:string;employee_id:string;
+            days:Array<{date:string;punches:Array<{id:string;seq:number;
+              type:PunchType;recorded_at:number}>}>
+          };
+          if(history.company_id!==companyId||history.employee_id!==employeeId)
+            throw new Error('O histórico retornou outra empresa ou funcionário.');
+          const punches=history.days.find(day=>day.date===data.work_date)?.punches||[];
+          const time=(seq:number)=>punches.find(p=>p.seq===seq)?.recorded_at;
+          const first=time(0)!=null&&time(1)!=null?Math.max(0,time(1)!-time(0)!):0;
+          const second=time(2)!=null&&time(3)!=null?Math.max(0,time(3)!-time(2)!):0;
+          const pause=time(1)!=null&&time(2)!=null?Math.max(0,time(2)!-time(1)!):0;
+          hydrated={...data,punches,worked_minutes:Math.floor((first+second)/60000),
+            break_minutes:Math.floor(pause/60000)};
+        }
+      }catch(error){
+        if(error instanceof Error&&error.message.includes('outra empresa'))
+          throw error;
+      }
+      setToday(hydrated);setDisabled(false);
     }catch(e){
       setToday(null);
       setError(e instanceof Error?e.message:'Falha ao consultar.');
