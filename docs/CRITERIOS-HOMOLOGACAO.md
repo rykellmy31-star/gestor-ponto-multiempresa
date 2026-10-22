@@ -7,7 +7,7 @@ Situação atual: **85,00% — 17 de 20 blocos aprovados**. Calendário e tratam
 | # | Bloco e limite da comprovação | Estado |
 |---|---|---|
 | 1 | Worker e D1 staging reais e exclusivos | Aprovado |
-| 2 | Migrações e guardas de destinos; staging 41, produção 38 (última comprovação) | Aprovado |
+| 2 | Migrações e guardas de destinos; staging 42, produção 38 (última comprovação) | Aprovado |
 | 3 | Tipos, build, testes gerais e três grupos D1 | Aprovado |
 | 4 | Superadmin: login, empresas, gestores, suspensão/reativação por API | Aprovado |
 | 5 | Login empresarial e troca obrigatória da senha inicial | Aprovado |
@@ -21,7 +21,7 @@ Situação atual: **85,00% — 17 de 20 blocos aprovados**. Calendário e tratam
 | 13 | Relatório empresarial de marcações no painel, JSON e CSV | Aprovado |
 | 14 | Apuração provisória de horas; não é fechamento definitivo | Aprovado |
 | 15 | Página comercial: rascunho, publicação e retirada; captação real desabilitada | Aprovado |
-| 16 | Backup staging cifrado, adulteração rejeitada e restauração de 55 tabelas em clone | Aprovado |
+| 16 | Backup staging cifrado, adulteração rejeitada e restauração de 56 tabelas em clone | Aprovado |
 | 17 | Feriados, ocorrências aprovadas pelo administrador e ajustes por empresa na apuração provisória | Aprovado |
 | 18 | Fechamento mensal definitivo, reconciliação e reabertura auditada | Parcial: fechamento/reabertura aprovados; reconciliação e decisões pendentes |
 | 19 | Revisão integral de segurança e demais fluxos visuais; decisões sobre rotas legadas | Pendente |
@@ -44,3 +44,5 @@ Avanço parcial do bloco 18: fechamento/reabertura empresarial no navegador e hi
 Homologação final do fechamento: `39707152663`, código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff`, 298 verificações reais aprovadas. Inclui a proteção adicional para não fechar turno original incompleto mesmo ajustado.
 
 CI final do código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff` aprovado em `39707152635`: compilação/testes gerais e três grupos D1. A instalação inicial de produção permaneceu desativada.
+
+Acesso do proprietário em staging ativado em `39709756387`, com troca obrigatória e pedido cifrado. Código `d5a0be5` aprovado no CI `39709068691` e na homologação `39709068643` (298 verificações, recuperação de 56 tabelas). Isso não conclui o bloco 20, que trata da preparação operacional e publicação de produção.

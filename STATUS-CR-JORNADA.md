@@ -1,10 +1,14 @@
 # CR JORNADA — estado real do desenvolvimento
 
-Estado atual: staging real em funcionamento, 41 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
+Estado atual: staging real em funcionamento, 42 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
 
-Evidência atual: código `71f9cef33ec3a835494e23dc0ec6bf5da77566ff`, homologação `39707152663`: **298 verificações reais aprovadas**, incluindo o ciclo visual de fechamento e reabertura. Recuperação do schema 41 aprovada no Actions `39706943984`: **55 tabelas**, schema/hashes idênticos, SHA256/AES-256-GCM e adulteração rejeitada, clone `1d348877-5fa7-4b8b-b733-c5d094cd62d9`. A chave do ensaio é efêmera, não substitui backup operacional. CI `39707152635` aprovado: compilação/testes gerais e três grupos D1. Instalação inicial de produção permaneceu desativada.
+Evidência atual: código `d5a0be5dc9160a2ea86f598f4aaec88fa90c791d`, homologação `39709068643`: **298 verificações reais aprovadas**. CI `39709068691` integralmente aprovado. Recuperação do schema 42: **56 tabelas**, schema/hashes idênticos, SHA256/AES-256-GCM e adulteração rejeitada; clone `0ed425fc-25e2-461a-8003-ca85bc5fc4a6`. A chave do ensaio é efêmera, não substitui backup operacional. Conta do proprietário ativada somente no staging com troca obrigatória no primeiro acesso (`39709756387`).
 
 Progresso por checklist: **85,00% (17/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). A apuração aberta continua provisória; o fechamento guarda um snapshot imutável. Ajustes não modificam comprovantes e turnos originais incompletos impedem o fechamento. Fechamento e reabertura com snapshots foram homologados em `39706943984`: 298 verificações e restauração de 55 tabelas. O bloco 18 permanece parcial: reconciliação de históricos e decisões de extras ainda pendentes. Publicação de produção bloqueada até completar esse bloco, auditoria integral, backup operacional durável, credenciais iniciais do proprietário e liberação autorizada.
+
+## Acesso do proprietário — 22/10/2026
+
+Conta do proprietário ativada no staging pelo Actions `39709756387`, com troca obrigatória no primeiro acesso. Código `d5a0be5dc9160a2ea86f598f4aaec88fa90c791d`: CI `39709068691` aprovado integralmente; homologação `39709068643` com 298 verificações reais e restauração de 56 tabelas. O pedido de ativação contém somente envelope cifrado. Detalhes em `docs/ACESSO-PROPRIETARIO-STAGING.md`. Produção não alterada; progresso permanece 85,00% (17/20).
 
 ## Registro histórico — 19/10/2026
 
