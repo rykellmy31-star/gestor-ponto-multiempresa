@@ -1,3 +1,4 @@
+import { logoFixture } from './helpers/logo-fixture';
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
@@ -97,7 +98,7 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
 
       const create=(slug:string,name:string)=>
         call('/api/platform/companies','POST',{
-          name,document:'',slug,primary_color:'#0F766E',
+          name,document:'',slug,logo_url:slug.endsWith('-a')?logoFixture:null,primary_color:'#0F766E',
           timezone:'America/Bahia'
         },superCookie,csrf);
       const coA=await create('empresa-ficticia-a','Empresa Fictícia A');
@@ -118,6 +119,18 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       expect(list.status).toBe(200);
       expect((await list.json() as any).companies.map((c:any)=>c.slug).sort())
         .toEqual(['empresa-ficticia-a','empresa-ficticia-b']);
+      const imageCompanyBody={name:companyA.name,document:'',slug:companyA.slug,logo_url:logoFixture,primary_color:companyA.primary_color,timezone:companyA.timezone};
+      expect((await call('/api/platform/companies/'+companyA.id,'PUT',imageCompanyBody,superCookie,csrf)).status).toBe(200);
+      const branded=(await (await call('/api/platform/companies/'+companyA.id,'GET',undefined,superCookie)).json() as any).company;
+      expect(branded.logo_url).toMatch(/^\/api\/platform\/companies\//);
+      const raster=await call(branded.logo_url,'GET',undefined,superCookie);
+      expect(raster.status).toBe(200);expect(raster.headers.get('content-type')).toBe('image/png');
+      expect(raster.headers.get('cache-control')).toContain('no-store');
+      expect((await call(branded.logo_url,'GET')).status).toBe(401);
+      expect((await call('/api/platform/companies/'+companyA.id,'PUT',{...imageCompanyBody,logo_url:branded.logo_url},superCookie,csrf)).status).toBe(200);
+      expect((await db.prepare('SELECT logo_url FROM companies WHERE id=?').bind(companyA.id).first<{logo_url:string}>())?.logo_url).toBe(logoFixture);
+      expect((await call('/api/platform/companies/'+companyB.id,'PUT',{...imageCompanyBody,name:companyB.name,slug:companyB.slug,logo_url:branded.logo_url},superCookie,csrf)).status).toBe(400);
+      expect((await call('/api/platform/companies/'+companyA.id,'PUT',{...imageCompanyBody,logo_url:'data:image/svg+xml;base64,PHN2Zy8+'},superCookie,csrf)).status).toBe(400);
       // O Superadmin edita só a empresa A; B mantém identidade e visual.
       const edit=await call('/api/platform/companies/'+companyA.id,'PUT',{
         name:'Empresa Fictícia A Atualizada',document:'',
@@ -463,7 +476,7 @@ describe('CR JORNADA — Superadmin cria duas empresas e gestores reais no D1 lo
       ).all<any>();
       const actions=events.results?.map(x=>x.action);
       expect(actions?.filter(x=>x==='company.created')).toHaveLength(2);
-      expect(actions?.filter(x=>x==='company.updated')).toHaveLength(1);
+      expect(actions?.filter(x=>x==='company.updated')).toHaveLength(3);
       expect(actions?.filter(x=>x==='company_admin.created')).toHaveLength(4);
       expect(actions?.filter(x=>x==='company_admin.password_reset')).toHaveLength(1);
       expect(actions?.filter(x=>x==='company_admin.status_changed')).toHaveLength(2);

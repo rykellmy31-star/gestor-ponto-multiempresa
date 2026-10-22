@@ -363,6 +363,45 @@ try {
       await page.getByRole('link',{name:'Página de vendas',exact:true}).waitFor();
       for(const company of companies)await page.getByText('Código: '+company.slug,{exact:true}).waitFor();
       verify(true,'Superadmin autentica pelo formulario e visualiza as duas empresas reais de QA');
+      const logoSlug='qa-logo-'+tag,logoName='Empresa Ficticia Logo QA '+tag;
+      const imageFile=async color=>({name:'qa-logo.png',mimeType:'image/png',buffer:Buffer.from(await page.evaluate(color=>{
+        const canvas=document.createElement('canvas');canvas.width=32;canvas.height=32;
+        const ctx=canvas.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,32,32);return canvas.toDataURL('image/png').split(',')[1];
+      },color),'base64')});
+      await page.getByRole('button',{name:'Nova empresa',exact:true}).click();
+      await page.getByLabel('Nome da empresa',{exact:true}).fill(logoName);
+      await page.getByLabel('Identificador da empresa',{exact:true}).fill(logoSlug);
+      await page.getByLabel('Enviar logomarca do dispositivo (opcional)',{exact:true}).setInputFiles(await imageFile('#17424a'));
+      const preview=page.getByRole('img',{name:'Prévia da logomarca',exact:true});await preview.waitFor();
+      verify(await preview.evaluate(async img=>{await img.decode();return img.naturalWidth>0;}),'arquivo selecionado no navegador produz previa da logomarca');
+      await page.getByRole('button',{name:'Cadastrar empresa',exact:true}).click();
+      await page.getByText('Código: '+logoSlug,{exact:true}).waitFor();
+      let logoCompany=(await root.call('/api/platform/companies')).companies.find(c=>c.slug===logoSlug);
+      verify(logoCompany&&logoCompany.logo_url.startsWith('/api/platform/companies/'),'cadastro pelo painel salva referencia autenticada da imagem');
+      const storedLogo=(await query('SELECT logo_url FROM companies WHERE id=?',[logoCompany.id]))[0].logo_url;
+      verify(/^data:image\/(webp|png);base64,/.test(storedLogo)&&storedLogo.length<33000,'D1 conserva logomarca otimizada com tamanho limitado');
+      const served=await page.request.get(STAGING_ORIGIN+logoCompany.logo_url);
+      verify(served.status()===200&&/^image\/(png|webp)$/.test(served.headers()['content-type'])&&
+        (await served.body()).equals(Buffer.from(storedLogo.split(',')[1],'base64')),'imagem gravada e servida com bytes e tipo corretos');
+      verify((await fetch(STAGING_ORIGIN+logoCompany.logo_url,{redirect:'error'})).status===401,'imagem administrativa exige sessao Superadmin');
+      const row=page.locator('article').filter({has:page.getByText('Código: '+logoSlug,{exact:true})});
+      async function editLogo(){await row.getByRole('button',{name:'Editar',exact:true}).click();await page.getByRole('heading',{name:'Editar empresa',exact:true}).waitFor();}
+      async function saveLogo(){await page.getByRole('button',{name:'Salvar alterações',exact:true}).click();await page.getByRole('heading',{name:'Editar empresa',exact:true}).waitFor({state:'hidden'});}
+      await editLogo();await preview.waitFor();
+      await page.getByLabel('Nome da empresa',{exact:true}).fill(logoName+' Editada');await saveLogo();
+      logoCompany=(await root.call('/api/platform/companies/'+logoCompany.id)).company;
+      verify(logoCompany.logo_url===served.url().slice(STAGING_ORIGIN.length),'editar dados preserva a imagem existente sem novo envio');
+      await editLogo();await page.getByLabel('Enviar logomarca do dispositivo (opcional)',{exact:true}).setInputFiles(await imageFile('#0f766e'));
+      await page.getByText('Preparando imagem…',{exact:true}).waitFor({state:'hidden'});await saveLogo();
+      const changed=(await root.call('/api/platform/companies/'+logoCompany.id)).company;
+      verify(changed.logo_url!==logoCompany.logo_url,'novo arquivo substitui a logomarca na edicao');
+      await editLogo();await page.getByRole('button',{name:'Remover logomarca',exact:true}).click();await saveLogo();
+      verify((await root.call('/api/platform/companies/'+logoCompany.id)).company.logo_url===null,'remocao da logomarca pelo painel e persistida');
+      // Retain a fictitious uploaded logo so the encrypted recovery also checks its bytes.
+      await root.call('/api/platform/companies/'+logoCompany.id,{method:'PUT',body:{name:changed.name,document:changed.document,slug:changed.slug,
+        primary_color:changed.primary_color,timezone:changed.timezone,logo_url:storedLogo}});
+      verify((await query('SELECT logo_url FROM companies WHERE id=?',[logoCompany.id]))[0].logo_url===storedLogo,'fixture de imagem preservada para validacao de recuperacao');
+
     } finally {await platformContext.close();}
     for(const company of companies) {
       const context=await profilesBrowser.newContext({acceptDownloads:true});

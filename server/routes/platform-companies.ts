@@ -1,3 +1,5 @@
+import { companyLogoSchema,decodeCompanyLogo,COMPANY_LOGO_PATH } from '../../shared/company-logo';
+import { sha256 } from '../core/crypto';
 import { companyAdminWrite } from '../core/company-admin-write';
 
 import { Hono } from 'hono';
@@ -21,12 +23,7 @@ const companySchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .min(3)
     .max(60),
-  logo_url: z.union([
-    z.string().trim().url().max(2048)
-      .refine(value => value.startsWith('https://')),
-    z.literal(''),
-    z.null()
-  ]).optional(),
+  logo_url: companyLogoSchema,
   primary_color: z.string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default('#0F766E'),
@@ -124,6 +121,19 @@ async function recordAudit(
   ).run();
 }
 
+function exposeLogo<T extends {id:string;logo_url:string|null}>(company:T):T {
+  return {...company,logo_url:company.logo_url?.startsWith('data:')
+    ?'/api/platform/companies/'+company.id+'/logo/'+sha256(company.logo_url):company.logo_url};
+}
+platformCompaniesRoutes.get('/:id/logo/:hash',async c=>{
+  await requirePlatformAdmin(c);
+  const row=await c.get('db').prepare('SELECT logo_url FROM companies WHERE id=?').bind(c.req.param('id')).first<{logo_url:string|null}>();
+  ensure(row?.logo_url&&sha256(row.logo_url)===c.req.param('hash'),404,'logo_not_found','Logomarca não encontrada.');
+  const image=decodeCompanyLogo(row.logo_url);ensure(image,404,'logo_not_found','Logomarca não encontrada.');
+  c.header('Content-Type',image.type);c.header('Cache-Control','private, no-store');c.header('X-Content-Type-Options','nosniff');
+  return c.body(new Uint8Array(image.bytes).buffer);
+});
+
 // Listar empresas cadastradas.
 platformCompaniesRoutes.get('/', async c => {
   await requirePlatformAdmin(c);
@@ -139,7 +149,7 @@ platformCompaniesRoutes.get('/', async c => {
   `).all<CompanyRow>();
 
   return c.json({
-    companies: result.results || []
+    companies: (result.results || []).map(exposeLogo)
   });
 });
 
@@ -159,6 +169,7 @@ platformCompaniesRoutes.post('/', async c => {
   );
 
   const data = parsed.data;
+  ensure(!data.logo_url||!COMPANY_LOGO_PATH.test(data.logo_url),400,'invalid_logo','Envie uma imagem ou URL válida para a nova empresa.');
   const db = c.get('db');
 
   const existing = await db.prepare(`
@@ -217,14 +228,14 @@ platformCompaniesRoutes.post('/', async c => {
 
   return c.json({
     success: true,
-    company: {
+    company: exposeLogo({
       id,
       ...data,
       logo_url: data.logo_url || null,
       status: 'active',
       created_at: now,
       updated_at: now
-    }
+    })
   }, 201);
 });
 
@@ -248,7 +259,7 @@ platformCompaniesRoutes.get('/:id', async c => {
     'Empresa não encontrada.'
   );
 
-  return c.json({ company });
+  return c.json({ company:exposeLogo(company) });
 });
 
 // Atualizar dados de uma empresa.
@@ -271,9 +282,9 @@ platformCompaniesRoutes.put('/:id', async c => {
   const db = c.get('db');
 
   const existing = await db.prepare(`
-    SELECT id, status, updated_at FROM companies WHERE id = ?
+    SELECT id, status, updated_at,logo_url FROM companies WHERE id = ?
   `).bind(id).first<{
-    id: string; status: string; updated_at: number
+    id: string; status: string; updated_at: number;logo_url:string|null
   }>();
 
   ensure(
@@ -284,6 +295,12 @@ platformCompaniesRoutes.put('/:id', async c => {
   );
   ensure(existing.status !== 'archived', 409, 'company_archived',
     'Uma empresa arquivada não pode ser alterada.');
+  if(data.logo_url&&COMPANY_LOGO_PATH.test(data.logo_url)){
+    ensure(existing.logo_url?.startsWith('data:')&&exposeLogo({id,logo_url:existing.logo_url}).logo_url===data.logo_url,
+      400,'invalid_logo','A logomarca não corresponde a esta empresa. Envie a imagem novamente.');
+    data.logo_url=existing.logo_url;
+  }
+
 
   const duplicate = await db.prepare(`
     SELECT id FROM companies

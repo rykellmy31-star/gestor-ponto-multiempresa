@@ -10,6 +10,7 @@ import {
   Navigate,
   useLocation
 } from 'react-router-dom';
+import { CompanyLogoUpload } from './company-logo-upload';
 import { PlatformPasswordChange } from './platform-password-change';
 import { SalesPageEditor } from './sales-editor';
 import { PlatformCompanyAdmins } from './platform-company-admins';
@@ -214,6 +215,8 @@ function CompanyAvatar({
     >
       {company.logo_url && !failed ? (
         <img
+          loading="lazy"
+          decoding="async"
           src={company.logo_url}
           alt={`Logo de ${company.name}`}
           onError={() => setFailed(true)}
@@ -263,6 +266,7 @@ export function PlatformPage() {
 
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [logoBusy,setLogoBusy]=useState(false);
   const [changingId, setChangingId] =
     useState<string | null>(null);
 
@@ -430,6 +434,7 @@ export function PlatformPage() {
   }
 
   function openCreate() {
+    setLogoBusy(false);
     setEditingId(null);
     setForm({ ...initialForm });
     setFormError('');
@@ -438,6 +443,7 @@ export function PlatformPage() {
   }
 
   function openEdit(company: Company) {
+    setLogoBusy(false);
     if (company.status === 'archived') return;
 
     setEditingId(company.id);
@@ -469,7 +475,7 @@ export function PlatformPage() {
   ) {
     event.preventDefault();
 
-    if (!session) return;
+    if (!session || logoBusy) return;
 
     setSaving(true);
     setFormError('');
@@ -1218,7 +1224,7 @@ export function PlatformPage() {
                 type="button"
                 aria-label="Fechar formulário"
                 onClick={() => setFormOpen(false)}
-                disabled={saving}
+                disabled={saving||logoBusy}
                 style={{
                   border: 'none',
                   background: 'transparent',
@@ -1303,23 +1309,7 @@ export function PlatformPage() {
                 para reconhecer a empresa.
               </small>
 
-              <label htmlFor="company-logo">
-                URL da logomarca (opcional)
-              </label>
-
-              <input
-                id="company-logo"
-                type="url"
-                value={form.logo_url}
-                onChange={event =>
-                  updateForm(
-                    'logo_url',
-                    event.target.value
-                  )
-                }
-                placeholder="https://exemplo.com/logo.png"
-                pattern="https://.*"
-              />
+              <CompanyLogoUpload value={form.logo_url} onChange={v=>updateForm('logo_url',v)} onBusy={setLogoBusy} disabled={saving}/>
 
               <label htmlFor="company-color">
                 Cor principal
@@ -1416,7 +1406,7 @@ export function PlatformPage() {
                 <button
                   type="button"
                   onClick={() => setFormOpen(false)}
-                  disabled={saving}
+                  disabled={saving||logoBusy}
                   style={{
                     padding: '11px 18px',
                     borderRadius: 10,
@@ -1429,7 +1419,7 @@ export function PlatformPage() {
                 <button
                   type="submit"
                   className="platform-button"
-                  disabled={saving}
+                  disabled={saving||logoBusy}
                   style={{ width: 'auto' }}
                 >
                   {saving
