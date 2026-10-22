@@ -155,12 +155,31 @@ employeeCpfPunchRoutes.get('/today',async c=>{
   const seq=data.day?.next_seq||0;
   ensure(seq>=0&&seq<=4,409,'invalid_sequence',
     'A sequência do dia precisa ser verificada.');
+  const result=await c.get('db').prepare(
+    'SELECT p.id,p.seq,p.type,p.recorded_at FROM punches p '+
+    'JOIN work_days d ON d.id=p.work_day_id AND d.employee_id=p.employee_id '+
+    'WHERE d.company_id=? AND d.employee_id=? AND d.work_date=? '+
+    'ORDER BY p.seq LIMIT 5'
+  ).bind(s.company_id,s.employee_id,data.workDate).all<{
+    id:string;seq:number;type:PunchType;recorded_at:number
+  }>();
+  const punches=result.results||[];
+  ensure(punches.length<=4,409,'invalid_punch_history','Registros do dia exigem conferência.');
+  const times=(seq:number)=>punches.find(p=>p.seq===seq)?.recorded_at;
+  const first=times(0)!=null&&times(1)!=null?Math.max(0,times(1)!-times(0)!):0;
+  const second=times(2)!=null&&times(3)!=null?Math.max(0,times(3)!-times(2)!):0;
+  const pause=times(1)!=null&&times(2)!=null?Math.max(0,times(2)!-times(1)!):0;
   c.header('Cache-Control','private, no-store');
   return c.json({
     company_id:s.company_id,employee_id:s.employee_id,
     work_date:data.workDate,next_seq:seq,
     next_type:seq===4?null:cpfPunchTypes[seq],
-    completed:seq===4,server_now:now
+    completed:seq===4,server_now:now,
+    timezone:data.employee.timezone,schedule:data.shift,
+    expected_minutes:scheduleMinutes(data.shift).daily,
+    worked_minutes:Math.floor((first+second)/60000),
+    break_minutes:Math.floor(pause/60000),
+    punches
   });
 });
 
