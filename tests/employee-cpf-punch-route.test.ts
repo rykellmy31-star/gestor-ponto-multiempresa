@@ -203,15 +203,15 @@ describe('CR JORNADA — batida CPF multiempresa em homologação',()=>{
     expect(selected?.args).toEqual(['company-a','2026-10-19','employee-a','2026-10-19']);
   });
 
-  it('rejeita empresa sem politica propria ativa ou jornada propria',async()=>{
-    expect((await setup({policy:false}).request('/today')).status).toBe(409);
-    expect((await setup({validSchedule:false}).request('/today')).status).toBe(409);
-  });
-
-  it('nega dia legado sem empresa reconciliada',async()=>{
-    const t=setup({legacy:true});
-    expect((await t.request('/today')).status).toBe(409);
-    expect(t.batched).toHaveLength(0);
+  it('consulta jornada bloqueada sem liberar escrita nem esconder o motivo',async()=>{
+    for(const [options,code] of [[{policy:false},'company_punch_disabled'],[{validSchedule:false},'no_company_schedule'],[{legacy:true},'legacy_day_pending']] as const){
+      const t=setup(options),response=await t.request('/today');
+      expect(response.status).toBe(200);
+      const data=await response.json() as any;
+      expect(data).toMatchObject({can_punch:false,next_type:null,blocked:{code}});
+      expect((await t.request('/punch','POST',{type:'entry',idempotency_key:uuid})).status).toBe(409);
+      expect(t.batched).toHaveLength(0);
+    }
   });
 
   it('apresenta sequencia correta para jornada iniciada',async()=>{

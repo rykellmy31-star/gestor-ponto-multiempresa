@@ -200,6 +200,7 @@ try {
         await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
         await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
         await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+        await page.getByRole('button',{name:'Configurações',exact:true}).click();
         const panel = page.locator('section').filter({has:page.getByRole('heading',{
           name:'Regras de ponto da empresa',exact:true
         })});
@@ -294,9 +295,16 @@ try {
         await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
         await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
         await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
-        await page.getByRole('heading',{name:'Jornadas e escalas',exact:true}).waitFor();
+        await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();
+        await page.getByRole('button',{name:'Funcionários',exact:true}).click();
         verify(true,'login empresarial realizado pelo formulario real');
-        const access=page.locator('section').filter({has:page.getByRole('heading',{name:'Acesso dos funcionários',exact:true})});
+        await page.getByRole('button',{name:'Funcionários',exact:true}).click();
+      const access=page.locator('section').filter({has:page.getByRole('heading',{name:'Acesso dos funcionários',exact:true})});
+        await access.getByText('Janela QA de ponto',{exact:false}).first().waitFor();
+        await access.getByRole('button',{name:'Ver e alterar escala',exact:true}).click();
+        await access.getByText('Alterar escala deste funcionário',{exact:true}).waitFor();
+        await access.getByRole('button',{name:'Fechar escala',exact:true}).click();
+        verify(true,'funcionario no painel mostra escala atribuida e permite consultar sete dias');
         await access.getByRole('button',{name:'Editar nome e cargo',exact:true}).click();
         const editor=access.locator('form').filter({has:page.getByRole('heading',{name:'Editar nome e cargo',exact:true})});
         const editedName='Funcionario QA '+company.slug;
@@ -313,6 +321,7 @@ try {
         const audit=await query("SELECT details_json FROM audit_log WHERE action='company.employee.profile_updated' AND entity_id=?",[company.employee.id]);
         verify(audit.length===1&&JSON.parse(audit[0].details_json).company_id===company.id,
           'D1 registra auditoria da edicao empresarial');
+        await page.getByRole('button',{name:'Registros de ponto',exact:true}).click();
         const panel = page.locator('section').filter({has:page.getByRole('heading',{
           name:'Relatório mensal de marcações',exact:true
         })});
@@ -330,6 +339,7 @@ try {
         const contents = readFileSync(await download.path(),'utf8');
         verify(contents.includes('Comprovante') && contents.split('\r\n').length === 6,
           'CSV baixado pelo navegador contem cabecalho e quatro registros');
+        await page.getByRole('button',{name:'Folhas e relatórios',exact:true}).click();
         const calculation=page.locator('section').filter({has:page.getByRole('heading',{
           name:'Apuração de jornadas',exact:true
         })});
@@ -420,8 +430,9 @@ try {
         await page.getByRole('button',{name:'Entrar com segurança',exact:true}).click();
         await page.getByRole('heading',{name:'Escolha sua empresa',exact:true}).waitFor();
         await page.getByRole('button',{name:company.name,exact:true}).click();
-        await page.getByText('Jornada do dia finalizada',{exact:true}).waitFor();
+        await page.getByText('Jornada concluída. Os registros foram confirmados pelo servidor.',{exact:true}).waitFor();
         verify(true,'funcionario autentica, escolhe empresa e visualiza jornada concluida no navegador');
+        await page.getByRole('button',{name:'Minha folha de ponto',exact:true}).click();
         const history=page.locator('section').filter({has:page.getByRole('heading',{
           name:'Meu histórico de ponto',exact:true
         })}).last();
@@ -433,9 +444,66 @@ try {
           'cr-jornada-meu-ponto-'+today.slice(0,7)+'.csv','funcionario baixa extrato pelo navegador real');
         verify(await history.locator('details').count()===4,
           'historico visual do funcionario mostra quatro identificacoes de registro');
+        await page.getByRole('button',{name:'Minhas solicitações',exact:true}).click();
+        await page.getByLabel('Data da solicitação',{exact:true}).fill(today);
+        await page.getByLabel('Justificativa',{exact:true}).fill('Solicitacao ficticia QA '+tag);
+        await page.getByRole('button',{name:'Enviar solicitação',exact:true}).click();
+        await page.getByText('Solicitação enviada.',{exact:true}).waitFor();
+        verify((await query('SELECT id FROM company_employee_requests WHERE company_id=? AND employee_id=? AND message=?',
+          [company.id,company.employee.id,'Solicitacao ficticia QA '+tag])).length===1,'solicitacao enviada pelo funcionario e persistida somente no vinculo correto');
+        await page.getByRole('button',{name:'Registrar ponto',exact:true}).click();
+        await page.getByRole('button',{name:'Bem',exact:true}).click();
+        await page.getByText('Sua resposta de hoje foi registrada: Bem.',{exact:true}).waitFor();
+        verify((await query('SELECT mood FROM company_employee_moods WHERE company_id=? AND employee_id=? AND work_date=?',
+          [company.id,company.employee.id,today]))[0]?.mood==='good','pesquisa de humor respondida na interface e confirmada no D1');
       } finally {await context.close();}
     }
   } finally {await profilesBrowser.close();}
+  const workspaceBrowser=await chromium.launch({headless:true});
+  try {
+    const context=await workspaceBrowser.newContext();
+    try {
+      const page=await context.newPage();await page.goto(STAGING_ORIGIN+'/admin/entrar');
+      await page.getByLabel('Identificador da empresa',{exact:true}).fill(b.slug);
+      await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
+      await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
+      await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      await page.getByRole('heading',{name:'Visão geral',exact:true}).waitFor();
+      const currentPolicy=await b.client.call('/api/company/punch-policy');
+      await b.client.call('/api/company/punch-policy',{method:'PUT',body:{enabled:false,rules:currentPolicy.rules,expected_revision:currentPolicy.revision}});
+      const blockedClock=await employeeClients[1].call('/api/employee/cpf-work/today');
+      verify(blockedClock.can_punch===false&&blockedClock.blocked.code==='company_punch_disabled'&&blockedClock.schedule&&blockedClock.next_seq===4,
+        'consulta de ponto bloqueado conserva horario do servidor, escala e sequencia real');
+      await page.reload();
+      await page.getByRole('button',{name:'Liberar registro de ponto',exact:true}).click();
+      await page.getByText('Registro de ponto liberado para funcionários com jornada atribuída.',{exact:true}).waitFor();
+      verify((await b.client.call('/api/company/punch-policy')).enabled,'gestor libera o ponto pelo botao da visao geral com auditoria');
+      await page.getByRole('heading',{name:'Jornada da equipe',exact:true}).waitFor();
+      verify(true,'visao geral consulta API real sem bloqueio de homologacao');
+      await page.getByRole('button',{name:'Ocorrências',exact:true}).click();
+      await page.getByRole('button',{name:'Responder solicitação',exact:true}).click();
+      await page.getByLabel('Resposta ao funcionário',{exact:true}).fill('Justificativa recebida na homologacao QA.');
+      await page.getByRole('button',{name:'Confirmar resposta',exact:true}).click();
+      await page.getByText('Resposta registrada.',{exact:true}).waitFor();
+      const requests=await b.client.call('/api/company/workspace/requests');
+      verify(requests.requests.length===1&&requests.requests[0].decision==='accepted','administrador responde somente a solicitacao da propria empresa');
+      await a.client.call('/api/company/workspace/requests/'+requests.requests[0].id+'/decision',{
+        method:'POST',body:{decision:'rejected',response:'Tentativa ficticia de outra empresa'},expected:409});
+      await page.getByRole('button',{name:'Humor da Equipe',exact:true}).click();
+      await page.getByText('Aguardando pelo menos três participantes para proteger as respostas individuais.',{exact:true}).waitFor();
+      verify((await b.client.call('/api/company/workspace/mood')).results.length===0,'pesquisa protege respostas individuais de equipe pequena');
+      const archived=await b.client.call('/api/company/schedules',{method:'POST',body:{...morning,name:'Modelo QA para excluir'},expected:201});
+      await page.getByRole('button',{name:'Jornadas e escalas',exact:true}).click();
+      const card=page.locator('article').filter({has:page.getByRole('heading',{name:'Modelo QA para excluir',exact:true})});
+      page.once('dialog',dialog=>dialog.accept());
+      await card.getByRole('button',{name:'Excluir escala',exact:true}).click();
+      await page.getByText('Escala excluída dos modelos. Vínculos e histórico preservados.',{exact:true}).waitFor();
+      verify((await query('SELECT id FROM company_workspace_audit WHERE company_id=? AND target_id=?',[b.id,archived.id])).length===1,
+        'botao excluir escala registra arquivo imutavel no D1');
+      verify((await query('SELECT COUNT(*) total FROM punches p JOIN work_days d ON d.id=p.work_day_id WHERE d.company_id=? AND p.employee_id=?',[b.id,b.employee.id]))[0].total===4,
+        'exclusao de modelo preserva as quatro marcacoes originais');
+    }finally{await context.close();}
+  }finally{await workspaceBrowser.close();}
   const statusBrowser=await chromium.launch({headless:true});
   try {
     const context=await statusBrowser.newContext();
@@ -446,6 +514,7 @@ try {
       await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
       await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
       await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      await page.getByRole('button',{name:'Funcionários',exact:true}).click();
       const access=page.locator('section').filter({has:page.getByRole('heading',{name:'Acesso dos funcionários',exact:true})});
       const initial=(await a.client.call('/api/company/employees')).employees.find(e=>e.id===a.employee.id);
       const request={status:'blocked',reason:'Teste ficticio de bloqueio do vinculo',current_password:finalPassword,expected_updated_at:initial.updated_at};
@@ -518,6 +587,7 @@ try {
       await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
       await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
       await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      await page.getByRole('button',{name:'Ocorrências',exact:true}).click();
       const treatments=page.locator('section').filter({has:page.getByRole('heading',{name:'Calendário e tratamentos do ponto',exact:true})});
       await treatments.getByLabel('Funcionário dos tratamentos',{exact:true}).selectOption(b.employee.id);
       await treatments.getByLabel('Mês dos tratamentos',{exact:true}).fill(treatmentMonth);
@@ -572,6 +642,7 @@ try {
       await page.getByLabel('Usuário ou e-mail',{exact:true}).fill('gestor');
       await page.getByLabel('Senha',{exact:true}).fill(finalPassword);
       await page.getByRole('button',{name:'Entrar no painel',exact:true}).click();
+      await page.getByRole('button',{name:'Folhas e relatórios',exact:true}).click();
       const panel=page.locator('section').filter({has:page.getByRole('heading',{name:'Fechamento mensal',exact:true})});
       await panel.getByLabel('Funcionário do fechamento',{exact:true}).selectOption(closureEmployee);
       await panel.getByLabel('Mês do fechamento',{exact:true}).fill(historicalMonth);

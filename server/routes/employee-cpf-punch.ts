@@ -151,7 +151,36 @@ function replay(c:Ctx,found:Previous,type:PunchType,companyId:string) {
 
 employeeCpfPunchRoutes.get('/today',async c=>{
   const s=await authorized(c,false),now=Date.now();
-  const data=await loadContext(c,s,now);
+  let data:Awaited<ReturnType<typeof loadContext>>;
+  try {data=await loadContext(c,s,now);} catch(error) {
+    if(!(error instanceof ApiError)||error.status!==409)throw error;
+    // Reading the clock must work even when a write is currently forbidden.
+    // The POST continues to run every eligibility and atomic authorization check.
+    const workDate=localDate(now,s.company_timezone);
+    const row=await c.get('db').prepare('SELECT * FROM ('+SELECT_ACTIVE_COMPANY_SCHEDULE_SQL+`) chosen
+      WHERE EXISTS(SELECT 1 FROM employee_company_sessions sess
+       JOIN users u ON u.id=sess.user_id AND u.employee_id=sess.employee_id AND u.auth_version=sess.auth_version AND u.active=1 AND u.role='employee'
+       JOIN employees e ON e.id=sess.employee_id AND e.company_id=sess.company_id AND e.status='active' AND e.deleted_at IS NULL
+       JOIN companies co ON co.id=e.company_id AND co.status='active'
+       WHERE sess.token_hash=? AND sess.company_id=? AND sess.employee_id=? AND sess.expires_at>? AND sess.last_seen_at>?
+       AND (u.employee_temporary_password_expires_at IS NULL OR u.employee_temporary_password_expires_at>?))`)
+      .bind(s.company_id,workDate,s.employee_id,workDate,s.token_hash,s.company_id,s.employee_id,now,now-3600000,now)
+      .first<{config_json:string;schedule_name:string}>();
+    const frozen=await c.get('db').prepare('SELECT id,company_id,next_seq,schedule_json,rules_json,timezone FROM work_days WHERE employee_id=? AND company_id=? AND work_date=?')
+      .bind(s.employee_id,s.company_id,workDate).first<Day>();
+    const validFrozen=frozen?.company_id===s.company_id&&canUseFrozenCompanyWorkday(frozen);
+    let schedule:Schedule|null=null;
+    if(validFrozen){const parsed=shiftSchema.safeParse(JSON.parse(frozen.schedule_json));
+      if(parsed.success)schedule=scheduleForDate(parsed.data as Schedule,workDate);}
+    if(!schedule&&row){const parsed=shiftSchema.safeParse(JSON.parse(row.config_json));
+      if(parsed.success)schedule=scheduleForDate(parsed.data as Schedule,workDate);}
+    c.header('Cache-Control','private, no-store');
+    return c.json({company_id:s.company_id,employee_id:s.employee_id,
+      work_date:workDate,next_seq:validFrozen&&frozen.next_seq>=0&&frozen.next_seq<=4?frozen.next_seq:0,
+      next_type:null,completed:Boolean(validFrozen&&frozen.next_seq===4),server_now:now,
+      timezone:s.company_timezone,schedule,expected_minutes:schedule?scheduleMinutes(schedule).daily:null,schedule_name:row?.schedule_name??null,
+      can_punch:false,blocked:{code:error.code,message:error.message}});
+  }
   const seq=data.day?.next_seq||0;
   ensure(seq>=0&&seq<=4,409,'invalid_sequence',
     'A sequência do dia precisa ser verificada.');
@@ -160,7 +189,7 @@ employeeCpfPunchRoutes.get('/today',async c=>{
     company_id:s.company_id,employee_id:s.employee_id,
     work_date:data.workDate,next_seq:seq,
     next_type:seq===4?null:cpfPunchTypes[seq],
-    completed:seq===4,server_now:now,
+    completed:seq===4,server_now:now,can_punch:seq<4,blocked:null,
     timezone:data.employee.timezone,schedule:data.shift,
     expected_minutes:scheduleMinutes(data.shift).daily
   });

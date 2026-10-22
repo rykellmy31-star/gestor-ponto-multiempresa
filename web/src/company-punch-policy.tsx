@@ -90,3 +90,22 @@ export function CompanyPunchPolicy({companyId,csrf,onSessionExpired}:{
     </form>}
   </section>;
 }
+
+export function CompanyPunchStatus({companyId,csrf,onSessionExpired}:{companyId:string;csrf:string;onSessionExpired:()=>void}){
+ const [policy,setPolicy]=useState<Policy|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{const c=new AbortController();jsonRequest<Policy>('/company/punch-policy',{signal:c.signal}).then(p=>{
+  if(p.company_id!==companyId)throw new Error('A sessão mudou.');if(!c.signal.aborted)setPolicy(p);
+ }).catch(e=>{if(!c.signal.aborted){if(isExpiredCompanySession(e))onSessionExpired();else setError(e instanceof Error?e.message:'Falha ao consultar regras.');}});return()=>c.abort();},[companyId,onSessionExpired]);
+ async function enable(){if(!policy||busy)return;setBusy(true);setError('');try{
+  const result=await jsonRequest<{company_id:string;revision:number}>('/company/punch-policy',{
+   method:'PUT',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+   body:JSON.stringify({enabled:true,rules:policy.rules,expected_revision:policy.revision})});
+  if(result.company_id!==companyId)throw new Error('A sessão mudou.');setPolicy({...policy,enabled:true,revision:result.revision});
+ }catch(e){setPolicy(null);if(isExpiredCompanySession(e))onSessionExpired();else setError(e instanceof Error?e.message:'Recarregue antes de tentar novamente.');}finally{setBusy(false);}}
+ return <section className="panel company-schedules-card"><h2>Registro de ponto da empresa</h2>
+  {policy&&<><p>{policy.enabled?'Registro de ponto liberado para funcionários com jornada atribuída.':'O ponto está desativado. A atribuição de uma escala, sozinha, não autoriza novas marcações.'}</p>
+   {!policy.enabled&&<><p>Confira tolerâncias e regras em Configurações. Ao liberar, as regras atuais serão aplicadas aos novos dias, preservando o histórico.</p>
+   <button type="button" disabled={busy} onClick={()=>void enable()}>{busy?'Liberando…':'Liberar registro de ponto'}</button></>}</>}
+  {error&&<p role="alert">{error}</p>}
+ </section>;
+}

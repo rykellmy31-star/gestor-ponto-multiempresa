@@ -17,7 +17,7 @@ type Today = {
   company_id:string; employee_id:string; work_date:string;
   next_seq:number; next_type:PunchType|null; completed:boolean;
   server_now:number;
-  timezone?:string;
+  timezone?:string;can_punch?:boolean;blocked?:{code:string;message:string}|null;schedule_name?:string|null;
   schedule?:{start:string;break_start:string;break_end:string;end:string;paid_break:boolean}|null;
   expected_minutes?:number;worked_minutes?:number;break_minutes?:number;
   punches?:Array<{id:string;seq:number;type:PunchType;recorded_at:number}>;
@@ -71,9 +71,8 @@ export function EmployeeCpfPunch({
         setToday(null);onSessionExpired?.();return;
       }
       if(!response.ok){
-        throw new Error(response.status===401
-          ? 'Sua sessão expirou. Entre novamente.'
-          : 'Não foi possível consultar o próximo horário. Atualize a tela.');
+        const failure=await response.json().catch(()=>null) as {error?:{message?:string}}|null;
+        throw new Error(failure?.error?.message||'Não foi possível consultar sua jornada. Tente novamente.');
       }
       const data=await response.json() as Today;
       if(data.company_id!==companyId||data.employee_id!==employeeId){
@@ -127,7 +126,7 @@ export function EmployeeCpfPunch({
 
   async function punch(){
     const type=today?.next_type;
-    if(!type||busy||disabled)return;
+    if(!type||busy||disabled||today?.can_punch===false)return;
     const expected={companyId,employeeId,workDate:today!.work_date,type};
     setBusy(true);setError('');setNotice('');
     try{
@@ -139,6 +138,7 @@ export function EmployeeCpfPunch({
       if(check.status===401){onSessionExpired?.();return;}
       if(!check.ok)throw new Error('Não foi possível confirmar a jornada atual. Atualize a tela antes de registrar.');
       const fresh=await check.json() as Today;
+      if(fresh.can_punch===false){setToday(fresh);throw new Error(fresh.blocked?.message||'Registro indisponível.');}
       const verdict=checkEmployeePunchPreflight(expected,fresh,pendingKey.current);
       if(verdict==='different_identity'){
         setToday(null);pendingKey.current=null;
@@ -228,7 +228,7 @@ export function EmployeeCpfPunch({
       </div>
       <div className="punch-buttons">
         {marks.map(([kind,label,Icon],i)=>{
-          const enabled=Boolean(today&&today.next_type===kind&&!busy&&!loading&&!disabled);
+          const enabled=Boolean(today&&today.next_type===kind&&today.can_punch!==false&&!busy&&!loading&&!disabled);
           const done=Boolean(today&&sequence>i);
           return <button key={kind} type="button"
             className={'punch-button '+(enabled?'punch-enabled':'')+(done?' punch-done':'')}
@@ -240,6 +240,8 @@ export function EmployeeCpfPunch({
           </button>;
         })}
       </div>
+      {today?.blocked&&<p role="status" className="cpf-punch-warning">{today.blocked.message}
+        {today.blocked.code==='company_punch_disabled'&&' Peça ao administrador para ativar “Permitir registro de ponto” em Configurações.'}</p>}
       {loading&&<p role="status" className="cpf-punch-muted">Consultando sua jornada…</p>}
       {disabled&&<div role="status" className="cpf-punch-warning">
         <ShieldCheck size={17}/> Marcação ainda em homologação. Nenhuma batida real está habilitada.

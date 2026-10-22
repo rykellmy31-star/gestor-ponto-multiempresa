@@ -30,6 +30,7 @@ describe('CR JORNADA — gestor aplica jornada para todos no D1 local',()=>{
         db.prepare('CREATE TABLE company_admins(id TEXT PRIMARY KEY,company_id TEXT,login TEXT,display_name TEXT,active INTEGER,auth_version INTEGER,must_change_password INTEGER,temporary_password_expires_at INTEGER)'),
         db.prepare('CREATE TABLE company_admin_sessions(token_hash TEXT PRIMARY KEY,admin_id TEXT,company_id TEXT,csrf_token TEXT,expires_at INTEGER,last_seen_at INTEGER,auth_version INTEGER)'),
         db.prepare('CREATE TABLE employees(id TEXT PRIMARY KEY,company_id TEXT NOT NULL,full_name TEXT,status TEXT,deleted_at INTEGER)'),
+        db.prepare('CREATE TABLE company_workspace_audit(id TEXT PRIMARY KEY,company_id TEXT,target_id TEXT,action TEXT)'),
         db.prepare('CREATE TABLE schedules(id TEXT PRIMARY KEY,company_id TEXT,name TEXT,config_json TEXT,deleted_at INTEGER)'),
         db.prepare('CREATE TABLE schedule_history(id TEXT PRIMARY KEY,schedule_id TEXT,effective_from TEXT,config_json TEXT)'),
         db.prepare('CREATE TABLE schedule_assignments(id TEXT PRIMARY KEY,employee_id TEXT,schedule_id TEXT,effective_from TEXT,created_at INTEGER)'),

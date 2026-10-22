@@ -1,4 +1,5 @@
-import { CompanyPunchPolicy } from './company-punch-policy';
+import {WorkspaceMood,WorkspaceRequests} from './company-workspace';
+import { CompanyPunchPolicy,CompanyPunchStatus } from './company-punch-policy';
 import { CompanyOriginalOverview } from './company-original-dashboard';
 import { CompanyOriginalBrand } from './company-original-brand';
 import { CompanyCalculations } from './company-calculations';
@@ -231,6 +232,16 @@ export function CompanySchedulesPage() {
     setEditDayByDay(false);
     setFormOpen(true);setError('');setNotice('');
   }
+  async function archiveSchedule(item:CompanySchedule){
+    if(!session||saving||!window.confirm('Excluir a escala “'+item.name+'” dos modelos disponíveis? As atribuições e os registros anteriores serão preservados.'))return;
+    setSaving(true);setError('');setNotice('');
+    try {const r=await jsonRequest<{company_id:string}>('/company/schedules/'+encodeURIComponent(item.id),{
+      method:'DELETE',headers:{'X-CSRF-Token':session.csrf_token}});
+      if(r.company_id!==session.company.id)throw new Error('A sessão mudou.');
+      await load();setNotice('Escala excluída dos modelos. Vínculos e histórico preservados.');
+    }catch(e){handleRequestError(e,'Não foi possível confirmar a exclusão. Atualize a lista.');}
+    finally{setSaving(false);}
+  }
   function duplicate(schedule:CompanySchedule) {
     setForm({...schedule.config,name:schedule.name+' — nova versão',
       weekdays:[...schedule.config.weekdays],
@@ -432,15 +443,18 @@ export function CompanySchedulesPage() {
         </div>
       </header>
       <div className="page-content cr-original-page-content">
-        {view==='overview'&&<CompanyOriginalOverview companyId={session.company.id}
+        {view==='overview'&&<>
+        <CompanyPunchStatus companyId={session.company.id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
+        <CompanyOriginalOverview companyId={session.company.id}
           timezone={session.company.timezone||'America/Sao_Paulo'}
           onNavigate={name=>setView(name as typeof view)}
-          onSessionExpired={onSessionExpired}/>}
+          onSessionExpired={onSessionExpired}/></>}
 
 
       {view==='employees'&&<div id="cr-gestao-equipe" className="cr-legacy-group">
       <CompanyEmployeeAccess key={session.company.id+':'+session.user.id+':'+session.csrf_token}
-        companyId={session.company.id} csrf={session.csrf_token}
+        companyId={session.company.id} csrf={session.csrf_token} timezone={session.company.timezone}
+        onEditSchedule={id=>{const item=schedules.find(s=>s.id===id);if(item){setView('schedules');duplicate(item);}}}
         onEmployeeCreated={()=>void load()}
         onSessionExpired={onSessionExpired}/>
       </div>}
@@ -458,6 +472,7 @@ export function CompanySchedulesPage() {
       </div>}
 
       {view==='occurrences'&&<div className="cr-legacy-group">
+        <WorkspaceRequests companyId={session.company.id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
         <CompanyDayEvents key={session.company.id+':events:'+session.csrf_token}
           companyId={session.company.id} employees={employees} csrf={session.csrf_token}
           onSessionExpired={onSessionExpired}/>
@@ -499,6 +514,7 @@ export function CompanySchedulesPage() {
               .sort(([a],[b])=>Number(a)-Number(b));
             return <article key={item.id} className="company-schedules-item">
               <h3>{item.name}</h3>
+              <button type="button" className="company-schedules-secondary" disabled={saving} onClick={()=>void archiveSchedule(item)}>Excluir escala</button>
               <p>Horário padrão: {item.config.start}–{item.config.end}</p>
               {special.map(([day,shift])=><p key={day}>
                 {weekdays[Number(day)]}: {shift.start}–{shift.end} · Pausa {shift.break_start}–{shift.break_end}
@@ -680,11 +696,7 @@ export function CompanySchedulesPage() {
       </section>
       <p className="company-schedules-footer">CR JORNADA · Funcionamento sujeito às políticas de homologação e liberação da empresa.</p>
       </div>}
-      {view==='mood'&&<section className="panel cr-original-pending">
-        <h2>Humor da Equipe</h2>
-        <p>A pesquisa anônima original ainda precisa ser adaptada para vínculos multiempresa.
-          Nenhuma resposta de outra empresa será exibida.</p>
-      </section>}
+      {view==='mood'&&<WorkspaceMood companyId={session.company.id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>}
       {view==='administrators'&&<section className="panel cr-original-pending">
         <h2>Administradores</h2>
         <p>O cadastro e a recuperação de administradores desta empresa são feitos pelo Superadmin,

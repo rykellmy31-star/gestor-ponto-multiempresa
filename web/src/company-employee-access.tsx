@@ -1,3 +1,4 @@
+import { EmployeeAssignedSchedule } from './employee-assigned-schedule';
 import { z } from 'zod';
 import { CompanyEmployeeStatus } from './company-employee-status';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -26,9 +27,9 @@ const recoverySchema=z.object({company_id:z.string(),employee_id:z.string(),
 type Recovery=z.infer<typeof recoverySchema>;
 
 export function CompanyEmployeeAccess({
-  companyId,csrf,onEmployeeCreated,onSessionExpired
+  companyId,csrf,onEmployeeCreated,onSessionExpired,timezone='America/Bahia',onEditSchedule
 }:{
-  companyId:string;csrf:string;onEmployeeCreated?:()=>void;
+  companyId:string;csrf:string;timezone?:string;onEditSchedule?:(scheduleId:string)=>void;onEmployeeCreated?:()=>void;
   onSessionExpired?:()=>void
 }) {
   const [data,setData]=useState<Result|null>(null);
@@ -217,11 +218,12 @@ export function CompanyEmployeeAccess({
         <strong>{employee.full_name}</strong>
         <p>Matrícula: {employee.registration}</p>
         <p>{employee.job_title||'Cargo não informado'}</p>
+        <EmployeeAssignedSchedule companyId={companyId} employeeId={employee.id} csrf={csrf} timezone={timezone} onSessionExpired={onSessionExpired} onChanged={onEmployeeCreated} onEdit={onEditSchedule}/>
         {data.registration_available&&<CompanyEmployeeStatus employee={employee} companyId={companyId} csrf={csrf}
           onSessionExpired={onSessionExpired} onUpdated={change=>{
             setData(prev=>prev?{...prev,employees:prev.employees.map(e=>e.id===employee.id?{...e,...change}:e)}:prev);
             onEmployeeCreated?.();
-          }}/>} 
+          }}/>}
         {data.registration_available&&Number.isSafeInteger(employee.updated_at)&&<button type="button" className="company-schedules-secondary" onClick={()=>{
           setEditing(employee);setEditName(employee.full_name);setEditJob(employee.job_title||'');setError('');setEditUncertain(false);
         }}>Editar nome e cargo</button>}

@@ -6,7 +6,7 @@ import {jsonRequest,isExpiredCompanySession} from './company-schedules-network';
 import {Button,Empty,Initials,PageHeader,Stat} from './ui';
 
 type EmployeeDay={employee:{id:string;full_name:string;registration:string};
-  day:{status:string;timezone:string;marks:(number|null)[];worked_minutes:number;next_seq:number}};
+  day:{status:string;timezone:string;marks:(number|null)[];worked_minutes:number;next_seq:number;schedule_name?:string|null}};
 type Dashboard={company_id:string;date:string;month:string;rows:EmployeeDay[];
   trend:Array<{date:string;worked_minutes:number}>;
   counts:{active_employees:number;entered:number;not_entered:number;on_break:number;
@@ -146,12 +146,13 @@ export function CompanyOriginalOverview({companyId,timezone,onNavigate,onSession
           <Empty icon={Users} title={data.rows.length?'Nenhum funcionário neste filtro':'Sua equipe começa aqui'}
             text={data.rows.length?'Tente outro nome ou situação.':'Cadastre seu primeiro funcionário.'}/>:
           <div className="table-scroll"><table className="data-table">
-            <thead><tr><th>Funcionário</th><th>Situação</th><th>Entrada</th>
+            <thead><tr><th>Funcionário</th><th>Escala atribuída</th><th>Situação</th><th>Entrada</th>
               <th>Intervalo</th><th>Retorno</th><th>Saída</th><th>Realizadas</th></tr></thead>
             <tbody>{filtered.map(r=><tr key={r.employee.id}>
               <td><div className="person-cell"><Initials name={r.employee.full_name}/>
                 <div><strong>{r.employee.full_name}</strong>
                 <small>Matrícula {r.employee.registration}</small></div></div></td>
+              <td>{r.day.schedule_name||'Sem escala atribuída'}</td>
               <td><span className={'badge badge-'+r.day.status}>
                 {statusNames[r.day.status]||r.day.status}</span></td>
               {r.day.marks.map((m,i)=><td key={i} className="number">{clock(m,r.day.timezone)}</td>)}

@@ -7,7 +7,7 @@ import { closureReadiness } from '../server/routes/company-closures';
 import { sha256,hashPassword } from '../server/core/crypto';
 import { DEFAULT_RULES } from '../server/core/calculations';
 const at=(date:string,time:string)=>DateTime.fromISO(date+'T'+time,{zone:'America/Bahia'}).toMillis();
-describe('apuracao empresarial com 42 migrations reais no D1',()=>{
+describe('apuracao empresarial com 43 migrations reais no D1',()=>{
   it('isola dados, aplica snapshots, filtra cancelamentos e exige conciliacao de legado',async()=>{
     const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'test',modules:true,
       script:'export default {fetch(){return new Response("ok")}}',d1Databases:['DB']}]}));
@@ -28,7 +28,7 @@ for p in sorted(Path('migrations').glob('*.sql')):
   files.append(statements)
 print(json.dumps(files))
 `],{encoding:'utf8'})) as string[][];
-      expect(migrations).toHaveLength(42);
+      expect(migrations).toHaveLength(43);
       for(const statements of migrations)if(statements.length)await db.batch(statements.map(s=>db.prepare(s)));
       const token='a'.repeat(64),now=Date.now(),created=at('2026-09-01','00:00');
       const schedule={start:'07:00',break_start:'11:00',break_end:'12:00',end:'16:00',weekdays:[1,2,3,4,5],paid_break:false};

@@ -1,3 +1,4 @@
+import {WorkspaceMood,WorkspaceRequests} from './company-workspace';
 import {useEffect,useState,type FormEvent,type CSSProperties} from 'react';
 import {BookOpen,Building2,ChevronRight,Clock3,FileSpreadsheet,
   HelpCircle,LogOut,Menu,MessageSquareText,ShieldCheck,
@@ -172,6 +173,7 @@ export function EmployeeOriginalWorkspace({session,historyVersion,onSessionExpir
             csrfToken={session.csrf_token} timezone={session.company.timezone}
             onConfirmed={onPunchConfirmed}
             onSessionExpired={onSessionExpired}/>
+          <WorkspaceMood companyId={session.company.id} employeeId={session.user.employee_id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
           <EmployeeWeek key={historyVersion} companyId={session.company.id}
             employeeId={session.user.employee_id} timezone={timezone}/>
         </>}
@@ -185,11 +187,7 @@ export function EmployeeOriginalWorkspace({session,historyVersion,onSessionExpir
         {view==='requests'&&<>
           <PageHeader eyebrow="DIÁLOGO COM O RH" title="Minhas solicitações"
             description="Acompanhe solicitações e justificativas para o administrador."/>
-          <section className="panel cr-original-pending"><MessageSquareText size={24}/>
-            <h3>Solicitações em integração</h3>
-            <p>A funcionalidade antiga de justificativas ainda será conectada a registros
-              exclusivos desta empresa. Nenhuma solicitação de outra empresa ficará acessível.</p>
-          </section>
+          <WorkspaceRequests companyId={session.company.id} employeeId={session.user.employee_id} csrf={session.csrf_token} onSessionExpired={onSessionExpired}/>
         </>}
         {view==='account'&&<>
           <PageHeader eyebrow="SEGURANÇA E PRIVACIDADE" title="Minha conta"

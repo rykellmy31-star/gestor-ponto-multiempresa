@@ -50,6 +50,7 @@ describe('CR JORNADA — cadastro empresarial D1 local de ponta a ponta',()=>{
         db.prepare("CREATE TABLE employee_cpf_links(employee_id TEXT PRIMARY KEY,company_id TEXT,cpf_lookup_key TEXT,created_at INTEGER,updated_at INTEGER,UNIQUE(company_id,cpf_lookup_key))"),
         db.prepare("CREATE TABLE company_employee_registration_audit(id TEXT PRIMARY KEY,company_id TEXT,employee_id TEXT,admin_id TEXT,action TEXT,created_at INTEGER)"),
         db.prepare("CREATE TABLE company_employee_write_guards(id TEXT PRIMARY KEY,affected_rows INTEGER NOT NULL CHECK(affected_rows=1))"),
+        db.prepare('CREATE TABLE company_workspace_audit(id TEXT PRIMARY KEY,company_id TEXT,target_id TEXT,action TEXT)'),
         db.prepare('CREATE TABLE schedules(id TEXT PRIMARY KEY,name TEXT,config_json TEXT,created_by TEXT,created_at INTEGER,company_id TEXT,deleted_at INTEGER)'),
         // Triggers presentes no schema real: D1.meta.changes inclui tambem
         // estas atualizacoes, embora cada INSERT principal grave uma linha.

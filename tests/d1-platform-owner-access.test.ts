@@ -24,7 +24,7 @@ for p in sorted(Path('migrations').glob('*.sql')):
    pending=''
  files.append(statements)
 print(json.dumps(files))`],{encoding:'utf8'})) as string[][];
-      expect(files).toHaveLength(42);
+      expect(files).toHaveLength(43);
       for(const statements of files)if(statements.length)await db.batch(statements.map(s=>db.prepare(s)));
       const env={DB:binding,AUTH_PEPPER:'qa-platform-owner-pepper-2026-local',DATA_KEY:'a'.repeat(64),ENVIRONMENT:'development',ENABLE_COMPANY_SCHEDULES:'true'} as any;
       const rootPassword='QaRoot-Only-Testing!2026',initialPassword='QaTemporary-Only!2026',newPassword='QaChanged-Only!2026';

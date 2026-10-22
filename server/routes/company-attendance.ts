@@ -98,18 +98,21 @@ companyAttendanceRoutes.get('/overview',async c=>{
   const db=c.get('db'),now=Date.now();
   const auth=companyAdminWriteParams(token,admin,company.id,now);
   type EmployeeRow={id:string;full_name:string;registration:string;status:string;next_seq:number|null;
-    timezone:string|null;seq:number|null;recorded_at:number|null};
+    timezone:string|null;seq:number|null;recorded_at:number|null;schedule_name:string|null};
   type MonthRow={work_date:string;employee_id:string;seq:number|null;recorded_at:number|null};
   // Em ambas consultas, a empresa vem apenas da sessao e a autenticacao e revalidada no SQL.
   const [today,period]=await db.batch([
     db.prepare('SELECT e.id,e.full_name,'+
       'COALESCE(e.company_registration,e.registration) AS registration,'+
-      'e.status,d.next_seq,d.timezone,p.seq,p.recorded_at '+
+      'e.status,d.next_seq,d.timezone,p.seq,p.recorded_at,'+
+      '(SELECT sc.name FROM schedule_assignments sa JOIN schedules sc ON sc.id=sa.schedule_id AND sc.company_id=e.company_id '+
+      'WHERE sa.employee_id=e.id AND sa.effective_from<=? AND NOT EXISTS(SELECT 1 FROM schedule_assignment_cancellations cac WHERE cac.assignment_id=sa.id) '+
+      'ORDER BY sa.effective_from DESC,sa.created_at DESC,sa.id DESC LIMIT 1) AS schedule_name '+
       'FROM employees e JOIN companies co ON co.id=e.company_id AND co.status=\'active\' '+
       'LEFT JOIN work_days d ON d.employee_id=e.id AND d.company_id=e.company_id AND d.work_date=? '+
       'LEFT JOIN punches p ON p.work_day_id=d.id AND p.employee_id=e.id '+
       'WHERE e.company_id=? AND e.deleted_at IS NULL AND '+VALID_COMPANY_ADMIN_WRITE_SQL+
-      ' ORDER BY e.full_name,p.seq LIMIT 4000').bind(date,company.id,...auth),
+      ' ORDER BY e.full_name,p.seq LIMIT 4000').bind(date,date,company.id,...auth),
     db.prepare('SELECT d.work_date,d.employee_id,p.seq,p.recorded_at '+
       'FROM work_days d JOIN employees e ON e.id=d.employee_id AND e.company_id=d.company_id '+
       'JOIN companies co ON co.id=e.company_id AND co.status=\'active\' '+
@@ -130,7 +133,7 @@ companyAttendanceRoutes.get('/overview',async c=>{
     return Math.floor((first+second)/60000);
   }
   const people=new Map<string,{employee:{id:string;full_name:string;registration:string};
-    day:{status:string;timezone:string;marks:(number|null)[];worked_minutes:number;next_seq:number}}>();
+    day:{status:string;timezone:string;marks:(number|null)[];worked_minutes:number;next_seq:number;schedule_name:string|null}}>();
   for(const item of employees){
     let entry=people.get(item.id);
     if(!entry){
@@ -139,7 +142,7 @@ companyAttendanceRoutes.get('/overview',async c=>{
         day:{status:item.status!=='active'?'inactive':seq===4?'completed':
           seq===2?'on_break':seq===1||seq===3?'working':'not_started',
           timezone:item.timezone||'America/Sao_Paulo',marks:[null,null,null,null],
-          worked_minutes:0,next_seq:seq}};
+          worked_minutes:0,next_seq:seq,schedule_name:item.schedule_name}};
       people.set(item.id,entry);
     }
     if(item.seq!==null&&item.seq>=0&&item.seq<=3)

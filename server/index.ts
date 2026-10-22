@@ -1,3 +1,4 @@
+import { employeeWorkspaceRoutes,companyWorkspaceRoutes } from './routes/company-workspace';
 
 // CR JORNADA - Login isolado por CPF e selecao de empresa
 import { employeeCpfAuthRoutes } from './routes/employee-cpf-auth';
@@ -208,7 +209,13 @@ app.use('/api/*', async (c, next) => {
     path === '/api/company/punch-policy' && ['GET','PUT'].includes(c.req.method);
 
   const isCompanyAttendanceRoute =
-    ['/api/company/reports/attendance','/api/company/reports/calculations'].includes(path) && c.req.method === 'GET';
+    ['/api/company/reports/attendance','/api/company/reports/calculations','/api/company/reports/overview'].includes(path) && c.req.method === 'GET';
+
+  const isWorkspaceRoute=([
+    '/api/employee/cpf-work/mood','/api/employee/cpf-work/requests',
+    '/api/company/workspace/mood','/api/company/workspace/requests'
+  ].includes(path)&&['GET','POST'].includes(c.req.method))||
+    (/^\/api\/company\/workspace\/requests\/[^/]+\/decision$/.test(path)&&c.req.method==='POST');
 
   const isHealthRoute =
     path === '/api/health';
@@ -230,6 +237,7 @@ app.use('/api/*', async (c, next) => {
     (path === '/api/employee/cpf-work/punch' && c.req.method === 'POST');
 
   if (
+    !isWorkspaceRoute &&
     !isPlatformRoute &&
     !isPublicSalesRoute &&
     !isCompanyAuthRoute &&
@@ -293,6 +301,8 @@ app.route(
   '/api/company/employees',
   companyEmployeesRoutes
 );
+app.route('/api/company/workspace',companyWorkspaceRoutes);
+app.route('/api/employee/cpf-work',employeeWorkspaceRoutes);
 app.route('/api/company/schedules', companySchedulesRoutes);
 
 app.route('/api/employee/cpf-auth', employeeCpfAuthRoutes);

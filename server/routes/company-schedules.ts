@@ -52,7 +52,7 @@ companySchedulesRoutes.get('/', async c => {
   const result = await c.get('db').prepare([
     'SELECT s.id,s.name,s.config_json,s.created_at',
     'FROM schedules s JOIN companies c ON c.id=s.company_id',
-    'WHERE s.company_id=? AND c.status=\'active\' AND s.deleted_at IS NULL',
+    'WHERE s.company_id=? AND c.status=\'active\' AND s.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM company_workspace_audit wa WHERE wa.company_id=s.company_id AND wa.target_id=s.id)',
     'ORDER BY s.created_at DESC,s.id DESC LIMIT 100'
   ].join(' ')).bind(company.id).all<{
     id: string; name: string; config_json: string; created_at: number;
@@ -171,16 +171,16 @@ companySchedulesRoutes.get('/employee/:id/week', async c => {
     'Funcionário não encontrado nesta empresa.');
   const dates=Array.from({length:7},(_,i)=>first.plus({days:i}).toISODate()!);
   const days=await Promise.all(dates.map(async date=>{
-    const row=await db.prepare(SELECT_ACTIVE_COMPANY_SCHEDULE_SQL)
+    const row=await db.prepare(SELECT_ACTIVE_COMPANY_SCHEDULE_SQL.replace('a.id AS assignment_id','a.id AS assignment_id,s.id AS schedule_id,s.name AS schedule_name'))
       .bind(company.id,date,employeeId,date)
-      .first<{config_json:string;assignment_id:string}>();
+      .first<{config_json:string;assignment_id:string;schedule_id:string;schedule_name:string}>();
     if(!row) return {date,assignment_id:null,shift:null};
     const parsed=validatedSchedule.safeParse(JSON.parse(row.config_json));
     ensure(parsed.success,409,'invalid_company_schedule',
       'A jornada cadastrada precisa de conferência.');
     const weekday=DateTime.fromISO(date,{zone:'utc'}).weekday%7;
     return {
-      date,assignment_id:row.assignment_id,
+      date,assignment_id:row.assignment_id,schedule_id:row.schedule_id,schedule_name:row.schedule_name,
       shift:parsed.data.weekdays.includes(weekday)
         ? scheduleForDate(parsed.data,date) : null
     };
@@ -212,7 +212,7 @@ companySchedulesRoutes.post('/:id/assign-all', async c => {
   const db=c.get('db'), scheduleId=c.req.param('id'),now=Date.now();
   const schedule=await db.prepare([
     'SELECT s.id FROM schedules s JOIN companies co ON co.id=s.company_id',
-    'WHERE s.id=? AND s.company_id=? AND s.deleted_at IS NULL',
+    'WHERE s.id=? AND s.company_id=? AND s.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM company_workspace_audit wa WHERE wa.company_id=s.company_id AND wa.target_id=s.id)',
     "AND co.status='active'"
   ].join(' ')).bind(scheduleId,company.id).first<{id:string}>();
   ensure(schedule,404,'schedule_not_found','Jornada não encontrada nesta empresa.');
@@ -252,7 +252,7 @@ companySchedulesRoutes.post('/:id/assign-all', async c => {
         'id,employee_id,schedule_id,effective_from,created_at)',
         'SELECT ?,e.id,s.id,?,? FROM employees e',
         'JOIN schedules s ON s.id=? AND s.company_id=e.company_id',
-        'AND s.deleted_at IS NULL',
+        'AND s.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM company_workspace_audit wa WHERE wa.company_id=s.company_id AND wa.target_id=s.id)',
         'JOIN companies co ON co.id=e.company_id',
         'WHERE e.id=? AND e.company_id=?',
         "AND e.deleted_at IS NULL AND e.status='active'",
@@ -325,7 +325,7 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       'INSERT INTO schedule_assignments(',
       'id,employee_id,schedule_id,effective_from,created_at)',
       'SELECT ?,e.id,s.id,?,? FROM employees e',
-      'JOIN schedules s ON s.id=? AND s.company_id=e.company_id AND s.deleted_at IS NULL',
+      'JOIN schedules s ON s.id=? AND s.company_id=e.company_id AND s.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM company_workspace_audit wa WHERE wa.company_id=s.company_id AND wa.target_id=s.id)',
       'JOIN companies co ON co.id=e.company_id',
       'WHERE e.id=? AND e.company_id=?',
       'AND e.deleted_at IS NULL AND e.status=\'active\'',
@@ -359,7 +359,7 @@ companySchedulesRoutes.post('/:id/assign', async c => {
       'JOIN employees e ON e.id=a.employee_id',
       'JOIN companies co ON co.id=e.company_id AND co.status=\'active\'',
       'JOIN schedules s ON s.id=a.schedule_id',
-      'AND s.company_id=e.company_id AND s.deleted_at IS NULL',
+      'AND s.company_id=e.company_id AND s.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM company_workspace_audit wa WHERE wa.company_id=s.company_id AND wa.target_id=s.id)',
       'WHERE e.id=? AND e.company_id=? AND e.deleted_at IS NULL',
       'AND e.status=\'active\' AND a.effective_from=?',
       'AND NOT EXISTS (SELECT 1 FROM schedule_assignment_cancellations cancelled',
@@ -379,4 +379,20 @@ companySchedulesRoutes.post('/:id/assign', async c => {
     404, 'invalid_company_assignment',
     'Funcionário ou jornada não pertence à empresa.');
   return c.json({ success: true, company_id: company.id }, 201);
+});
+
+// Remove a template from the catalogue without rewriting assignments or frozen days.
+companySchedulesRoutes.delete('/:id',async c=>{
+ const co=c.get('company')!,admin=c.get('companyAdminId')!,token=c.get('companyAdminTokenHash')!;
+ await limit(c,'company-schedule-archive:'+co.id+':'+admin,20,3600000);
+ const db=c.get('db'),now=Date.now(),id=c.req.param('id');
+ const {companyAdminWrite}=await import('../core/company-admin-write');
+ await companyAdminWrite(db,[
+  db.prepare(`INSERT INTO company_workspace_audit(id,company_id,admin_id,action,target_id,created_at)
+   SELECT ?,company_id,?,'schedule.archived',id,? FROM schedules WHERE id=? AND company_id=? AND deleted_at IS NULL
+   AND NOT EXISTS(SELECT 1 FROM company_workspace_audit wa WHERE wa.company_id=schedules.company_id AND wa.target_id=schedules.id)
+   AND EXISTS(SELECT 1 FROM companies WHERE id=? AND status='active') AND ${VALID_COMPANY_ADMIN_WRITE_SQL}`)
+   .bind(crypto.randomUUID(),admin,now,id,co.id,co.id,...companyAdminWriteParams(token,admin,co.id,now))
+ ],'schedule_archive_conflict');
+ return c.json({success:true,company_id:co.id,id});
 });
