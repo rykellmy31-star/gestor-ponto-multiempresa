@@ -61,8 +61,8 @@ export type ActiveSession = {
   company_name: string;
   company_slug: string;
   company_timezone: 'America/Bahia' | 'America/Sao_Paulo';
-  company_logo_url: string | null;
-  company_primary_color: string;
+  company_logo_url?: string | null;
+  company_primary_color?: string;
   display_name: string;
   csrf_token: string;
   token_hash: string;
