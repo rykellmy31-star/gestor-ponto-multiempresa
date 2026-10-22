@@ -23,7 +23,7 @@ As 38 migrações antigas permanecem intactas. O provisionamento só aceita o in
 - 324 testes de lógica, rotas e autorização aprovados antes da publicação.
 - Novo ensaio D1 com o roteador real e todas as migrações: solicitações A/B, CSRF, decisões únicas, pesquisa com limiar de privacidade, bloqueio de ponto explícito sem liberar POST, arquivo de modelos preservando atribuições, imutabilidade e suspensão.
 - Script de homologação ampliado para navegar pela interface restaurada, consultar a escala em Funcionários, enviar solicitações e humor, responder como gestor, liberar ponto pela visão geral e excluir um modelo fictício.
-- A execução remota e o ensaio de recuperação precisam terminar com sucesso antes de considerar esta entrega homologada.
+- A execução remota e o ensaio de recuperação terminaram com sucesso na rodada final abaixo.
 
 Progresso geral permanece estimado em 85,00% (17/20 critérios). Esta entrega não encerra automaticamente os critérios amplos de segurança, conciliação e publicação final.
 
@@ -32,3 +32,13 @@ Primeira execução remota `39764709999`: migração 0043 e publicação realiza
 Segunda rodada `39765638820`: os tipos e testes prévios passaram; a automação identificou que o rótulo do seletor Nova escala incluía o texto das opções. O campo recebeu nome acessível explícito. A edição de horários agora conserva também o funcionário selecionado ao abrir a nova versão. O CI completo da primeira implementação (`39764710023`) aprovou 381 testes (324 gerais + 57 D1 em três grupos).
 
 Terceira rodada `39766242898`: todos os fluxos visuais novos passaram, incluindo alteração de escala, preservação do funcionário ao editar horários, solicitações, humor, visão geral e exclusão. A verificação final ainda esperava as três atribuições da fixture antiga; passou a exigir as quatro datas exatas, incluindo a nova atribuição criada pelo formulário. A bateria será repetida sem alterar a implementação da aplicação.
+
+## Homologação dos painéis e escalas — 22/10/2026
+
+Código `76fc79cf542a00de0d259591b5010b204ce9ca4b`. [Homologação real 39766727757](https://github.com/rykellmy31-star/gestor-ponto-multiempresa/actions/runs/39766727757) aprovada com **343 verificações**; [CI 39766727804](https://github.com/rykellmy31-star/gestor-ponto-multiempresa/actions/runs/39766727804) integralmente aprovado: **381 testes**, sendo 324 gerais e 57 D1 em três grupos. Produção e main foram preservados.
+
+Visão geral com escala atribuída e contador de solicitações, consulta do ponto com motivo específico de bloqueio, botão de liberação pelo gestor, alteração de escala e edição em nova versão pela aba Funcionários, exclusão de modelos sem apagar histórico, solicitações e respostas empresariais, pesquisa de humor agrupada e envio da logomarca do dispositivo foram verificados no navegador e no D1 real, usando duas empresas fictícias. A interface restaurada foi preservada e incorporada à branch de desenvolvimento.
+
+Staging: Worker `gestor-ponto-multiempresa-staging`, D1 `41604781-5fbf-4287-beca-64e20ce1ee1f`, **43 migrações**. Backup criptografado e restauração aprovados: **60 tabelas**, schema e hashes idênticos, SHA256/AES-256-GCM e rejeição de adulteração. Destino separado `cr-jornada-staging-restore-5bc75a378df4` (`12a82d3d-ed71-4bea-b27d-2ba7fb4b8f4b`). Produção não foi exportada nem restaurada. A chave do ensaio continua efêmera; o cofre e o backup operacional durável de produção permanecem pendentes.
+
+**85,00% = 17/20 critérios aprovados**. Os fluxos novos avançam parcialmente o bloco 19; não encerram a reconciliação do bloco 18 nem a revisão integral de segurança e preparação operacional/publicação dos blocos 19–20. Limites da exclusão e da resposta a justificativas em [CORRECOES-PAINEL-ESCALAS-SOLICITACOES.md](CORRECOES-PAINEL-ESCALAS-SOLICITACOES.md).

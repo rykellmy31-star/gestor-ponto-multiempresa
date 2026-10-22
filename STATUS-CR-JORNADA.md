@@ -1,8 +1,8 @@
 # CR JORNADA — estado real do desenvolvimento
 
-Estado atual: staging real em funcionamento, 42 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
+Estado atual: staging real em funcionamento, 43 migrations. Produção preservada nesta entrega, com última comprovação de 38. Feriados, ocorrências aprovadas pelo gestor e ajustes versionados foram homologados com duas empresas fictícias, preservando todas as marcações originais.
 
-Evidência atual: código `d5a0be5dc9160a2ea86f598f4aaec88fa90c791d`, homologação `39709068643`: **298 verificações reais aprovadas**. CI `39709068691` integralmente aprovado. Recuperação do schema 42: **56 tabelas**, schema/hashes idênticos, SHA256/AES-256-GCM e adulteração rejeitada; clone `0ed425fc-25e2-461a-8003-ca85bc5fc4a6`. A chave do ensaio é efêmera, não substitui backup operacional. Conta do proprietário ativada somente no staging com troca obrigatória no primeiro acesso (`39709756387`).
+Evidência atual: código `76fc79cf542a00de0d259591b5010b204ce9ca4b`, homologação `39766727757`: **343 verificações reais aprovadas**. CI `39766727804` integralmente aprovado: **381 testes** (324 gerais + 57 D1). Recuperação do schema 43: **60 tabelas**, schema/hashes idênticos, SHA256/AES-256-GCM e adulteração rejeitada; clone `12a82d3d-ed71-4bea-b27d-2ba7fb4b8f4b`. A chave do ensaio é efêmera e não substitui backup operacional. Conta do proprietário preservada; nenhuma credencial foi redefinida nesta entrega.
 
 Progresso por checklist: **85,00% (17/20 blocos comprovados)**. Critérios e limites em [docs/CRITERIOS-HOMOLOGACAO.md](docs/CRITERIOS-HOMOLOGACAO.md). A apuração aberta continua provisória; o fechamento guarda um snapshot imutável. Ajustes não modificam comprovantes e turnos originais incompletos impedem o fechamento. Fechamento e reabertura com snapshots foram homologados em `39706943984`: 298 verificações e restauração de 55 tabelas. O bloco 18 permanece parcial: reconciliação de históricos e decisões de extras ainda pendentes. Publicação de produção bloqueada até completar esse bloco, auditoria integral, backup operacional durável, credenciais iniciais do proprietário e liberação autorizada.
 
@@ -96,3 +96,13 @@ A atualização explícita para **Vitest 5.0.5** preservou os 268 testes rápido
 removeu os alertas reportados (`npm audit`: zero no momento da verificação).
 O CI passa a auditar todas as dependências com limite de severidade `moderate`.
 Isso não substitui a validação completa dos shards D1 no último commit.
+
+## Homologação dos painéis e escalas — 22/10/2026
+
+Código `76fc79cf542a00de0d259591b5010b204ce9ca4b`. [Homologação real 39766727757](https://github.com/rykellmy31-star/gestor-ponto-multiempresa/actions/runs/39766727757) aprovada com **343 verificações**; [CI 39766727804](https://github.com/rykellmy31-star/gestor-ponto-multiempresa/actions/runs/39766727804) integralmente aprovado: **381 testes**, sendo 324 gerais e 57 D1 em três grupos. Produção e main foram preservados.
+
+Visão geral com escala atribuída e contador de solicitações, consulta do ponto com motivo específico de bloqueio, botão de liberação pelo gestor, alteração de escala e edição em nova versão pela aba Funcionários, exclusão de modelos sem apagar histórico, solicitações e respostas empresariais, pesquisa de humor agrupada e envio da logomarca do dispositivo foram verificados no navegador e no D1 real, usando duas empresas fictícias. A interface restaurada foi preservada e incorporada à branch de desenvolvimento.
+
+Staging: Worker `gestor-ponto-multiempresa-staging`, D1 `41604781-5fbf-4287-beca-64e20ce1ee1f`, **43 migrações**. Backup criptografado e restauração aprovados: **60 tabelas**, schema e hashes idênticos, SHA256/AES-256-GCM e rejeição de adulteração. Destino separado `cr-jornada-staging-restore-5bc75a378df4` (`12a82d3d-ed71-4bea-b27d-2ba7fb4b8f4b`). Produção não foi exportada nem restaurada. A chave do ensaio continua efêmera; o cofre e o backup operacional durável de produção permanecem pendentes.
+
+**85,00% = 17/20 critérios aprovados**. Os fluxos novos avançam parcialmente o bloco 19; não encerram a reconciliação do bloco 18 nem a revisão integral de segurança e preparação operacional/publicação dos blocos 19–20. Limites da exclusão e da resposta a justificativas em [CORRECOES-PAINEL-ESCALAS-SOLICITACOES.md](docs/CORRECOES-PAINEL-ESCALAS-SOLICITACOES.md).
