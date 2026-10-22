@@ -734,7 +734,9 @@ try {
       await page.getByLabel('Filtrar empresas por situação',{exact:true}).selectOption('archived');
       const archivedRow=page.locator('article').filter({has:page.getByText('Código: '+a.slug,{exact:true})});
       await page.getByText('Código: '+a.slug,{exact:true}).waitFor();
-      await archivedRow.getByText('Arquivada',{exact:true}).waitFor();
+      const archivedButton=archivedRow.getByRole('button',{name:'Arquivada',exact:true});
+      await archivedButton.waitFor();
+      verify(await archivedButton.isDisabled(),'empresa arquivada nao permite novas alteracoes operacionais');
       verify(true,'Superadmin exclui empresa suspensa pelo painel e encontra o cadastro preservado em Arquivadas');
     } finally {await context.close();}
   } finally {await platformArchiveBrowser.close();}
