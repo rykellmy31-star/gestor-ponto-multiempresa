@@ -14,9 +14,12 @@ type Dashboard={company_id:string;date:string;month:string;rows:EmployeeDay[];
     pending:number|null;worked_minutes:number}};
 const hm=(n:number)=>Math.floor(n/60).toString().padStart(2,'0')+':'+
   Math.floor(n%60).toString().padStart(2,'0');
-const localDate=(zone:string)=>new Intl.DateTimeFormat('en-CA',{
-  timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'
-}).format(new Date());
+const localDate=(zone:string)=>{
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:zone,
+    year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const value=(key:string)=>parts.find(p=>p.type===key)?.value||'';
+  return value('year')+'-'+value('month')+'-'+value('day');
+};
 const dayDate=(date:string)=>date.split('-').reverse().join('/');
 const statusNames:Record<string,string>={working:'Em expediente',on_break:'Em intervalo',
   completed:'Encerrado',not_started:'Não iniciado',inactive:'Inativo'};
